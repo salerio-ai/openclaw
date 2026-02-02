@@ -1,0 +1,37 @@
+{
+  "name": "openclaw-electron",
+  "version": "1.0.0",
+  "description": "OpenClaw Electron Desktop Client",
+  "main": "dist/main-dev.js",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm run build:preload && pnpm run build:main-dev && pnpm exec concurrently \"pnpm run dev:renderer\" \"pnpm run wait:renderer && pnpm run dev:main\"",
+    "dev:renderer": "vite",
+    "wait:renderer": "sleep 2",
+    "dev:main": "NODE_ENV=development pnpm exec electron .",
+    "build": "pnpm run build:preload && pnpm run build:main && pnpm run build:renderer",
+    "build:preload": "pnpm exec esbuild src/main/preload.ts --bundle --platform=node --target=node22 --outfile=dist/main/preload.js --external:electron --format=cjs",
+    "build:main-dev": "pnpm exec esbuild src/main/index.ts --bundle --platform=node --target=node22 --outfile=dist/main-dev.js --external:electron --format=esm",
+    "build:main": "pnpm exec esbuild src/main/index.ts --bundle --platform=node --target=node22 --outfile=dist/main/index.js --external:electron --external:electron-builder --external:@electron/rebuild --format=esm",
+    "build:renderer": "vite build",
+    "preview": "vite preview",
+    "lint": "oxlint",
+    "format": "oxfmt"
+  },
+  "dependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.7",
+    "@types/react": "^19.2.10",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^4.7.0",
+    "concurrently": "^9.2.1",
+    "electron": "^35.7.5",
+    "esbuild": "^0.25.12",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.1"
+  }
+}
