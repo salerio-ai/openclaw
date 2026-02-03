@@ -5,7 +5,12 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from "node
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { Socket } from "node:net";
-import { initializeOpenClaw, isInitialized, type InitializationResult } from "./auto-init.js";
+import {
+  initializeOpenClaw,
+  getConfigPath,
+  isFullyInitialized,
+  type InitializationResult,
+} from "./auto-init.js";
 import {
   listProviders,
   authenticateWithApiKey,
@@ -28,7 +33,6 @@ const __dirname = resolve(fileURLToPath(import.meta.url), "..");
 
 let gatewayProcess: ChildProcess | null = null;
 let mainWindow: BrowserWindow | null = null;
-let controlWindow: BrowserWindow | null = null;
 let gatewayPort: number = 18789;
 let gatewayBind: string = "loopback";
 let gatewayToken: string | null = null;
@@ -251,7 +255,7 @@ async function waitForGatewayPort(port: number, timeoutMs = 20_000): Promise<boo
   return false;
 }
 
-function openControlUiWindow(): void {
+function openControlUiInMainWindow(): void {
   const controlUrl = buildControlUiUrl({ port: gatewayPort, token: gatewayToken });
   const loadingHtml = `
     <!doctype html>
@@ -320,53 +324,26 @@ function openControlUiWindow(): void {
       </body>
     </html>
   `.trim();
-  if (controlWindow && !controlWindow.isDestroyed()) {
-    controlWindow.loadURL(`data:text/html,${encodeURIComponent(loadingHtml)}`).catch(() => {});
-    waitForGatewayPort(gatewayPort).then((ready) => {
-      if (!ready || !controlWindow || controlWindow.isDestroyed()) {
-        return;
-      }
-      controlWindow.loadURL(controlUrl).catch((error) => {
-        console.warn("[Control UI] Failed to reload Control UI:", error);
-      });
-    });
-    controlWindow.focus();
+  if (!mainWindow || mainWindow.isDestroyed()) {
     return;
   }
-
-  controlWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    minWidth: 800,
-    minHeight: 600,
-    title: "OpenClaw Control",
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-    },
-  });
-
-  controlWindow.on("closed", () => {
-    controlWindow = null;
-  });
-
-  controlWindow.loadURL(`data:text/html,${encodeURIComponent(loadingHtml)}`).catch(() => {});
-  controlWindow.webContents.on("did-fail-load", () => {
+  mainWindow.loadURL(`data:text/html,${encodeURIComponent(loadingHtml)}`).catch(() => {});
+  mainWindow.webContents.on("did-fail-load", () => {
     waitForGatewayPort(gatewayPort).then((ready) => {
-      if (!ready || !controlWindow || controlWindow.isDestroyed()) {
+      if (!ready || !mainWindow || mainWindow.isDestroyed()) {
         return;
       }
-      controlWindow.loadURL(controlUrl).catch((error) => {
+      mainWindow.loadURL(controlUrl).catch((error) => {
         console.warn("[Control UI] Failed to load Control UI:", error);
       });
     });
   });
 
   waitForGatewayPort(gatewayPort).then((ready) => {
-    if (!ready || !controlWindow || controlWindow.isDestroyed()) {
+    if (!ready || !mainWindow || mainWindow.isDestroyed()) {
       return;
     }
-    controlWindow.loadURL(controlUrl).catch((error) => {
+    mainWindow.loadURL(controlUrl).catch((error) => {
       console.warn("[Control UI] Failed to load Control UI:", error);
     });
   });
@@ -431,16 +408,13 @@ function setupIpcHandlers(): void {
 
   // Check if initialized
   ipcMain.handle("openclaw-is-initialized", () => {
-    return isInitialized();
+    return isFullyInitialized();
   });
 
   // Reset onboarding (delete ~/.openclaw and stop gateway)
   ipcMain.handle("openclaw-reset", async () => {
     try {
       await stopGateway();
-      if (controlWindow && !controlWindow.isDestroyed()) {
-        controlWindow.close();
-      }
       const openclawDir = resolve(app.getPath("home"), ".openclaw");
       rmSync(openclawDir, { recursive: true, force: true });
       initResult = null;
@@ -455,6 +429,9 @@ function setupIpcHandlers(): void {
   // Start gateway
   ipcMain.handle("gateway-start", async (_event, apiKey?: string) => {
     try {
+      if (!isFullyInitialized()) {
+        return { success: false, error: "OpenClaw is not onboarded yet." };
+      }
       // If API key is provided, re-initialize config with the API key
       if (apiKey && apiKey.trim()) {
         console.log("[Gateway] Re-initializing with API key...");
@@ -504,7 +481,7 @@ function setupIpcHandlers(): void {
       host: GATEWAY_HOST,
       bind: gatewayBind,
       wsUrl,
-      initialized: isInitialized(),
+      initialized: isFullyInitialized(),
     };
   });
 
@@ -711,7 +688,7 @@ function setupIpcHandlers(): void {
 
       try {
         await startGateway();
-        openControlUiWindow();
+        openControlUiInMainWindow();
       } catch (error) {
         console.warn("[Gateway] Failed to auto-start or open Control UI:", error);
       }
@@ -743,12 +720,16 @@ function setupIpcHandlers(): void {
 // App lifecycle
 app.whenReady().then(async () => {
   setupIpcHandlers();
-  createWindow();
 
   console.log("=== OpenClaw Desktop starting ===");
 
+  const isDev = process.env.NODE_ENV === "development";
+  const configPath = getConfigPath();
+  console.log(`[Init] configPath=${configPath ?? "unresolved"}`);
   // Check if we need to initialize or re-initialize (fix broken config)
-  let needsInit = !isInitialized();
+  const fullyInitialized = isFullyInitialized();
+  console.log(`[Init] fullyInitialized=${fullyInitialized}`);
+  let needsInit = !fullyInitialized;
   if (!needsInit) {
     const checkConfig = loadGatewayConfig();
     if (checkConfig && !checkConfig.token) {
@@ -757,25 +738,12 @@ app.whenReady().then(async () => {
     }
   }
 
-  // Auto-initialize if needed
+  if (isDev || needsInit) {
+    createWindow();
+  }
+
   if (needsInit) {
-    console.log("[Init] Running auto-initialization...");
-    try {
-      const result = await initializeOpenClaw({ force: true });
-      if (result.success) {
-        console.log("[Init] ✓ Auto-initialization successful");
-        initResult = result;
-        gatewayPort = result.gatewayPort;
-        gatewayBind = result.gatewayBind;
-        if (result.gatewayToken) {
-          gatewayToken = result.gatewayToken;
-        }
-      } else {
-        console.error("[Init] ✗ Auto-initialization failed:", result.error);
-      }
-    } catch (error) {
-      console.error("[Init] ✗ Auto-initialization error:", error);
-    }
+    console.log("[Init] Skipping auto-initialization; waiting for onboarding.");
   } else {
     console.log("[Init] Configuration already exists and is valid");
     // Load existing config to get port and token
@@ -789,14 +757,16 @@ app.whenReady().then(async () => {
     }
   }
 
-  // Auto-start gateway
-  console.log("[Gateway] Auto-starting gateway...");
-  try {
-    await startGateway();
-    console.log("[Gateway] ✓ Gateway started successfully");
-    openControlUiWindow();
-  } catch (error) {
-    console.error("[Gateway] ✗ Failed to start gateway:", error);
+  if (!needsInit) {
+    // Auto-start gateway
+    console.log("[Gateway] Auto-starting gateway...");
+    try {
+      await startGateway();
+      console.log("[Gateway] ✓ Gateway started successfully");
+      openControlUiInMainWindow();
+    } catch (error) {
+      console.error("[Gateway] ✗ Failed to start gateway:", error);
+    }
   }
 });
 

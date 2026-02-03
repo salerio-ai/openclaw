@@ -5,7 +5,7 @@ interface OnboardProps {
   onCancel: () => void;
 }
 
-type Step = "welcome" | "select-provider" | "authenticate" | "select-model" | "complete";
+type Step = "welcome" | "select-provider" | "authenticate" | "select-model";
 
 export default function Onboard({ onComplete, onCancel }: OnboardProps) {
   const [step, setStep] = useState<Step>("welcome");
@@ -158,13 +158,9 @@ export default function Onboard({ onComplete, onCancel }: OnboardProps) {
       setLoading(false);
       return;
     }
-    setStep("complete");
-    setLoading(false);
-  }, [authResult, manualModel, selectedModel]);
-
-  const handleFinish = useCallback(() => {
     onComplete();
-  }, [onComplete]);
+    setLoading(false);
+  }, [authResult, manualModel, selectedModel, onComplete]);
 
   const handleBack = useCallback(() => {
     if (step === "authenticate") {
@@ -359,31 +355,6 @@ export default function Onboard({ onComplete, onCancel }: OnboardProps) {
               </div>
             </div>
           )}
-        </div>
-      </div>
-    );
-  }
-
-  // Complete step
-  if (step === "complete") {
-    return (
-      <div className="onboard">
-        <div className="onboard-card">
-          <div className="success-icon">✓</div>
-          <h2>Setup Complete!</h2>
-          <p className="onboard-subtitle">
-            Your {selectedProvider?.label} credentials have been saved.
-          </p>
-
-          <div className="onboard-info">
-            <p>The gateway will start automatically with your new configuration.</p>
-          </div>
-
-          <div className="onboard-actions">
-            <button className="btn btn-primary" onClick={handleFinish}>
-              Start Using OpenClaw
-            </button>
-          </div>
         </div>
       </div>
     );

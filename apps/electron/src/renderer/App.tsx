@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 
 // Types are defined in electron.d.ts
 import Onboard from "./components/Onboard";
+import DevPanel from "./components/DevPanel";
 
 interface LogEntry {
   id: number;
@@ -141,19 +142,7 @@ export default function App() {
       setError("Gateway is not running");
       return;
     }
-
-    // Build HTTP URL with token for browser
-    const baseUrl = `http://127.0.0.1:${gatewayStatus.port}`;
-
-    // Extract token from wsUrl if available
-    let url = baseUrl;
-    if (gatewayStatus.wsUrl.includes('?token=')) {
-      const urlObj = new URL(gatewayStatus.wsUrl.replace('ws://', 'http://'));
-      url = `${baseUrl}?token=${urlObj.searchParams.get('token')}`;
-    }
-
-    console.log("Opening Control UI:", url);
-    window.open(url, '_blank');
+    setError("Control UI opens automatically in the desktop window.");
   }, [gatewayStatus]);
 
   // Clear logs
@@ -193,134 +182,21 @@ export default function App() {
     return <Onboard onComplete={handleOnboardComplete} onCancel={handleOnboardCancel} />;
   }
 
+  if (process.env.NODE_ENV !== "development") {
+    return null;
+  }
+
   return (
-    <div className="app">
-      {/* Header */}
-      <header className="header">
-        <div className="header-left">
-          <h1>OpenClaw Desktop</h1>
-          {appInfo && (
-            <span className="version">
-              v{appInfo.version} (Electron {appInfo.electronVersion}, Node {appInfo.nodeVersion})
-            </span>
-          )}
-        </div>
-        <div className="header-right">
-          <div className={`status-indicator ${gatewayStatus?.running ? "running" : "stopped"}`}>
-            <span className="status-dot" />
-            Gateway: {gatewayStatus?.running ? "Running" : "Stopped"}
-          </div>
-        </div>
-      </header>
-
-      {/* Main content */}
-      <main className="main">
-        {/* Control panel */}
-        <section className="control-panel">
-          <div className="control-group">
-            <h2>Gateway Control</h2>
-            <div className="button-group">
-              <button
-                type="button"
-                onClick={handleStartGateway}
-                disabled={gatewayStatus?.running}
-                className="btn btn-primary"
-              >
-                Start Gateway
-              </button>
-              <button
-                type="button"
-                onClick={handleStopGateway}
-                disabled={!gatewayStatus?.running}
-                className="btn btn-danger"
-              >
-                Stop Gateway
-              </button>
-              <button
-                type="button"
-                onClick={handleReOnboard}
-                disabled={gatewayStatus?.running}
-                className="btn btn-secondary"
-              >
-                Re-Onboard
-              </button>
-              <button
-                type="button"
-                onClick={handleOpenControlUI}
-                disabled={!gatewayStatus?.running}
-                className="btn btn-secondary"
-              >
-                Open Control UI
-              </button>
-              <button
-                type="button"
-                onClick={handleClearLogs}
-                className="btn btn-secondary"
-              >
-                Clear Logs
-              </button>
-            </div>
-
-            {gatewayStatus && (
-              <div className="status-details">
-                <div className="status-item">
-                  <strong>Status:</strong> {gatewayStatus.running ? "Running" : "Stopped"}
-                </div>
-                {gatewayStatus.pid && (
-                  <div className="status-item">
-                    <strong>PID:</strong> {gatewayStatus.pid}
-                  </div>
-                )}
-                <div className="status-item">
-                  <strong>Port:</strong> {gatewayStatus.port}
-                </div>
-                <div className="status-item">
-                  <strong>Host:</strong> {gatewayStatus.host}
-                </div>
-                <div className="status-item">
-                  <strong>WebSocket URL:</strong> {gatewayStatus.wsUrl}
-                </div>
-              </div>
-            )}
-
-            {error && (
-              <div className="error-message">
-                <strong>Error:</strong> {error}
-              </div>
-            )}
-          </div>
-
-          {/* Logs panel */}
-          <div className="logs-panel">
-            <h2>Gateway Logs</h2>
-            <div className="logs-container">
-              {logs.length === 0 ? (
-                <div className="logs-empty">No logs yet. Start the gateway to see logs.</div>
-              ) : (
-                <div className="logs-list">
-                  {logs.map((log) => (
-                    <div
-                      key={log.id}
-                      className={`log-entry log-entry-${log.stream}`}
-                    >
-                      <span className="log-timestamp">
-                        {log.timestamp.toLocaleTimeString()}
-                      </span>
-                      <span className="log-message">{log.message}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </section>
-
-        {/* TODO: Add more panels for gateway interaction */}
-        {/* - Chat interface */}
-        {/* - Channels management */}
-        {/* - Config editor */}
-        {/* - etc. */}
-      </main>
-    </div>
+    <DevPanel
+      appInfo={appInfo}
+      gatewayStatus={gatewayStatus}
+      logs={logs}
+      error={error}
+      onStartGateway={handleStartGateway}
+      onStopGateway={handleStopGateway}
+      onReOnboard={handleReOnboard}
+      onOpenControlUI={handleOpenControlUI}
+      onClearLogs={handleClearLogs}
+    />
   );
 }

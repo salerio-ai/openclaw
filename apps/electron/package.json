@@ -10,6 +10,7 @@
     "dev:renderer": "vite",
     "wait:renderer": "sleep 2",
     "dev:main": "NODE_ENV=development pnpm exec electron .",
+    "dev:prod": "pnpm run build && NODE_ENV=production pnpm exec electron .",
     "build": "pnpm run build:preload && pnpm run build:main && pnpm run build:renderer",
     "build:preload": "pnpm exec esbuild src/main/preload.ts --bundle --platform=node --target=node22 --outfile=dist/main/preload.js --external:electron --format=cjs",
     "build:main-dev": "pnpm exec esbuild src/main/index.ts --bundle --platform=node --target=node22 --outfile=dist/main-dev.js --packages=external --format=esm",

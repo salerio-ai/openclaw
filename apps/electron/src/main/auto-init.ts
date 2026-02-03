@@ -5,10 +5,11 @@
  */
 
 
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 import { generateDefaultConfig, type PresetConfigOptions } from "../config/default-config.js";
+import { resolveConfigPath as resolveConfigPathFromSrc } from "../../../../src/config/paths";
 
 // Import from OpenClaw source
 // NOTE: These imports assume the Electron app is running from the repo root
@@ -178,12 +179,47 @@ export async function initializeOpenClaw(
  */
 export function isInitialized(): boolean {
   try {
-    if (!resolveConfigPath) {
-      return false; // Modules not loaded yet
-    }
-    const configPath = resolveConfigPath();
+    const resolver = resolveConfigPath ?? resolveConfigPathFromSrc;
+    const configPath = resolver();
     return existsSync(configPath);
   } catch {
     return false;
+  }
+}
+
+export function isFullyInitialized(): boolean {
+  try {
+    const resolver = resolveConfigPath ?? resolveConfigPathFromSrc;
+    const configPath = resolver();
+    console.log(`[Init] Checking config at ${configPath}`);
+    if (!existsSync(configPath)) {
+      console.log("[Init] Config file not found");
+      return false;
+    }
+    const raw = readFileSync(configPath, "utf-8");
+    const config = JSON.parse(raw) as {
+      auth?: { profiles?: Record<string, unknown> };
+      agents?: { defaults?: { model?: { primary?: string } | string } };
+    };
+    const hasProfiles =
+      Boolean(config.auth?.profiles) && Object.keys(config.auth?.profiles ?? {}).length > 0;
+    const model = config.agents?.defaults?.model;
+    const primary = typeof model === "string" ? model : model?.primary;
+    const hasPrimaryModel = typeof primary === "string" && primary.trim().length > 0;
+    console.log(
+      `[Init] hasProfiles=${hasProfiles} hasPrimaryModel=${hasPrimaryModel} primary=${primary ?? ""}`,
+    );
+    return hasProfiles && hasPrimaryModel;
+  } catch {
+    return false;
+  }
+}
+
+export function getConfigPath(): string | null {
+  try {
+    const resolver = resolveConfigPath ?? resolveConfigPathFromSrc;
+    return resolver();
+  } catch {
+    return null;
   }
 }
