@@ -17,9 +17,10 @@
     "build:main": "pnpm exec esbuild src/main/index.ts --bundle --platform=node --target=node22 --outfile=dist/main/index.js --packages=external --format=esm",
     "build:renderer": "vite build",
     "check:main-deps": "node scripts/check-main-deps.js",
+    "prepare:openclaw-deps": "node scripts/prepare-openclaw-deps.js",
     "prepare:node": "node scripts/prepare-node.js",
-    "pack:app": "pnpm run prepare:node && pnpm run build && pnpm run check:main-deps && pnpm exec electron-builder --mac dir",
-    "pack:dmg": "pnpm run pack:app && ../../scripts/create-dmg.sh dist/electron/mac-arm64/OpenClaw.app dist/electron/OpenClaw-${npm_package_version}-arm64.dmg",
+    "pack:app": "pnpm run prepare:openclaw-deps && pnpm run prepare:node && pnpm run build && pnpm run check:main-deps && pnpm exec electron-builder --mac dir",
+    "pack:dmg": "pnpm run prepare:openclaw-deps && pnpm run prepare:node && pnpm run build && pnpm run check:main-deps && pnpm exec electron-builder --mac dmg",
     "preview": "vite preview",
     "lint": "oxlint",
     "format": "oxfmt"
@@ -74,6 +75,21 @@
         "to": "node"
       },
       {
+        "from": "resources/openclaw",
+        "to": "openclaw",
+        "filter": [
+          "**/*",
+          "!node_modules/**"
+        ]
+      },
+      {
+        "from": "resources/openclaw/node_modules",
+        "to": "node_modules",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
         "from": "../../openclaw.mjs",
         "to": "openclaw.mjs"
       },
@@ -84,6 +100,10 @@
       {
         "from": "../../dist",
         "to": "dist"
+      },
+      {
+        "from": "../../docs/reference/templates",
+        "to": "docs/reference/templates"
       },
       {
         "from": "../../extensions/memory-core",

@@ -180,12 +180,12 @@ function loadGatewayConfig(): { port: number; bind: string; token?: string } | n
  * Start the OpenClaw Gateway process
  */
 async function startGateway(): Promise<boolean> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolvePromise, reject) => {
     const startAt = Date.now();
     if (gatewayProcess) {
       console.log("Gateway already running");
       writeMainLog("Gateway already running");
-      resolve(true);
+      resolvePromise(true);
       return;
     }
 
@@ -271,12 +271,25 @@ async function startGateway(): Promise<boolean> {
     const stateDir = resolve(homeDir, ".openclaw");
     const shellPath = process.env.SHELL?.trim() || "/bin/zsh";
     const appPath = app.getAppPath();
+    const resourcesPath = process.resourcesPath || appPath;
     const appNodeModules = resolve(appPath, "node_modules");
-    const resourcesNodeModules = resolve(process.resourcesPath, "node_modules");
+    const resourcesNodeModules = resolve(resourcesPath, "node_modules");
+    const openclawNodeModules = resolve(resourcesPath, "openclaw", "node_modules");
     const inheritedNodePath = process.env.NODE_PATH?.trim();
-    const combinedNodePath = [appNodeModules, resourcesNodeModules, inheritedNodePath]
+    const nodePathCandidates = [
+      openclawNodeModules,
+      appNodeModules,
+      resourcesNodeModules,
+      inheritedNodePath,
+    ];
+    const combinedNodePath = nodePathCandidates
       .filter((value) => Boolean(value && value.length > 0))
       .join(":");
+    const effectiveNodePath = combinedNodePath || openclawNodeModules;
+    const nodePathStatus = nodePathCandidates
+      .filter((value) => Boolean(value && value.length > 0))
+      .map((value) => `${value}(${existsSync(value!) ? "exists" : "missing"})`)
+      .join(" | ");
     const spawnEnv = {
       ...process.env,
       NODE_ENV: "production",
@@ -287,11 +300,11 @@ async function startGateway(): Promise<boolean> {
       USERPROFILE: homeDir,
       OPENCLAW_LOAD_SHELL_ENV: "1",
       SHELL: shellPath,
-      NODE_PATH: combinedNodePath,
+      NODE_PATH: effectiveNodePath,
       ...(bundledVersion ? { OPENCLAW_BUNDLED_VERSION: bundledVersion } : {}),
     };
     writeMainLog(
-      `Gateway env: SHELL=${shellPath} OPENCLAW_LOAD_SHELL_ENV=1 NODE_PATH=${combinedNodePath || "(empty)"} appPath=${appPath}`,
+      `Gateway env: SHELL=${shellPath} OPENCLAW_LOAD_SHELL_ENV=1 NODE_PATH=${effectiveNodePath || "(empty)"} appPath=${appPath} resourcesPath=${resourcesPath} candidates=${nodePathStatus || "(none)"} rawOpenClawNodeModules=${openclawNodeModules} rawResourcesNodeModules=${resourcesNodeModules} rawAppNodeModules=${appNodeModules} inheritedNodePath=${inheritedNodePath ?? "(none)"}`,
     );
 
     writeMainLog(
@@ -364,7 +377,7 @@ async function startGateway(): Promise<boolean> {
         const elapsedMs = Date.now() - startAt;
         writeMainLog(`Gateway startup ready in ${elapsedMs}ms`);
         console.log("Gateway started successfully");
-        resolve(true);
+        resolvePromise(true);
       })
       .catch((error) => {
         const elapsedMs = Date.now() - startAt;
