@@ -3,7 +3,7 @@
  * This module provides a simplified one-call initialization
  */
 
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 import { generateDefaultConfig, type PresetConfigOptions } from "../config/default-config.js";
@@ -75,23 +75,71 @@ export async function initializeOpenClaw(
 
     // Check if config already exists
     if (!force && existsSync(configPath)) {
-      console.log("Configuration already exists, skipping initialization");
-      // Read existing config to extract gateway info
-      const existingConfig = JSON.parse(require("node:fs").readFileSync(configPath, "utf-8"));
+      console.log("Configuration already exists, merging with default configuration...");
+
+      // Load existing config
+      const existingConfig = JSON.parse(readFileSync(configPath, "utf-8"));
+
+      // Generate default config
+      const { config: defaultConfig, gatewayToken } = generateDefaultConfig(configOptions);
+
+      // Preserve existing skill entries and env variables
+      const mergedConfig = {
+        ...defaultConfig,
+        skills: existingConfig.skills || defaultConfig.skills,
+        env: {
+          ...defaultConfig.env,
+          ...(existingConfig.env || {})
+        }
+      };
+
+      // Write merged config
+      const io = createConfigIO();
+      await io.writeConfigFile(mergedConfig);
+      console.log(`Configuration merged and written to: ${configPath}`);
+
+      // Update models.json if needed
+      console.log("Generating models.json...");
+      try {
+        const modelsResult = await ensureOpenClawModelsJson(mergedConfig);
+        if (modelsResult.wrote) {
+          console.log(`✓ models.json generated at: ${modelsResult.agentDir}`);
+        } else {
+          console.log("ℹ models.json already up-to-date");
+        }
+      } catch (error) {
+        console.warn(`Failed to generate models.json: ${error}`);
+      }
+
       return {
         success: true,
         configPath,
-        gatewayPort: existingConfig.gateway?.port || 18790,
-        gatewayBind: existingConfig.gateway?.bind || "loopback",
-        gatewayToken: existingConfig.gateway?.auth?.token,
-        workspace: existingConfig.agents?.defaults?.workspace || "~/.openclaw/workspace",
+        gatewayPort: mergedConfig.gateway?.port || 18789,
+        gatewayBind: mergedConfig.gateway?.bind || "loopback",
+        gatewayToken: mergedConfig.gateway?.auth?.token || gatewayToken,
+        workspace: mergedConfig.agents?.defaults?.workspace || "~/.openclaw/workspace",
       };
     }
 
     console.log("Initializing OpenClaw with default configuration...");
 
     // Generate default configuration (auth disabled for local development)
-    const { config, gatewayToken } = generateDefaultConfig(configOptions);
+    const { config: defaultConfig, gatewayToken } = generateDefaultConfig(configOptions);
+
+    // Preserve existing skill entries and env variables if config exists
+    let finalConfig = defaultConfig;
+    if (existsSync(configPath)) {
+      const existingConfig = JSON.parse(readFileSync(configPath, "utf-8"));
+      finalConfig = {
+        ...defaultConfig,
+        skills: existingConfig.skills || defaultConfig.skills,
+        env: {
+          ...defaultConfig.env,
+          ...(existingConfig.env || {})
+        }
+      };
+      console.log("Preserving existing skill and environment configurations");
+    }
 
     // Ensure config directory exists
     const configDir = dirname(configPath);
@@ -101,11 +149,11 @@ export async function initializeOpenClaw(
 
     // Write configuration file
     const io = createConfigIO();
-    await io.writeConfigFile(config);
+    await io.writeConfigFile(finalConfig);
     console.log(`Configuration written to: ${configPath}`);
 
     // Create workspace directory
-    const workspaceDir = config.agents?.defaults?.workspace || "~/.openclaw/workspace";
+    const workspaceDir = finalConfig.agents?.defaults?.workspace || "~/.openclaw/workspace";
     const resolvedWorkspace = workspaceDir.startsWith("~")
       ? join(homedir(), workspaceDir.slice(1))
       : workspaceDir;
@@ -131,7 +179,7 @@ export async function initializeOpenClaw(
 
     // Initialize auth profiles (if API key is configured)
     // Check all profiles in the generated config
-    const profiles = config.auth?.profiles || {};
+    const profiles = finalConfig.auth?.profiles || {};
     for (const [profileId, profileConfig] of Object.entries(profiles)) {
       const profile = profileConfig as { provider?: string; mode?: string };
       console.log(`Auth profile found: ${profileId} (${profile.provider})`);
@@ -140,7 +188,7 @@ export async function initializeOpenClaw(
     // Generate models.json
     console.log("Generating models.json...");
     try {
-      const modelsResult = await ensureOpenClawModelsJson(config);
+      const modelsResult = await ensureOpenClawModelsJson(finalConfig);
       if (modelsResult.wrote) {
         console.log(`✓ models.json generated at: ${modelsResult.agentDir}`);
       } else {
@@ -153,9 +201,9 @@ export async function initializeOpenClaw(
     return {
       success: true,
       configPath,
-      gatewayPort: config.gateway?.port || 18789,
-      gatewayBind: config.gateway?.bind || "loopback",
-      gatewayToken: config.gateway?.auth?.token || gatewayToken,
+      gatewayPort: finalConfig.gateway?.port || 18789,
+      gatewayBind: finalConfig.gateway?.bind || "loopback",
+      gatewayToken: finalConfig.gateway?.auth?.token || gatewayToken,
       workspace: resolvedWorkspace,
     };
   } catch (error) {

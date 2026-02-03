@@ -223,7 +223,7 @@ function createWindow(): void {
 
   // Load the app
   if (process.env.NODE_ENV === "development") {
-    mainWindow.loadURL("http://localhost:5173");
+    mainWindow.loadURL("http://localhost:5180");
     mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(resolve(__dirname, "../renderer/index.html"));
