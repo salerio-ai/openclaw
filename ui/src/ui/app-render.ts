@@ -57,6 +57,7 @@ import { renderGatewayUrlConfirmation } from "./views/gateway-url-confirmation";
 import { renderInstances } from "./views/instances";
 import { renderLogs } from "./views/logs";
 import { renderNodes } from "./views/nodes";
+import { renderOnboard } from "./views/onboard";
 import { renderOverview } from "./views/overview";
 import { renderSessions } from "./views/sessions";
 import { renderSkills } from "./views/skills";
@@ -575,6 +576,12 @@ export function renderApp(state: AppViewState) {
                 onExport: (lines, label) => state.exportLogs(lines, label),
                 onScroll: (event) => state.handleLogsScroll(event),
               })
+            : nothing
+        }
+
+        ${
+          state.tab === "onboard"
+            ? renderOnboard(state)
             : nothing
         }
       </main>
