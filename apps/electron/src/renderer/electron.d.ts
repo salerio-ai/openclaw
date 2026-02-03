@@ -50,6 +50,9 @@ interface GatewayExitData {
   code: number | null;
   signal: string | null;
 }
+interface MainLogData {
+  message: string;
+}
 
 // Onboarding types
 interface ProviderConfig {
@@ -93,6 +96,7 @@ interface ElectronAPI {
   openclawInit: (options?: PresetConfigOptions) => Promise<InitializationResult>;
   openclawIsInitialized: () => Promise<boolean>;
   openclawReset: () => Promise<{ success: boolean; error?: string }>;
+  openclawNeedsOnboard: () => Promise<boolean>;
 
   // Gateway management
   gatewayStart: (apiKey?: string) => Promise<{ success: boolean; error?: string }>;
@@ -117,6 +121,7 @@ interface ElectronAPI {
   onOAuthRequestCode: (callback: (message: string) => void) => () => void;
   onGatewayLog: (callback: (data: GatewayLogData) => void) => () => void;
   onGatewayExit: (callback: (data: GatewayExitData) => void) => () => void;
+  onMainLog: (callback: (data: MainLogData) => void) => () => void;
 }
 
 interface Window {

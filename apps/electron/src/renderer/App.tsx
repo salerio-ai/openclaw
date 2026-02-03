@@ -30,17 +30,18 @@ export default function App() {
       }
 
       try {
-        const [status, info, initialized] = await Promise.all([
+        const [status, info, initialized, needsOnboard] = await Promise.all([
           window.electronAPI.gatewayStatus(),
           window.electronAPI.getAppInfo(),
           window.electronAPI.openclawIsInitialized(),
+          window.electronAPI.openclawNeedsOnboard(),
         ]);
         setGatewayStatus(status);
         setAppInfo(info);
         setIsInitialized(initialized);
 
-        // Show onboarding if not initialized
-        if (!initialized) {
+        // Show onboarding if needed for this launch
+        if (needsOnboard || !initialized) {
           setShowOnboard(true);
         }
       } catch (err) {
@@ -103,9 +104,23 @@ export default function App() {
       setGatewayStatus((prev) => (prev ? { ...prev, running: false, pid: null } : null));
     });
 
+    const unsubscribeMain = window.electronAPI.onMainLog((data) => {
+      setLogs((prev) => [
+        ...prev,
+        {
+          id: logIdRef.current++,
+          stream: "stderr",
+          message: `[main] ${data.message}`,
+          timestamp: new Date(),
+        },
+      ]);
+      setLogs((prev) => prev.slice(-1000));
+    });
+
     return () => {
       unsubscribe();
       unsubscribeExit();
+      unsubscribeMain();
     };
   }, []);
 
@@ -180,10 +195,6 @@ export default function App() {
   // Show onboarding if needed
   if (showOnboard) {
     return <Onboard onComplete={handleOnboardComplete} onCancel={handleOnboardCancel} />;
-  }
-
-  if (process.env.NODE_ENV !== "development") {
-    return null;
   }
 
   return (

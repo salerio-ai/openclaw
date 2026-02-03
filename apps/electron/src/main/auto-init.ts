@@ -5,44 +5,123 @@
  */
 
 
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { homedir } from "node:os";
-import { generateDefaultConfig, type PresetConfigOptions } from "../config/default-config.js";
+import { fileURLToPath } from "node:url";
+import { execFile, spawnSync } from "node:child_process";
+import type { PresetConfigOptions } from "../config/default-config.js";
 import { resolveConfigPath as resolveConfigPathFromSrc } from "../../../../src/config/paths";
 
-// Import from OpenClaw source
-// NOTE: These imports assume the Electron app is running from the repo root
-// In production, you may need to adjust these paths or bundle the required modules
-let createConfigIO: (deps?: { fs?: typeof import("node:fs"); json5?: any; env?: NodeJS.ProcessEnv; homedir?: () => string; configPath?: string; logger?: Pick<typeof console, "error" | "warn"> }) => {
-  configPath: string;
-  loadConfig: () => any;
-  readConfigFileSnapshot: () => Promise<any>;
-  writeConfigFile: (cfg: any) => Promise<void>;
-};
-let resolveConfigPath: () => string;
-let ensureOpenClawModelsJson: (config?: unknown, agentDirOverride?: string) => Promise<{ agentDir: string; wrote: boolean }>;
+const __dirname = resolve(fileURLToPath(import.meta.url), "..");
 
-async function loadOpenClawModules() {
+function resolveConfigPathSafe(): string {
   try {
-    // Load from compiled dist (main repo must be built first)
-    const configModule = await import("../../../dist/config/io.js");
-    const pathsModule = await import("../../../dist/config/paths.js");
-    createConfigIO = configModule.createConfigIO;
-    resolveConfigPath = pathsModule.resolveConfigPath;
-
-    // Load models and auth modules
-    // @ts-expect-error - Dynamic import from main repo dist
-    const modelsConfigModule = await import("../../../dist/agents/models-config.js");
-    ensureOpenClawModelsJson = modelsConfigModule.ensureOpenClawModelsJson;
-  } catch (cause) {
-    console.warn("Could not load OpenClaw modules from dist, trying bundled path...");
-    // In production, these would be bundled differently
-    throw new Error(
-      "OpenClaw modules not found. Please run 'pnpm build' from the repo root first.",
-      { cause },
-    );
+    return resolveConfigPathFromSrc();
+  } catch {
+    return join(homedir(), ".openclaw", "openclaw.json");
   }
+}
+
+function resolveOpenClawCliPath(): string | null {
+  const candidates = [
+    resolve(process.resourcesPath, "openclaw.mjs"),
+    resolve(__dirname, "../../../openclaw.mjs"),
+    resolve(__dirname, "../../../../openclaw.mjs"),
+    resolve(__dirname, "../../../dist/cli.js"),
+    resolve(__dirname, "../../dist/cli.js"),
+  ];
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function resolveNodeBinary(): string | null {
+  const envPath = process.env.OPENCLAW_NODE_PATH?.trim();
+  if (envPath && existsSync(envPath)) {
+    return envPath;
+  }
+
+  const bundledCandidates = [
+    resolve(process.resourcesPath, "node", "bin", "node"),
+    resolve(process.resourcesPath, "node"),
+  ];
+  for (const candidate of bundledCandidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  try {
+    const which = spawnSync("/usr/bin/which", ["node"], { encoding: "utf-8" });
+    const path = which.stdout?.trim();
+    if (path && existsSync(path)) {
+      return path;
+    }
+  } catch {
+    // ignore
+  }
+
+  return null;
+}
+
+async function runCliOnboard(options: InitializationOptions): Promise<void> {
+  const cliPath = resolveOpenClawCliPath();
+  if (!cliPath) {
+    throw new Error("OpenClaw CLI not found. Ensure openclaw.mjs is bundled.");
+  }
+
+  const args: string[] = [
+    "onboard",
+    "--non-interactive",
+    "--accept-risk",
+    "--skip-channels",
+    "--skip-skills",
+    "--skip-health",
+    "--skip-ui",
+    "--json",
+  ];
+
+  if (options.workspace) {
+    args.push("--workspace", options.workspace);
+  }
+  if (options.gatewayPort) {
+    args.push("--gateway-port", String(options.gatewayPort));
+  }
+  if (options.gatewayBind) {
+    args.push("--gateway-bind", options.gatewayBind);
+  }
+  if (options.nodeManager) {
+    args.push("--node-manager", options.nodeManager);
+  }
+
+  if (options.openrouterApiKey) {
+    args.push("--auth-choice", "openrouter-api-key", "--openrouter-api-key", options.openrouterApiKey);
+  } else {
+    args.push("--auth-choice", "skip");
+  }
+
+  const isMjs = cliPath.endsWith(".mjs");
+  const nodePath = isMjs ? resolveNodeBinary() : null;
+  if (isMjs && !nodePath) {
+    throw new Error("Node binary not found. Set OPENCLAW_NODE_PATH or bundle node.");
+  }
+  const command = isMjs ? nodePath! : cliPath;
+  const commandArgs = isMjs ? [cliPath, ...args] : args;
+  const env = { ...process.env };
+
+  await new Promise<void>((resolvePromise, rejectPromise) => {
+    execFile(command, commandArgs, { env }, (error) => {
+      if (error) {
+        rejectPromise(error);
+        return;
+      }
+      resolvePromise();
+    });
+  });
 }
 
 export interface InitializationResult {
@@ -68,97 +147,32 @@ export async function initializeOpenClaw(
   options: InitializationOptions = {},
 ): Promise<InitializationResult> {
   try {
-    // Lazy load OpenClaw modules
-    if (!createConfigIO || !resolveConfigPath) {
-      await loadOpenClawModules();
-    }
-
     const { force = false, ...configOptions } = options;
-    const configPath = resolveConfigPath();
+    const configPath = resolveConfigPathSafe();
 
     // Check if config already exists
     if (!force && existsSync(configPath)) {
       console.log("Configuration already exists, skipping initialization");
-      // Read existing config to extract gateway info
-      const existingConfig = JSON.parse(require("node:fs").readFileSync(configPath, "utf-8"));
-      return {
-        success: true,
-        configPath,
-        gatewayPort: existingConfig.gateway?.port || 18790,
-        gatewayBind: existingConfig.gateway?.bind || "loopback",
-        gatewayToken: existingConfig.gateway?.auth?.token,
-        workspace: existingConfig.agents?.defaults?.workspace || "~/.openclaw/workspace",
-      };
+    } else {
+      console.log("Initializing OpenClaw via CLI onboarding...");
+      await runCliOnboard(configOptions);
+      if (!existsSync(configPath)) {
+        throw new Error("OpenClaw CLI did not create config file");
+      }
     }
 
-    console.log("Initializing OpenClaw with default configuration...");
-
-    // Generate default configuration (auth disabled for local development)
-    const { config, gatewayToken } = generateDefaultConfig(configOptions);
-
-    // Ensure config directory exists
-    const configDir = dirname(configPath);
-    if (!existsSync(configDir)) {
-      mkdirSync(configDir, { recursive: true, mode: 0o700 });
-    }
-
-    // Write configuration file
-    const io = createConfigIO();
-    await io.writeConfigFile(config);
-    console.log(`Configuration written to: ${configPath}`);
-
-    // Create workspace directory
+    const config = JSON.parse(readFileSync(configPath, "utf-8"));
     const workspaceDir = config.agents?.defaults?.workspace || "~/.openclaw/workspace";
     const resolvedWorkspace = workspaceDir.startsWith("~")
       ? join(homedir(), workspaceDir.slice(1))
       : workspaceDir;
-
-    if (!existsSync(resolvedWorkspace)) {
-      mkdirSync(resolvedWorkspace, { recursive: true, mode: 0o700 });
-      console.log(`Workspace created: ${resolvedWorkspace}`);
-    }
-
-    // Create sessions directory
-    const sessionsDir = join(homedir(), ".openclaw/agents/main/sessions");
-    if (!existsSync(sessionsDir)) {
-      mkdirSync(sessionsDir, { recursive: true, mode: 0o700 });
-      console.log(`Sessions directory created: ${sessionsDir}`);
-    }
-
-    // Create credentials directory
-    const credentialsDir = join(homedir(), ".openclaw/credentials");
-    if (!existsSync(credentialsDir)) {
-      mkdirSync(credentialsDir, { recursive: true, mode: 0o700 });
-      console.log(`Credentials directory created: ${credentialsDir}`);
-    }
-
-    // Initialize auth profiles (if API key is configured)
-    // Check all profiles in the generated config
-    const profiles = config.auth?.profiles || {};
-    for (const [profileId, profileConfig] of Object.entries(profiles)) {
-      const profile = profileConfig as { provider?: string; mode?: string };
-      console.log(`Auth profile found: ${profileId} (${profile.provider})`);
-    }
-
-    // Generate models.json
-    console.log("Generating models.json...");
-    try {
-      const modelsResult = await ensureOpenClawModelsJson(config);
-      if (modelsResult.wrote) {
-        console.log(`✓ models.json generated at: ${modelsResult.agentDir}`);
-      } else {
-        console.log("ℹ models.json already up-to-date");
-      }
-    } catch (error) {
-      console.warn(`Failed to generate models.json: ${error}`);
-    }
 
     return {
       success: true,
       configPath,
       gatewayPort: config.gateway?.port || 18789,
       gatewayBind: config.gateway?.bind || "loopback",
-      gatewayToken: config.gateway?.auth?.token || gatewayToken,
+      gatewayToken: config.gateway?.auth?.token,
       workspace: resolvedWorkspace,
     };
   } catch (error) {
@@ -179,8 +193,7 @@ export async function initializeOpenClaw(
  */
 export function isInitialized(): boolean {
   try {
-    const resolver = resolveConfigPath ?? resolveConfigPathFromSrc;
-    const configPath = resolver();
+    const configPath = resolveConfigPathSafe();
     return existsSync(configPath);
   } catch {
     return false;
@@ -189,8 +202,7 @@ export function isInitialized(): boolean {
 
 export function isFullyInitialized(): boolean {
   try {
-    const resolver = resolveConfigPath ?? resolveConfigPathFromSrc;
-    const configPath = resolver();
+    const configPath = resolveConfigPathSafe();
     console.log(`[Init] Checking config at ${configPath}`);
     if (!existsSync(configPath)) {
       console.log("[Init] Config file not found");
@@ -217,8 +229,7 @@ export function isFullyInitialized(): boolean {
 
 export function getConfigPath(): string | null {
   try {
-    const resolver = resolveConfigPath ?? resolveConfigPathFromSrc;
-    return resolver();
+    return resolveConfigPathSafe();
   } catch {
     return null;
   }
