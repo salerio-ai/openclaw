@@ -1,14 +1,34 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, shell } from "electron";
 import { resolve } from "node:path";
 import { spawn, ChildProcess } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { setTimeout as delay } from "node:timers/promises";
+import { Socket } from "node:net";
 import { initializeOpenClaw, isInitialized, type InitializationResult } from "./auto-init.js";
+import {
+  listProviders,
+  authenticateWithApiKey,
+  authenticateWithToken,
+  authenticateWithOAuth,
+  handleOAuthPromptResponse,
+  type AuthResult,
+} from "./oauth-handler.js";
+import { loadModelCatalog } from "../../../../src/agents/model-catalog";
+import { upsertAuthProfile } from "../../../../src/agents/auth-profiles";
+import {
+  applyAuthProfileConfig,
+  setAnthropicApiKey,
+  setOpenrouterApiKey,
+  writeOAuthCredentials,
+} from "../../../../src/commands/onboard-auth";
+import { applyPrimaryModel } from "../../../../src/commands/model-picker";
 
 const __dirname = resolve(fileURLToPath(import.meta.url), "..");
 
 let gatewayProcess: ChildProcess | null = null;
 let mainWindow: BrowserWindow | null = null;
+let controlWindow: BrowserWindow | null = null;
 let gatewayPort: number = 18789;
 let gatewayBind: string = "loopback";
 let gatewayToken: string | null = null;
@@ -199,6 +219,159 @@ function stopGateway(): Promise<boolean> {
   });
 }
 
+function buildControlUiUrl(params: { port: number; token?: string | null }) {
+  const baseUrl = `http://127.0.0.1:${params.port}`;
+  if (!params.token) {
+    return baseUrl;
+  }
+  return `${baseUrl}?token=${params.token}`;
+}
+
+async function waitForGatewayPort(port: number, timeoutMs = 20_000): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const ready = await new Promise<boolean>((resolve) => {
+      const socket = new Socket();
+      const onDone = (result: boolean) => {
+        socket.removeAllListeners();
+        socket.destroy();
+        resolve(result);
+      };
+      socket.setTimeout(1_000);
+      socket.once("connect", () => onDone(true));
+      socket.once("timeout", () => onDone(false));
+      socket.once("error", () => onDone(false));
+      socket.connect(port, "127.0.0.1");
+    });
+    if (ready) {
+      return true;
+    }
+    await delay(250);
+  }
+  return false;
+}
+
+function openControlUiWindow(): void {
+  const controlUrl = buildControlUiUrl({ port: gatewayPort, token: gatewayToken });
+  const loadingHtml = `
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Loading OpenClaw Control</title>
+        <style>
+          :root {
+            color-scheme: light;
+          }
+          html, body {
+            height: 100%;
+            margin: 0;
+            font-family: "SF Pro Text", "Inter", system-ui, -apple-system, sans-serif;
+            background: radial-gradient(circle at top, #f7f3ff, #eef2ff 55%, #fef7ed 100%);
+            color: #1f2937;
+          }
+          .wrap {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          .card {
+            background: #ffffffcc;
+            border: 1px solid #e5e7eb;
+            border-radius: 20px;
+            padding: 32px 40px;
+            box-shadow: 0 18px 60px rgba(15, 23, 42, 0.12);
+            min-width: 320px;
+            text-align: center;
+          }
+          .title {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0 0 8px;
+          }
+          .subtitle {
+            font-size: 14px;
+            color: #6b7280;
+            margin: 0 0 20px;
+          }
+          .spinner {
+            width: 44px;
+            height: 44px;
+            margin: 0 auto;
+            border-radius: 50%;
+            border: 4px solid #e5e7eb;
+            border-top-color: #6366f1;
+            animation: spin 1s linear infinite;
+          }
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="wrap">
+          <div class="card">
+            <div class="spinner"></div>
+            <p class="title">Loading Control UI</p>
+            <p class="subtitle">Starting gateway and preparing dashboard…</p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `.trim();
+  if (controlWindow && !controlWindow.isDestroyed()) {
+    controlWindow.loadURL(`data:text/html,${encodeURIComponent(loadingHtml)}`).catch(() => {});
+    waitForGatewayPort(gatewayPort).then((ready) => {
+      if (!ready || !controlWindow || controlWindow.isDestroyed()) {
+        return;
+      }
+      controlWindow.loadURL(controlUrl).catch((error) => {
+        console.warn("[Control UI] Failed to reload Control UI:", error);
+      });
+    });
+    controlWindow.focus();
+    return;
+  }
+
+  controlWindow = new BrowserWindow({
+    width: 1200,
+    height: 800,
+    minWidth: 800,
+    minHeight: 600,
+    title: "OpenClaw Control",
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+  });
+
+  controlWindow.on("closed", () => {
+    controlWindow = null;
+  });
+
+  controlWindow.loadURL(`data:text/html,${encodeURIComponent(loadingHtml)}`).catch(() => {});
+  controlWindow.webContents.on("did-fail-load", () => {
+    waitForGatewayPort(gatewayPort).then((ready) => {
+      if (!ready || !controlWindow || controlWindow.isDestroyed()) {
+        return;
+      }
+      controlWindow.loadURL(controlUrl).catch((error) => {
+        console.warn("[Control UI] Failed to load Control UI:", error);
+      });
+    });
+  });
+
+  waitForGatewayPort(gatewayPort).then((ready) => {
+    if (!ready || !controlWindow || controlWindow.isDestroyed()) {
+      return;
+    }
+    controlWindow.loadURL(controlUrl).catch((error) => {
+      console.warn("[Control UI] Failed to load Control UI:", error);
+    });
+  });
+}
+
 /**
  * Create the main browser window
  */
@@ -259,6 +432,24 @@ function setupIpcHandlers(): void {
   // Check if initialized
   ipcMain.handle("openclaw-is-initialized", () => {
     return isInitialized();
+  });
+
+  // Reset onboarding (delete ~/.openclaw and stop gateway)
+  ipcMain.handle("openclaw-reset", async () => {
+    try {
+      await stopGateway();
+      if (controlWindow && !controlWindow.isDestroyed()) {
+        controlWindow.close();
+      }
+      const openclawDir = resolve(app.getPath("home"), ".openclaw");
+      rmSync(openclawDir, { recursive: true, force: true });
+      initResult = null;
+      gatewayToken = null;
+      gatewayProcess = null;
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
   });
 
   // Start gateway
@@ -326,6 +517,227 @@ function setupIpcHandlers(): void {
       nodeVersion: process.versions.node,
     };
   });
+
+  // === Onboarding handlers ===
+
+  // List available providers
+  ipcMain.handle("onboard-list-providers", () => {
+    return listProviders();
+  });
+
+  // Authenticate with API key
+  ipcMain.handle("onboard-auth-api-key", async (_event, provider: string, apiKey: string) => {
+    try {
+      const result = await authenticateWithApiKey({ provider: provider as any, apiKey });
+      return result;
+    } catch (error) {
+      return {
+        success: false,
+        provider,
+        method: "api_key",
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  });
+
+  // Authenticate with token
+  ipcMain.handle("onboard-auth-token", async (_event, provider: string, token: string) => {
+    try {
+      const result = await authenticateWithToken({ provider: provider as any, token });
+      return result;
+    } catch (error) {
+      return {
+        success: false,
+        provider,
+        method: "token",
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  });
+
+  // Authenticate with OAuth
+  ipcMain.handle("onboard-auth-oauth", async (_event, provider: string) => {
+    try {
+      const result = await authenticateWithOAuth({
+        provider: provider as any,
+        onPromptRequired: (message) => {
+          // Send request to renderer to ask user for input
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send("onboard-oauth-request-code", message);
+          }
+        },
+      });
+      return result;
+    } catch (error) {
+      return {
+        success: false,
+        provider,
+        method: "oauth",
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  });
+
+  // Handle manual OAuth code submission
+  ipcMain.handle("onboard-oauth-submit-code", (_event, code: string) => {
+    handleOAuthPromptResponse(code);
+    return { success: true };
+  });
+
+  // List available models for provider
+  ipcMain.handle("onboard-list-models", async (_event, provider: string) => {
+    try {
+      const catalog = await loadModelCatalog({ useCache: false });
+      return catalog.filter((entry) => entry.provider === provider);
+    } catch (error) {
+      console.warn("[Onboard] Failed to load model catalog:", error);
+      return [];
+    }
+  });
+
+  // Complete onboarding (save credentials and initialize)
+  ipcMain.handle(
+    "onboard-complete",
+    async (_event, authResult: AuthResult, options?: { model?: string }) => {
+      try {
+      const resolveAuthProvider = (result: AuthResult) => {
+        if (result.provider === "openai" && result.method === "oauth") {
+          return "openai-codex";
+        }
+        return result.provider;
+      };
+
+      const provider = resolveAuthProvider(authResult);
+      const credential = authResult.credential;
+      if (!credential) {
+        return { success: false, error: "Missing credentials from onboarding" };
+      }
+
+      // Initialize with the API key in env
+      const result = await initializeOpenClaw({
+        force: true,
+        openrouterApiKey:
+          authResult.provider === "openrouter" && credential.type === "api_key"
+            ? credential.key
+            : undefined,
+      });
+
+      if (!result.success) {
+        return { success: false, error: result.error };
+      }
+
+      // Update config with the credential
+      const configPath = resolve(app.getPath("home"), ".openclaw/openclaw.json");
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+
+      let nextConfig = config;
+      if (credential.type === "oauth") {
+        const email =
+          typeof credential.email === "string" && credential.email.trim()
+            ? credential.email.trim()
+            : "default";
+        await writeOAuthCredentials(provider, {
+          access: credential.access || "",
+          refresh: credential.refresh || "",
+          expires: credential.expires || 0,
+          email: credential.email || "default",
+        });
+        nextConfig = applyAuthProfileConfig(nextConfig, {
+          profileId: `${provider}:${email}`,
+          provider,
+          mode: "oauth",
+          ...(email !== "default" ? { email } : {}),
+        });
+      } else if (credential.type === "token") {
+        if (!credential.token?.trim()) {
+          return { success: false, error: "Missing token credential" };
+        }
+        upsertAuthProfile({
+          profileId: `${provider}:default`,
+          credential: {
+            type: "token",
+            provider,
+            token: credential.token,
+          },
+        });
+        nextConfig = applyAuthProfileConfig(nextConfig, {
+          profileId: `${provider}:default`,
+          provider,
+          mode: "token",
+        });
+      } else if (credential.type === "api_key") {
+        if (!credential.key?.trim()) {
+          return { success: false, error: "Missing API key credential" };
+        }
+        if (provider === "anthropic") {
+          await setAnthropicApiKey(credential.key);
+        } else if (provider === "openrouter") {
+          await setOpenrouterApiKey(credential.key);
+        } else {
+          upsertAuthProfile({
+            profileId: `${provider}:default`,
+            credential: {
+              type: "api_key",
+              provider,
+              key: credential.key,
+            },
+          });
+        }
+        nextConfig = applyAuthProfileConfig(nextConfig, {
+          profileId: `${provider}:default`,
+          provider,
+          mode: "api_key",
+        });
+      }
+
+      // Update model config
+      const selectedModel = options?.model?.trim();
+      const resolvedModel = selectedModel || authResult.defaultModel;
+      if (resolvedModel) {
+        nextConfig = applyPrimaryModel(nextConfig, resolvedModel);
+      }
+
+      // Write updated config
+      writeFileSync(configPath, JSON.stringify(nextConfig, null, 2));
+
+      // Update gateway settings
+      gatewayPort = nextConfig.gateway?.port || 18789;
+      gatewayBind = nextConfig.gateway?.bind || "loopback";
+      if (nextConfig.gateway?.auth?.token) {
+        gatewayToken = nextConfig.gateway.auth.token;
+      }
+
+      initResult = result;
+
+      try {
+        await startGateway();
+        openControlUiWindow();
+      } catch (error) {
+        console.warn("[Gateway] Failed to auto-start or open Control UI:", error);
+      }
+
+      return { success: true };
+    } catch (error) {
+      return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    },
+  );
+
+  // Open OAuth URL in browser
+  ipcMain.handle("onboard-open-url", async (_event, url: string) => {
+    try {
+      await shell.openExternal(url);
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  });
 }
 
 // App lifecycle
@@ -382,6 +794,7 @@ app.whenReady().then(async () => {
   try {
     await startGateway();
     console.log("[Gateway] ✓ Gateway started successfully");
+    openControlUiWindow();
   } catch (error) {
     console.error("[Gateway] ✗ Failed to start gateway:", error);
   }

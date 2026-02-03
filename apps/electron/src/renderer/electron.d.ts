@@ -51,10 +51,48 @@ interface GatewayExitData {
   signal: string | null;
 }
 
+// Onboarding types
+interface ProviderConfig {
+  id: string;
+  label: string;
+  authMethods: Array<{ id: string; label: string; kind: "oauth" | "api_key" | "token" | "device_code" | "custom" }>;
+  defaultModel: string;
+  envKey: string;
+  isDev?: boolean;
+}
+
+interface AuthResult {
+  success: boolean;
+  provider: string;
+  method: string;
+  credential?: {
+    type: "api_key" | "token" | "oauth";
+    provider: string;
+    key?: string;
+    token?: string;
+    access?: string;
+    refresh?: string;
+    expires?: number;
+    email?: string;
+  };
+  defaultModel?: string;
+  error?: string;
+}
+
+interface ModelCatalogEntry {
+  id: string;
+  name: string;
+  provider: string;
+  contextWindow?: number;
+  reasoning?: boolean;
+  input?: Array<"text" | "image">;
+}
+
 interface ElectronAPI {
   // OpenClaw initialization
   openclawInit: (options?: PresetConfigOptions) => Promise<InitializationResult>;
   openclawIsInitialized: () => Promise<boolean>;
+  openclawReset: () => Promise<{ success: boolean; error?: string }>;
 
   // Gateway management
   gatewayStart: (apiKey?: string) => Promise<{ success: boolean; error?: string }>;
@@ -62,7 +100,21 @@ interface ElectronAPI {
   gatewayStatus: () => Promise<GatewayStatus>;
   getAppInfo: () => Promise<AppInfo>;
 
+  // Onboarding
+  onboardListProviders: () => Promise<ProviderConfig[]>;
+  onboardAuthApiKey: (provider: string, apiKey: string) => Promise<AuthResult>;
+  onboardAuthToken: (provider: string, token: string) => Promise<AuthResult>;
+  onboardAuthOAuth: (provider: string) => Promise<AuthResult>;
+  onboardOAuthSubmitCode: (code: string) => Promise<{ success: boolean }>;
+  onboardListModels: (provider: string) => Promise<ModelCatalogEntry[]>;
+  onboardComplete: (
+    authResult: AuthResult,
+    options?: { model?: string },
+  ) => Promise<{ success: boolean; error?: string }>;
+  onboardOpenUrl: (url: string) => Promise<{ success: boolean; error?: string }>;
+
   // Event listeners
+  onOAuthRequestCode: (callback: (message: string) => void) => () => void;
   onGatewayLog: (callback: (data: GatewayLogData) => void) => () => void;
   onGatewayExit: (callback: (data: GatewayExitData) => void) => () => void;
 }

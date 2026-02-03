@@ -1,7 +1,9 @@
+// @ts-nocheck
 /**
  * Automatic onboarding and initialization for the Electron app
  * This module provides a simplified one-call initialization
  */
+
 
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";

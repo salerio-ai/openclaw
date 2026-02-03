@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 
 // Types are defined in electron.d.ts
+import Onboard from "./components/Onboard";
 
 interface LogEntry {
   id: number;
@@ -14,7 +15,8 @@ export default function App() {
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [apiKey, setApiKey] = useState<string>("");
+  const [showOnboard, setShowOnboard] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
   const logIdRef = useRef(0);
 
   // Load initial data
@@ -27,12 +29,19 @@ export default function App() {
       }
 
       try {
-        const [status, info] = await Promise.all([
+        const [status, info, initialized] = await Promise.all([
           window.electronAPI.gatewayStatus(),
           window.electronAPI.getAppInfo(),
+          window.electronAPI.openclawIsInitialized(),
         ]);
         setGatewayStatus(status);
         setAppInfo(info);
+        setIsInitialized(initialized);
+
+        // Show onboarding if not initialized
+        if (!initialized) {
+          setShowOnboard(true);
+        }
       } catch (err) {
         console.error("Failed to load initial data:", err);
         setError(err instanceof Error ? err.message : String(err));
@@ -40,6 +49,26 @@ export default function App() {
     };
 
     loadInitialData();
+  }, []);
+
+  // Refresh gateway status periodically (handles auto-start and external changes)
+  useEffect(() => {
+    if (!window.electronAPI) return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const status = await window.electronAPI.gatewayStatus();
+        if (!cancelled) {
+          setGatewayStatus(status);
+        }
+      } catch {}
+    };
+    tick();
+    const interval = setInterval(tick, 2000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, []);
 
   // Setup gateway log listeners
@@ -83,7 +112,7 @@ export default function App() {
   const handleStartGateway = useCallback(async () => {
     if (!window.electronAPI) return;
     setError(null);
-    const result = await window.electronAPI.gatewayStart(apiKey);
+    const result = await window.electronAPI.gatewayStart();
     if (!result.success) {
       setError(result.error ?? "Failed to start gateway");
       return;
@@ -91,7 +120,7 @@ export default function App() {
     // Refresh status
     const status = await window.electronAPI.gatewayStatus();
     setGatewayStatus(status);
-  }, [apiKey]);
+  }, []);
 
   const handleStopGateway = useCallback(async () => {
     if (!window.electronAPI) return;
@@ -132,6 +161,38 @@ export default function App() {
     setLogs([]);
   }, []);
 
+  const handleReOnboard = useCallback(async () => {
+    if (!window.electronAPI) return;
+    setError(null);
+    const result = await window.electronAPI.openclawReset();
+    if (!result.success) {
+      setError(result.error ?? "Failed to reset onboarding");
+      return;
+    }
+    setIsInitialized(false);
+    setShowOnboard(true);
+  }, []);
+
+  // Onboard handlers
+  const handleOnboardComplete = useCallback(async () => {
+    setShowOnboard(false);
+    setIsInitialized(true);
+    // Refresh status after onboarding
+    if (window.electronAPI) {
+      const status = await window.electronAPI.gatewayStatus();
+      setGatewayStatus(status);
+    }
+  }, []);
+
+  const handleOnboardCancel = useCallback(() => {
+    setShowOnboard(false);
+  }, []);
+
+  // Show onboarding if needed
+  if (showOnboard) {
+    return <Onboard onComplete={handleOnboardComplete} onCancel={handleOnboardCancel} />;
+  }
+
   return (
     <div className="app">
       {/* Header */}
@@ -158,18 +219,6 @@ export default function App() {
         <section className="control-panel">
           <div className="control-group">
             <h2>Gateway Control</h2>
-            <div className="api-key-input">
-              <label htmlFor="api-key">OpenRouter API Key:</label>
-              <input
-                id="api-key"
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="sk-or-v1-..."
-                disabled={gatewayStatus?.running}
-                className="input-field"
-              />
-            </div>
             <div className="button-group">
               <button
                 type="button"
@@ -186,6 +235,14 @@ export default function App() {
                 className="btn btn-danger"
               >
                 Stop Gateway
+              </button>
+              <button
+                type="button"
+                onClick={handleReOnboard}
+                disabled={gatewayStatus?.running}
+                className="btn btn-secondary"
+              >
+                Re-Onboard
               </button>
               <button
                 type="button"

@@ -12,16 +12,19 @@
     "dev:main": "NODE_ENV=development pnpm exec electron .",
     "build": "pnpm run build:preload && pnpm run build:main && pnpm run build:renderer",
     "build:preload": "pnpm exec esbuild src/main/preload.ts --bundle --platform=node --target=node22 --outfile=dist/main/preload.js --external:electron --format=cjs",
-    "build:main-dev": "pnpm exec esbuild src/main/index.ts --bundle --platform=node --target=node22 --outfile=dist/main-dev.js --external:electron --format=esm",
-    "build:main": "pnpm exec esbuild src/main/index.ts --bundle --platform=node --target=node22 --outfile=dist/main/index.js --external:electron --external:electron-builder --external:@electron/rebuild --format=esm",
+    "build:main-dev": "pnpm exec esbuild src/main/index.ts --bundle --platform=node --target=node22 --outfile=dist/main-dev.js --packages=external --format=esm",
+    "build:main": "pnpm exec esbuild src/main/index.ts --bundle --platform=node --target=node22 --outfile=dist/main/index.js --packages=external --format=esm",
     "build:renderer": "vite build",
     "preview": "vite preview",
     "lint": "oxlint",
     "format": "oxfmt"
   },
   "dependencies": {
+    "@mariozechner/pi-ai": "0.51.0",
+    "google-auth-library": "^10.5.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "ws": "^8.19.0"
   },
   "devDependencies": {
     "@types/node": "^22.19.7",

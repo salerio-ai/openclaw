@@ -4,6 +4,7 @@
  */
 
 import { randomBytes } from "node:crypto";
+/* @ts-ignore */
 import type { OpenClawConfig } from "../../../src/config/config.js";
 
 export interface PresetConfigOptions {
