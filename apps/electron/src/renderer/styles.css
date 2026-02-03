@@ -106,6 +106,44 @@
   flex-wrap: wrap;
 }
 
+/* API key input */
+.api-key-input {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.api-key-input label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #f0f6fc;
+}
+
+.input-field {
+  padding: 8px 12px;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  color: #c9d1d9;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.input-field:focus {
+  border-color: #58a6ff;
+}
+
+.input-field:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.input-field::placeholder {
+  color: #8b949e;
+}
+
 .btn {
   padding: 8px 16px;
   border: none;

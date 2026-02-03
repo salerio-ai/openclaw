@@ -19,7 +19,6 @@ let createConfigIO: (deps?: { fs?: typeof import("node:fs"); json5?: any; env?: 
 };
 let resolveConfigPath: () => string;
 let ensureOpenClawModelsJson: (config?: unknown, agentDirOverride?: string) => Promise<{ agentDir: string; wrote: boolean }>;
-let upsertAuthProfile: (params: { profileId: string; credential: { type: string; key?: string; provider?: string }; agentDir?: string }) => void;
 
 async function loadOpenClawModules() {
   try {
@@ -33,10 +32,6 @@ async function loadOpenClawModules() {
     // @ts-expect-error - Dynamic import from main repo dist
     const modelsConfigModule = await import("../../../dist/agents/models-config.js");
     ensureOpenClawModelsJson = modelsConfigModule.ensureOpenClawModelsJson;
-
-    // @ts-expect-error - Dynamic import from main repo dist
-    const authProfilesModule = await import("../../../dist/agents/auth-profiles.js");
-    upsertAuthProfile = authProfilesModule.upsertAuthProfile;
   } catch (cause) {
     console.warn("Could not load OpenClaw modules from dist, trying bundled path...");
     // In production, these would be bundled differently
@@ -137,28 +132,9 @@ export async function initializeOpenClaw(
     // Initialize auth profiles (if API key is configured)
     // Check all profiles in the generated config
     const profiles = config.auth?.profiles || {};
-    const authProvider = options.authProvider || "google";
-    const apiKey = authProvider === "google" ? "AIzaSyDw0Tr49odoZZDy_XglyqlDiaTTb8drHgY" : undefined;
-    
     for (const [profileId, profileConfig] of Object.entries(profiles)) {
       const profile = profileConfig as { provider?: string; mode?: string };
-      // Only set up profile if we have a key for it
-      if (apiKey && profile.provider === authProvider) {
-        console.log(`Setting up auth profile for ${profile.provider || profileId}...`);
-        try {
-          upsertAuthProfile({
-            profileId,
-            credential: {
-              type: profile.mode || "api_key",
-              key: apiKey,
-              provider: profile.provider,
-            },
-          });
-          console.log(`✓ Auth profile created for ${profile.provider || profileId}`);
-        } catch (error) {
-          console.warn(`Failed to create auth profile for ${profileId}: ${error}`);
-        }
-      }
+      console.log(`Auth profile found: ${profileId} (${profile.provider})`);
     }
 
     // Generate models.json

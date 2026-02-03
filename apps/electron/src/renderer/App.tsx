@@ -14,6 +14,7 @@ export default function App() {
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [apiKey, setApiKey] = useState<string>("");
   const logIdRef = useRef(0);
 
   // Load initial data
@@ -82,7 +83,7 @@ export default function App() {
   const handleStartGateway = useCallback(async () => {
     if (!window.electronAPI) return;
     setError(null);
-    const result = await window.electronAPI.gatewayStart();
+    const result = await window.electronAPI.gatewayStart(apiKey);
     if (!result.success) {
       setError(result.error ?? "Failed to start gateway");
       return;
@@ -90,7 +91,7 @@ export default function App() {
     // Refresh status
     const status = await window.electronAPI.gatewayStatus();
     setGatewayStatus(status);
-  }, []);
+  }, [apiKey]);
 
   const handleStopGateway = useCallback(async () => {
     if (!window.electronAPI) return;
@@ -157,6 +158,18 @@ export default function App() {
         <section className="control-panel">
           <div className="control-group">
             <h2>Gateway Control</h2>
+            <div className="api-key-input">
+              <label htmlFor="api-key">OpenRouter API Key:</label>
+              <input
+                id="api-key"
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="sk-or-v1-..."
+                disabled={gatewayStatus?.running}
+                className="input-field"
+              />
+            </div>
             <div className="button-group">
               <button
                 type="button"
