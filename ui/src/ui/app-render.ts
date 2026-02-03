@@ -125,6 +125,26 @@ export function renderApp(state: AppViewState) {
             <span class="mono">${state.connected ? "OK" : "Offline"}</span>
           </div>
           ${renderThemeToggle(state)}
+          ${state.oauthLoginSuccess
+            ? html`
+                <button class="bustly-login-btn bustly-login-btn--success" disabled>
+                  ✓ 已登录
+                </button>
+              `
+            : state.oauthLoginPending
+              ? html`
+                  <button class="bustly-login-btn bustly-login-btn--pending" disabled>
+                    登录中...
+                  </button>
+                `
+              : html`
+                  <button
+                    class="bustly-login-btn"
+                    @click=${() => (state as unknown as { handleBustlyLogin: () => void }).handleBustlyLogin?.()}
+                  >
+                    登录 →
+                  </button>
+                `}
         </div>
       </header>
       <aside class="nav ${state.settings.navCollapsed ? "nav--collapsed" : ""}">

@@ -1,7 +1,13 @@
 import type { AgentBinding, AgentsConfig } from "./types.agents.js";
 import type { ApprovalsConfig } from "./types.approvals.js";
 import type { AuthConfig } from "./types.auth.js";
-import type { DiagnosticsConfig, LoggingConfig, SessionConfig, WebConfig } from "./types.base.js";
+import type {
+  DiagnosticsConfig,
+  LoggingConfig,
+  SalerioOAuthConfig,
+  SessionConfig,
+  WebConfig,
+} from "./types.base.js";
 import type { BrowserConfig } from "./types.browser.js";
 import type { ChannelsConfig } from "./types.channels.js";
 import type { CronConfig } from "./types.cron.js";
@@ -88,6 +94,8 @@ export type OpenClawConfig = {
   approvals?: ApprovalsConfig;
   session?: SessionConfig;
   web?: WebConfig;
+  /** Salerio OAuth configuration for desktop client login. */
+  salerioOAuth?: SalerioOAuthConfig;
   channels?: ChannelsConfig;
   cron?: CronConfig;
   hooks?: HooksConfig;

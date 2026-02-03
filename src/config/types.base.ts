@@ -166,3 +166,13 @@ export type IdentityConfig = {
   /** Avatar image: workspace-relative path, http(s) URL, or data URI. */
   avatar?: string;
 };
+
+/** Salerio OAuth configuration for desktop client login. */
+export type SalerioOAuthConfig = {
+  /** Base URL for Salerio API (e.g., "https://test-www.bustly.shop"). */
+  apiBaseUrl: string;
+  /** Base URL for Salerio Web interface (e.g., "https://test-www.bustly.shop"). */
+  webBaseUrl: string;
+  /** Client ID for OpenClaw desktop application. */
+  clientId: string;
+};
