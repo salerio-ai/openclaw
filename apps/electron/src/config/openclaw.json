@@ -1,0 +1,81 @@
+{
+  "meta": {
+    "lastTouchedVersion": "2026.1.30",
+    "lastTouchedAt": "2026-02-02T13:04:30.006Z"
+  },
+  "wizard": {
+    "lastRunAt": "2026-02-02T13:04:29.977Z",
+    "lastRunVersion": "2026.1.30",
+    "lastRunCommand": "electron-auto-init",
+    "lastRunMode": "local"
+  },
+  "env": {
+    "shellEnv": {
+      "enabled": true
+    },
+    "OPENROUTER_API_KEY": "sk-or-v1-"
+  },
+  "auth": {
+    "profiles": {
+      "google:default": {
+        "provider": "google",
+        "mode": "api_key"
+      }
+    }
+  },
+  "models": {
+    "bedrockDiscovery": {
+      "enabled": false,
+      "providerFilter": []
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "openrouter/minimax/minimax-m2.1"
+      },
+      "models": {
+        "openrouter/minimax/minimax-m2.1": {}
+      },
+      "workspace": "~/.openclaw/workspace",
+      "compaction": {
+        "mode": "safeguard"
+      },
+      "maxConcurrent": 4,
+      "subagents": {
+        "maxConcurrent": 8
+      }
+    },
+    "list": []
+  },
+  "messages": {
+    "ackReactionScope": "group-mentions"
+  },
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto"
+  },
+  "channels": {},
+  "gateway": {
+    "port": 18789,
+    "mode": "local",
+    "bind": "loopback",
+    "auth": {
+      "mode": "token",
+      "token": "b2e29f3c23514f2539b1bfea5ba2443578b0eb3b"
+    },
+    "tailscale": {
+      "mode": "off",
+      "resetOnExit": false
+    },
+    "remote": {}
+  },
+  "skills": {
+    "install": {
+      "nodeManager": "pnpm"
+    }
+  },
+  "plugins": {
+    "entries": {}
+  }
+}

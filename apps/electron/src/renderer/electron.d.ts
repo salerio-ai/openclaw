@@ -9,16 +9,10 @@ interface PresetConfigOptions {
   gatewayBind?: "loopback" | "lan" | "auto";
   /** Workspace directory (default: "~/.openclaw/workspace") */
   workspace?: string;
-  /** Auth provider and profile */
-  authProvider?: "google" | "anthropic" | "openai";
-  /** Auth mode (default: "api_key") */
-  authMode?: "api_key" | "token";
   /** Node manager for skills (default: "pnpm") */
   nodeManager?: "npm" | "pnpm" | "bun";
-  /** Slack bot token (optional) */
-  slackBotToken?: string;
-  /** Slack app token (optional) */
-  slackAppToken?: string;
+  /** OpenRouter API key for minimax model */
+  openrouterApiKey?: string;
 }
 
 interface InitializationResult {
@@ -63,7 +57,7 @@ interface ElectronAPI {
   openclawIsInitialized: () => Promise<boolean>;
 
   // Gateway management
-  gatewayStart: () => Promise<{ success: boolean; error?: string }>;
+  gatewayStart: (apiKey?: string) => Promise<{ success: boolean; error?: string }>;
   gatewayStop: () => Promise<{ success: boolean; error?: string }>;
   gatewayStatus: () => Promise<GatewayStatus>;
   getAppInfo: () => Promise<AppInfo>;

@@ -13,16 +13,10 @@ export interface PresetConfigOptions {
   gatewayBind?: "loopback" | "lan" | "auto";
   /** Workspace directory (default: "~/.openclaw/workspace") */
   workspace?: string;
-  /** Auth provider and profile */
-  authProvider?: "google" | "anthropic" | "openai";
-  /** Auth mode (default: "api_key") */
-  authMode?: "api_key" | "token";
   /** Node manager for skills (default: "pnpm") */
   nodeManager?: "npm" | "pnpm" | "bun";
-  /** Slack bot token (optional) */
-  slackBotToken?: string;
-  /** Slack app token (optional) */
-  slackAppToken?: string;
+  /** OpenRouter API key for minimax model */
+  openrouterApiKey?: string;
 }
 
 /**
@@ -35,11 +29,8 @@ export function generateDefaultConfig(
     gatewayPort = 18789,
     gatewayBind = "loopback",
     workspace = "~/.openclaw/workspace",
-    authProvider = "google",
-    authMode = "api_key",
     nodeManager = "pnpm",
-    slackBotToken,
-    slackAppToken,
+    openrouterApiKey,
   } = options;
 
   // Generate a random gateway token
@@ -60,12 +51,13 @@ export function generateDefaultConfig(
       shellEnv: {
         enabled: true,
       },
+      ...(openrouterApiKey && { OPENROUTER_API_KEY: openrouterApiKey }),
     },
     auth: {
       profiles: {
-        [`${authProvider}:default`]: {
-          provider: authProvider,
-          mode: authMode,
+        "google:default": {
+          provider: "google",
+          mode: "api_key",
         },
       },
     },
@@ -78,20 +70,11 @@ export function generateDefaultConfig(
     agents: {
       defaults: {
         model: {
-          primary: authProvider === "google" ? "google/gemini-3-pro-preview" : "anthropic/claude-sonnet-4-20250514",
+          primary: "openrouter/minimax/minimax-m2.1",
         },
-        models:
-          authProvider === "google"
-            ? {
-                "google/gemini-3-pro-preview": {
-                  alias: "gemini",
-                },
-              }
-            : {
-                "anthropic/claude-sonnet-4-20250514": {
-                  alias: "sonnet",
-                },
-              },
+        models: {
+          "openrouter/minimax/minimax-m2.1": {},
+        },
         workspace,
         compaction: {
           mode: "safeguard",
@@ -134,29 +117,6 @@ export function generateDefaultConfig(
       entries: {},
     },
   };
-
-  // Add Slack configuration if tokens are provided
-  if (slackBotToken || slackAppToken) {
-    config.channels = {
-      slack: {
-        mode: "socket",
-        webhookPath: "/slack/events",
-        enabled: true,
-        ...(slackBotToken && { botToken: slackBotToken }),
-        ...(slackAppToken && { appToken: slackAppToken }),
-        userTokenReadOnly: true,
-        groupPolicy: "allowlist",
-        channels: {},
-      },
-    };
-    config.plugins = {
-      entries: {
-        slack: {
-          enabled: true,
-        },
-      },
-    };
-  }
 
   return { config, gatewayToken };
 }

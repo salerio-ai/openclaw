@@ -10,7 +10,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   openclawIsInitialized: () => ipcRenderer.invoke("openclaw-is-initialized"),
 
   // Gateway management
-  gatewayStart: () => ipcRenderer.invoke("gateway-start"),
+  gatewayStart: (apiKey?: string) => ipcRenderer.invoke("gateway-start", apiKey),
   gatewayStop: () => ipcRenderer.invoke("gateway-stop"),
   gatewayStatus: () => ipcRenderer.invoke("gateway-status"),
 

@@ -262,8 +262,27 @@ function setupIpcHandlers(): void {
   });
 
   // Start gateway
-  ipcMain.handle("gateway-start", async () => {
+  ipcMain.handle("gateway-start", async (_event, apiKey?: string) => {
     try {
+      // If API key is provided, re-initialize config with the API key
+      if (apiKey && apiKey.trim()) {
+        console.log("[Gateway] Re-initializing with API key...");
+        const result = await initializeOpenClaw({
+          force: true,
+          openrouterApiKey: apiKey.trim(),
+        });
+        if (result.success) {
+          initResult = result;
+          gatewayPort = result.gatewayPort;
+          gatewayBind = result.gatewayBind;
+          if (result.gatewayToken) {
+            gatewayToken = result.gatewayToken;
+          }
+        } else {
+          return { success: false, error: result.error ?? "Failed to initialize config" };
+        }
+      }
+
       await startGateway();
       return { success: true };
     } catch (error) {
