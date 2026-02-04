@@ -250,6 +250,9 @@ importers:
       '@mariozechner/pi-coding-agent':
         specifier: 0.51.0
         version: 0.51.0(ws@8.19.0)(zod@3.25.76)
+      '@whiskeysockets/baileys':
+        specifier: 7.0.0-rc.9
+        version: 7.0.0-rc.9(sharp@0.34.5)
       ajv:
         specifier: ^8.17.1
         version: 8.17.1
@@ -265,6 +268,9 @@ importers:
       proper-lockfile:
         specifier: ^4.1.2
         version: 4.1.2
+      qrcode-terminal:
+        specifier: ^0.12.0
+        version: 0.12.0
       react:
         specifier: ^19.1.0
         version: 19.2.4

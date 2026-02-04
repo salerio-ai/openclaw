@@ -9,9 +9,10 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { execFile, spawnSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import type { PresetConfigOptions } from "../config/default-config.js";
 import { resolveConfigPath as resolveConfigPathFromSrc } from "../../../../src/config/paths";
+import { resolveCliInvocation, resolveOpenClawCliPath } from "./cli-utils.js";
 
 const __dirname = resolve(fileURLToPath(import.meta.url), "..");
 
@@ -21,51 +22,6 @@ function resolveConfigPathSafe(): string {
   } catch {
     return join(homedir(), ".openclaw", "openclaw.json");
   }
-}
-
-function resolveOpenClawCliPath(): string | null {
-  const candidates = [
-    resolve(process.resourcesPath, "openclaw.mjs"),
-    resolve(__dirname, "../../../openclaw.mjs"),
-    resolve(__dirname, "../../../../openclaw.mjs"),
-    resolve(__dirname, "../../../dist/cli.js"),
-    resolve(__dirname, "../../dist/cli.js"),
-  ];
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) {
-      return candidate;
-    }
-  }
-  return null;
-}
-
-function resolveNodeBinary(): string | null {
-  const envPath = process.env.OPENCLAW_NODE_PATH?.trim();
-  if (envPath && existsSync(envPath)) {
-    return envPath;
-  }
-
-  const bundledCandidates = [
-    resolve(process.resourcesPath, "node", "bin", "node"),
-    resolve(process.resourcesPath, "node"),
-  ];
-  for (const candidate of bundledCandidates) {
-    if (existsSync(candidate)) {
-      return candidate;
-    }
-  }
-
-  try {
-    const which = spawnSync("/usr/bin/which", ["node"], { encoding: "utf-8" });
-    const path = which.stdout?.trim();
-    if (path && existsSync(path)) {
-      return path;
-    }
-  } catch {
-    // ignore
-  }
-
-  return null;
 }
 
 async function runCliOnboard(options: InitializationOptions): Promise<void> {
@@ -104,13 +60,12 @@ async function runCliOnboard(options: InitializationOptions): Promise<void> {
     args.push("--auth-choice", "skip");
   }
 
-  const isMjs = cliPath.endsWith(".mjs");
-  const nodePath = isMjs ? resolveNodeBinary() : null;
-  if (isMjs && !nodePath) {
+  const invocation = resolveCliInvocation(cliPath, args, { includeBundledNode: true });
+  if (!invocation) {
     throw new Error("Node binary not found. Set OPENCLAW_NODE_PATH or bundle node.");
   }
-  const command = isMjs ? nodePath! : cliPath;
-  const commandArgs = isMjs ? [cliPath, ...args] : args;
+  const command = invocation.command;
+  const commandArgs = invocation.args;
   const env = { ...process.env };
 
   await new Promise<void>((resolvePromise, rejectPromise) => {

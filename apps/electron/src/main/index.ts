@@ -19,6 +19,7 @@ import {
   isFullyInitialized,
   type InitializationResult,
 } from "./auto-init.js";
+import { resolveCliInvocation, resolveOpenClawCliPath } from "./cli-utils.js";
 import {
   listProviders,
   authenticateWithApiKey,
@@ -135,70 +136,6 @@ function ensureBundledExtensionsDir(params: {
   return bundledDir;
 }
 
-/**
- * Find the OpenClaw CLI executable (bundled with Electron app only)
- */
-function findOpenClawCli(): string | null {
-  // In development: look for built CLI in repo root
-  // In production: look for bundled CLI in app resources
-
-  // Try to find the CLI in bundled locations only
-  const possiblePaths = [
-    // Production: bundled via electron-builder extraResources
-    resolve(process.resourcesPath, "openclaw.mjs"),
-    // Development: CLI built to repo root
-    resolve(__dirname, "../../../openclaw.mjs"),
-    resolve(__dirname, "../../../../openclaw.mjs"),
-    resolve(__dirname, "../../../dist/cli.js"),
-    // Development: CLI built in dist directory
-    resolve(__dirname, "../../dist/cli.js"),
-    // Production: Bundled CLI (adjust based on your build configuration)
-    // If using electron-builder, resources might be in process.resourcesPath
-    // For now, we assume CLI is bundled relative to the app
-  ];
-
-  for (const path of possiblePaths) {
-    const exists = existsSync(path);
-    console.log(`[CLI] check ${path} -> ${exists ? "found" : "missing"}`);
-    if (exists) {
-      console.log(`Found OpenClaw CLI at: ${path}`);
-      return path;
-    }
-  }
-
-  console.error("OpenClaw CLI not found in bundled locations");
-  return null;
-}
-
-function resolveNodeBinary(): string | null {
-  const envPath = process.env.OPENCLAW_NODE_PATH?.trim();
-  if (envPath && existsSync(envPath)) {
-    return envPath;
-  }
-
-  const bundledCandidates = [
-    resolve(process.resourcesPath, "node", "bin", "node"),
-    resolve(process.resourcesPath, "node"),
-  ];
-  for (const candidate of bundledCandidates) {
-    if (existsSync(candidate)) {
-      return candidate;
-    }
-  }
-
-  try {
-    const which = spawnSync("/usr/bin/which", ["node"], { encoding: "utf-8" });
-    const path = which.stdout?.trim();
-    if (path && existsSync(path)) {
-      return path;
-    }
-  } catch {
-    // ignore
-  }
-
-  return null;
-}
-
 function resolveBundledOpenClawVersion(): string | null {
   const candidatePaths = [
     resolve(process.resourcesPath, "openclaw.package.json"),
@@ -258,7 +195,10 @@ async function startGateway(): Promise<boolean> {
       return;
     }
 
-    const cliPath = findOpenClawCli();
+    const cliPath = resolveOpenClawCliPath({
+      info: (message) => console.log(message),
+      error: (message) => console.error(message),
+    });
     if (!cliPath) {
       reject(new Error("OpenClaw CLI not found"));
       return;
@@ -309,14 +249,14 @@ async function startGateway(): Promise<boolean> {
       }
     };
 
-    const isMjs = cliPath.endsWith(".mjs");
-    const nodePath = isMjs ? resolveNodeBinary() : null;
-    if (isMjs && !nodePath) {
+    const invocation = resolveCliInvocation(cliPath, args, { includeBundledNode: true });
+    if (!invocation) {
       writeMainLog("Failed to locate node binary. Set OPENCLAW_NODE_PATH or bundle node.");
       reject(new Error("Node binary not found for OpenClaw CLI"));
       return;
     }
-    if (isMjs && nodePath) {
+    const nodePath = invocation.nodePath ?? null;
+    if (invocation.isMjs && nodePath) {
       try {
         const nodeVersion = spawnSync(nodePath, ["-v"], { encoding: "utf-8" }).stdout?.trim();
         const nodeArch = spawnSync(nodePath, ["-p", "process.arch"], { encoding: "utf-8" })
@@ -329,8 +269,8 @@ async function startGateway(): Promise<boolean> {
     writeMainLog(
       `Gateway launch inputs: cli=${cliPath} node=${nodePath ?? "n/a"} port=${gatewayPort} bind=${gatewayBind}`,
     );
-    const spawnCommand = isMjs ? nodePath! : cliPath;
-    const spawnArgs = isMjs ? [cliPath, ...args] : args;
+    const spawnCommand = invocation.command;
+    const spawnArgs = invocation.args;
     const appPath = app.getAppPath();
     const resourcesPath = process.resourcesPath || appPath;
     const bundledPluginsDir = ensureBundledExtensionsDir({
