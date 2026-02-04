@@ -1,11 +1,16 @@
 import { app, BrowserWindow, ipcMain, shell } from "electron";
 import { resolve } from "node:path";
-import { spawn, ChildProcess } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { spawn, spawnSync, ChildProcess } from "node:child_process";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, appendFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { Socket } from "node:net";
-import { initializeOpenClaw, isInitialized, type InitializationResult } from "./auto-init.js";
+import {
+  initializeOpenClaw,
+  getConfigPath,
+  isFullyInitialized,
+  type InitializationResult,
+} from "./auto-init.js";
 import {
   listProviders,
   authenticateWithApiKey,
@@ -28,14 +33,38 @@ const __dirname = resolve(fileURLToPath(import.meta.url), "..");
 
 let gatewayProcess: ChildProcess | null = null;
 let mainWindow: BrowserWindow | null = null;
-let controlWindow: BrowserWindow | null = null;
+let needsOnboardAtLaunch = false;
 let gatewayPort: number = 18789;
 let gatewayBind: string = "loopback";
 let gatewayToken: string | null = null;
 let initResult: InitializationResult | null = null;
+let mainLogPath: string | null = null;
 
 // Gateway configuration
 const GATEWAY_HOST = "127.0.0.1";
+
+function ensureMainLogPath(): string {
+  if (mainLogPath) {
+    return mainLogPath;
+  }
+  const logDir = resolve(app.getPath("home"), ".openclaw/electron/logs");
+  mkdirSync(logDir, { recursive: true, mode: 0o700 });
+  mainLogPath = resolve(logDir, "main.log");
+  return mainLogPath;
+}
+
+function writeMainLog(message: string) {
+  try {
+    const logPath = ensureMainLogPath();
+    const line = `[${new Date().toISOString()}] ${message}\n`;
+    appendFileSync(logPath, line, "utf-8");
+  } catch (error) {
+    console.error("[Main log] Failed to write:", error);
+  }
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("main-log", { message });
+  }
+}
 
 /**
  * Find the OpenClaw CLI executable (bundled with Electron app only)
@@ -46,8 +75,11 @@ function findOpenClawCli(): string | null {
 
   // Try to find the CLI in bundled locations only
   const possiblePaths = [
+    // Production: bundled via electron-builder extraResources
+    resolve(process.resourcesPath, "openclaw.mjs"),
     // Development: CLI built to repo root
     resolve(__dirname, "../../../openclaw.mjs"),
+    resolve(__dirname, "../../../../openclaw.mjs"),
     resolve(__dirname, "../../../dist/cli.js"),
     // Development: CLI built in dist directory
     resolve(__dirname, "../../dist/cli.js"),
@@ -57,13 +89,67 @@ function findOpenClawCli(): string | null {
   ];
 
   for (const path of possiblePaths) {
-    if (existsSync(path)) {
+    const exists = existsSync(path);
+    console.log(`[CLI] check ${path} -> ${exists ? "found" : "missing"}`);
+    if (exists) {
       console.log(`Found OpenClaw CLI at: ${path}`);
       return path;
     }
   }
 
   console.error("OpenClaw CLI not found in bundled locations");
+  return null;
+}
+
+function resolveNodeBinary(): string | null {
+  const envPath = process.env.OPENCLAW_NODE_PATH?.trim();
+  if (envPath && existsSync(envPath)) {
+    return envPath;
+  }
+
+  const bundledCandidates = [
+    resolve(process.resourcesPath, "node", "bin", "node"),
+    resolve(process.resourcesPath, "node"),
+  ];
+  for (const candidate of bundledCandidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  try {
+    const which = spawnSync("/usr/bin/which", ["node"], { encoding: "utf-8" });
+    const path = which.stdout?.trim();
+    if (path && existsSync(path)) {
+      return path;
+    }
+  } catch {
+    // ignore
+  }
+
+  return null;
+}
+
+function resolveBundledOpenClawVersion(): string | null {
+  const candidatePaths = [
+    resolve(process.resourcesPath, "openclaw.package.json"),
+    resolve(__dirname, "../../../../package.json"),
+  ];
+
+  for (const candidate of candidatePaths) {
+    try {
+      if (!existsSync(candidate)) {
+        continue;
+      }
+      const raw = JSON.parse(readFileSync(candidate, "utf-8")) as { version?: string };
+      if (raw.version) {
+        return raw.version;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   return null;
 }
 
@@ -94,10 +180,12 @@ function loadGatewayConfig(): { port: number; bind: string; token?: string } | n
  * Start the OpenClaw Gateway process
  */
 async function startGateway(): Promise<boolean> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolvePromise, reject) => {
+    const startAt = Date.now();
     if (gatewayProcess) {
       console.log("Gateway already running");
-      resolve(true);
+      writeMainLog("Gateway already running");
+      resolvePromise(true);
       return;
     }
 
@@ -143,47 +231,169 @@ async function startGateway(): Promise<boolean> {
       args.push("--token", gatewayToken);
     }
 
-    gatewayProcess = spawn(cliPath, args, {
-      env: {
-        ...process.env,
-        NODE_ENV: "production",
-      },
+    const recentStdout: string[] = [];
+    const recentStderr: string[] = [];
+    const pushRecent = (buffer: string[], line: string) => {
+      buffer.push(line);
+      if (buffer.length > 50) {
+        buffer.shift();
+      }
+    };
+
+    const isMjs = cliPath.endsWith(".mjs");
+    const nodePath = isMjs ? resolveNodeBinary() : null;
+    if (isMjs && !nodePath) {
+      writeMainLog("Failed to locate node binary. Set OPENCLAW_NODE_PATH or bundle node.");
+      reject(new Error("Node binary not found for OpenClaw CLI"));
+      return;
+    }
+    if (isMjs && nodePath) {
+      try {
+        const nodeVersion = spawnSync(nodePath, ["-v"], { encoding: "utf-8" }).stdout?.trim();
+        const nodeArch = spawnSync(nodePath, ["-p", "process.arch"], { encoding: "utf-8" })
+          .stdout?.trim();
+        writeMainLog(`Gateway node runtime: path=${nodePath} version=${nodeVersion ?? "unknown"} arch=${nodeArch ?? "unknown"}`);
+      } catch (error) {
+        writeMainLog(`Gateway node runtime probe failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    writeMainLog(
+      `Gateway launch inputs: cli=${cliPath} node=${nodePath ?? "n/a"} port=${gatewayPort} bind=${gatewayBind}`,
+    );
+    const spawnCommand = isMjs ? nodePath! : cliPath;
+    const spawnArgs = isMjs ? [cliPath, ...args] : args;
+    const bundledPluginsDir = resolve(process.resourcesPath, "extensions");
+    const bundledVersion = resolveBundledOpenClawVersion();
+    if (bundledVersion) {
+      writeMainLog(`Bundled OpenClaw version: ${bundledVersion}`);
+    }
+    const homeDir = app.getPath("home");
+    const stateDir = resolve(homeDir, ".openclaw");
+    const shellPath = process.env.SHELL?.trim() || "/bin/zsh";
+    const appPath = app.getAppPath();
+    const resourcesPath = process.resourcesPath || appPath;
+    const appNodeModules = resolve(appPath, "node_modules");
+    const resourcesNodeModules = resolve(resourcesPath, "node_modules");
+    const openclawNodeModules = resolve(resourcesPath, "openclaw", "node_modules");
+    const inheritedNodePath = process.env.NODE_PATH?.trim();
+    const nodePathCandidates = [
+      openclawNodeModules,
+      appNodeModules,
+      resourcesNodeModules,
+      inheritedNodePath,
+    ];
+    const combinedNodePath = nodePathCandidates
+      .filter((value) => Boolean(value && value.length > 0))
+      .join(":");
+    const effectiveNodePath = combinedNodePath || openclawNodeModules;
+    const nodePathStatus = nodePathCandidates
+      .filter((value) => Boolean(value && value.length > 0))
+      .map((value) => `${value}(${existsSync(value!) ? "exists" : "missing"})`)
+      .join(" | ");
+    const spawnEnv = {
+      ...process.env,
+      NODE_ENV: "production",
+      OPENCLAW_BUNDLED_PLUGINS_DIR: bundledPluginsDir,
+      OPENCLAW_STATE_DIR: stateDir,
+      OPENCLAW_CONFIG: resolve(stateDir, "openclaw.json"),
+      HOME: homeDir,
+      USERPROFILE: homeDir,
+      OPENCLAW_LOAD_SHELL_ENV: "1",
+      SHELL: shellPath,
+      NODE_PATH: effectiveNodePath,
+      ...(bundledVersion ? { OPENCLAW_BUNDLED_VERSION: bundledVersion } : {}),
+    };
+    writeMainLog(
+      `Gateway env: SHELL=${shellPath} OPENCLAW_LOAD_SHELL_ENV=1 NODE_PATH=${effectiveNodePath || "(empty)"} appPath=${appPath} resourcesPath=${resourcesPath} candidates=${nodePathStatus || "(none)"} rawOpenClawNodeModules=${openclawNodeModules} rawResourcesNodeModules=${resourcesNodeModules} rawAppNodeModules=${appNodeModules} inheritedNodePath=${inheritedNodePath ?? "(none)"}`,
+    );
+
+    writeMainLog(
+      `Gateway spawn: command=${spawnCommand} args=${spawnArgs.join(" ")}`,
+    );
+    gatewayProcess = spawn(spawnCommand, spawnArgs, {
+      env: spawnEnv,
       stdio: "pipe",
     });
 
     gatewayProcess.stdout?.on("data", (data) => {
       const output = data.toString().trim();
+      if (output) {
+        pushRecent(recentStdout, output);
+        writeMainLog(`Gateway stdout: ${output}`);
+      }
       console.log(`[Gateway stdout]: ${output}`);
       mainWindow?.webContents.send("gateway-log", { stream: "stdout", message: output });
     });
 
     gatewayProcess.stderr?.on("data", (data) => {
       const output = data.toString().trim();
+      if (output) {
+        pushRecent(recentStderr, output);
+        writeMainLog(`Gateway stderr: ${output}`);
+      }
       console.error(`[Gateway stderr]: ${output}`);
       mainWindow?.webContents.send("gateway-log", { stream: "stderr", message: output });
     });
 
     gatewayProcess.on("error", (error) => {
       console.error("[Gateway error]:", error);
+      writeMainLog(`Gateway spawn error: ${error instanceof Error ? error.message : String(error)}`);
       gatewayProcess = null;
       reject(error);
     });
 
     gatewayProcess.on("exit", (code, signal) => {
       console.log(`[Gateway exit]: code=${code}, signal=${signal}`);
+      writeMainLog(
+        `Gateway exited during startup: code=${code ?? "null"} signal=${signal ?? "null"}`,
+      );
+      if (recentStderr.length > 0) {
+        writeMainLog(`Gateway stderr tail:\n${recentStderr.join("\n")}`);
+      } else if (recentStdout.length > 0) {
+        writeMainLog(`Gateway stdout tail:\n${recentStdout.join("\n")}`);
+      }
       gatewayProcess = null;
       mainWindow?.webContents.send("gateway-exit", { code, signal });
     });
 
-    // Give it a moment to start
-    setTimeout(() => {
-      if (gatewayProcess && !gatewayProcess.killed) {
-        console.log("Gateway started successfully");
-        resolve(true);
-      } else {
-        reject(new Error("Gateway failed to start"));
+    const startupTimeoutMs = 20_000;
+    const exitPromise = new Promise<never>((_resolve, rejectExit) => {
+      gatewayProcess?.once("exit", (code, signal) => {
+        rejectExit(
+          new Error(`Gateway exited during startup: code=${code ?? "null"} signal=${signal ?? "null"}`),
+        );
+      });
+    });
+    const readyPromise = (async () => {
+      const ready = await waitForGatewayPort(gatewayPort, startupTimeoutMs);
+      if (!ready) {
+        throw new Error(`Gateway port ${gatewayPort} not ready`);
       }
-    }, 2000); // Increased timeout to allow for startup
+      return true;
+    })();
+
+    Promise.race([readyPromise, exitPromise])
+      .then(() => {
+        const elapsedMs = Date.now() - startAt;
+        writeMainLog(`Gateway startup ready in ${elapsedMs}ms`);
+        console.log("Gateway started successfully");
+        resolvePromise(true);
+      })
+      .catch((error) => {
+        const elapsedMs = Date.now() - startAt;
+        writeMainLog(`Gateway startup failed after ${elapsedMs}ms`);
+        const stderrTail = recentStderr.length > 0 ? recentStderr.join("\n") : "";
+        const stdoutTail = recentStdout.length > 0 ? recentStdout.join("\n") : "";
+        if (stderrTail) {
+          writeMainLog(`Gateway startup stderr:\n${stderrTail}`);
+        } else if (stdoutTail) {
+          writeMainLog(`Gateway startup stdout:\n${stdoutTail}`);
+        }
+        if (gatewayProcess && !gatewayProcess.killed) {
+          gatewayProcess.kill("SIGTERM");
+        }
+        reject(error);
+      });
   });
 }
 
@@ -251,8 +461,11 @@ async function waitForGatewayPort(port: number, timeoutMs = 20_000): Promise<boo
   return false;
 }
 
-function openControlUiWindow(): void {
+function openControlUiInMainWindow(): void {
   const controlUrl = buildControlUiUrl({ port: gatewayPort, token: gatewayToken });
+  writeMainLog(
+    `Opening Control UI: url=${controlUrl} token=${gatewayToken ? "present" : "missing"}`,
+  );
   const loadingHtml = `
     <!doctype html>
     <html>
@@ -320,54 +533,44 @@ function openControlUiWindow(): void {
       </body>
     </html>
   `.trim();
-  if (controlWindow && !controlWindow.isDestroyed()) {
-    controlWindow.loadURL(`data:text/html,${encodeURIComponent(loadingHtml)}`).catch(() => {});
-    waitForGatewayPort(gatewayPort).then((ready) => {
-      if (!ready || !controlWindow || controlWindow.isDestroyed()) {
-        return;
-      }
-      controlWindow.loadURL(controlUrl).catch((error) => {
-        console.warn("[Control UI] Failed to reload Control UI:", error);
-      });
-    });
-    controlWindow.focus();
+  if (!mainWindow || mainWindow.isDestroyed()) {
     return;
   }
-
-  controlWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    minWidth: 800,
-    minHeight: 600,
-    title: "OpenClaw Control",
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-    },
+  const webContents = mainWindow.webContents;
+  const logLoadFailure = (
+    _event: unknown,
+    errorCode: number,
+    errorDescription: string,
+    validatedUrl: string,
+    isMainFrame: boolean,
+  ) => {
+    if (!isMainFrame) {
+      return;
+    }
+    writeMainLog(
+      `Control UI load failed: code=${errorCode} url=${validatedUrl} error=${errorDescription}`,
+    );
+  };
+  webContents.on("did-fail-load", logLoadFailure);
+  webContents.on("did-finish-load", () => {
+    const url = webContents.getURL();
+    writeMainLog(`Control UI load finished: url=${url}`);
+  });
+  webContents.on("did-navigate", (_event, url) => {
+    writeMainLog(`Control UI navigated: url=${url}`);
   });
 
-  controlWindow.on("closed", () => {
-    controlWindow = null;
-  });
-
-  controlWindow.loadURL(`data:text/html,${encodeURIComponent(loadingHtml)}`).catch(() => {});
-  controlWindow.webContents.on("did-fail-load", () => {
-    waitForGatewayPort(gatewayPort).then((ready) => {
-      if (!ready || !controlWindow || controlWindow.isDestroyed()) {
-        return;
-      }
-      controlWindow.loadURL(controlUrl).catch((error) => {
-        console.warn("[Control UI] Failed to load Control UI:", error);
-      });
-    });
+  mainWindow.loadURL(`data:text/html,${encodeURIComponent(loadingHtml)}`).catch((error) => {
+    writeMainLog(`Loading screen failed: ${error instanceof Error ? error.message : String(error)}`);
   });
 
   waitForGatewayPort(gatewayPort).then((ready) => {
-    if (!ready || !controlWindow || controlWindow.isDestroyed()) {
+    writeMainLog(`Gateway port ${gatewayPort} ready=${ready}`);
+    if (!ready || !mainWindow || mainWindow.isDestroyed()) {
       return;
     }
-    controlWindow.loadURL(controlUrl).catch((error) => {
-      console.warn("[Control UI] Failed to load Control UI:", error);
+    mainWindow.loadURL(controlUrl).catch((error) => {
+      writeMainLog(`Control UI loadURL failed: ${error instanceof Error ? error.message : String(error)}`);
     });
   });
 }
@@ -407,6 +610,14 @@ function createWindow(): void {
   });
 }
 
+function ensureWindow(): void {
+  if (app.isReady()) {
+    createWindow();
+    return;
+  }
+  app.once("ready", () => createWindow());
+}
+
 /**
  * Setup IPC handlers
  */
@@ -431,16 +642,18 @@ function setupIpcHandlers(): void {
 
   // Check if initialized
   ipcMain.handle("openclaw-is-initialized", () => {
-    return isInitialized();
+    return isFullyInitialized();
+  });
+
+  // Whether this launch needs onboarding (computed on app start)
+  ipcMain.handle("openclaw-needs-onboard", () => {
+    return needsOnboardAtLaunch;
   });
 
   // Reset onboarding (delete ~/.openclaw and stop gateway)
   ipcMain.handle("openclaw-reset", async () => {
     try {
       await stopGateway();
-      if (controlWindow && !controlWindow.isDestroyed()) {
-        controlWindow.close();
-      }
       const openclawDir = resolve(app.getPath("home"), ".openclaw");
       rmSync(openclawDir, { recursive: true, force: true });
       initResult = null;
@@ -455,6 +668,9 @@ function setupIpcHandlers(): void {
   // Start gateway
   ipcMain.handle("gateway-start", async (_event, apiKey?: string) => {
     try {
+      if (!isFullyInitialized()) {
+        return { success: false, error: "OpenClaw is not onboarded yet." };
+      }
       // If API key is provided, re-initialize config with the API key
       if (apiKey && apiKey.trim()) {
         console.log("[Gateway] Re-initializing with API key...");
@@ -504,7 +720,7 @@ function setupIpcHandlers(): void {
       host: GATEWAY_HOST,
       bind: gatewayBind,
       wsUrl,
-      initialized: isInitialized(),
+      initialized: isFullyInitialized(),
     };
   });
 
@@ -711,7 +927,7 @@ function setupIpcHandlers(): void {
 
       try {
         await startGateway();
-        openControlUiWindow();
+        openControlUiInMainWindow();
       } catch (error) {
         console.warn("[Gateway] Failed to auto-start or open Control UI:", error);
       }
@@ -743,12 +959,22 @@ function setupIpcHandlers(): void {
 // App lifecycle
 app.whenReady().then(async () => {
   setupIpcHandlers();
-  createWindow();
 
   console.log("=== OpenClaw Desktop starting ===");
+  writeMainLog("OpenClaw Desktop starting");
+  writeMainLog(`mainLogPath=${ensureMainLogPath()}`);
+  writeMainLog(`resourcesPath=${process.resourcesPath}`);
+  writeMainLog(`appVersion=${app.getVersion()} electron=${process.versions.electron}`);
 
+  const isDev = process.env.NODE_ENV === "development";
+  const configPath = getConfigPath();
+  console.log(`[Init] configPath=${configPath ?? "unresolved"}`);
+  writeMainLog(`configPath=${configPath ?? "unresolved"}`);
   // Check if we need to initialize or re-initialize (fix broken config)
-  let needsInit = !isInitialized();
+  const fullyInitialized = isFullyInitialized();
+  console.log(`[Init] fullyInitialized=${fullyInitialized}`);
+  writeMainLog(`fullyInitialized=${fullyInitialized}`);
+  let needsInit = !fullyInitialized;
   if (!needsInit) {
     const checkConfig = loadGatewayConfig();
     if (checkConfig && !checkConfig.token) {
@@ -756,28 +982,16 @@ app.whenReady().then(async () => {
       needsInit = true;
     }
   }
+  needsOnboardAtLaunch = needsInit;
 
-  // Auto-initialize if needed
+  ensureWindow();
+
   if (needsInit) {
-    console.log("[Init] Running auto-initialization...");
-    try {
-      const result = await initializeOpenClaw({ force: true });
-      if (result.success) {
-        console.log("[Init] ✓ Auto-initialization successful");
-        initResult = result;
-        gatewayPort = result.gatewayPort;
-        gatewayBind = result.gatewayBind;
-        if (result.gatewayToken) {
-          gatewayToken = result.gatewayToken;
-        }
-      } else {
-        console.error("[Init] ✗ Auto-initialization failed:", result.error);
-      }
-    } catch (error) {
-      console.error("[Init] ✗ Auto-initialization error:", error);
-    }
+    console.log("[Init] Skipping auto-initialization; waiting for onboarding.");
+    writeMainLog("Skipping auto-initialization; waiting for onboarding.");
   } else {
     console.log("[Init] Configuration already exists and is valid");
+    writeMainLog("Configuration already exists and is valid");
     // Load existing config to get port and token
     const existingConfig = loadGatewayConfig();
     if (existingConfig) {
@@ -789,14 +1003,19 @@ app.whenReady().then(async () => {
     }
   }
 
-  // Auto-start gateway
-  console.log("[Gateway] Auto-starting gateway...");
-  try {
-    await startGateway();
-    console.log("[Gateway] ✓ Gateway started successfully");
-    openControlUiWindow();
-  } catch (error) {
-    console.error("[Gateway] ✗ Failed to start gateway:", error);
+  if (!needsInit) {
+    // Auto-start gateway
+    console.log("[Gateway] Auto-starting gateway...");
+    writeMainLog("Gateway auto-starting");
+    try {
+      await startGateway();
+      console.log("[Gateway] ✓ Gateway started successfully");
+      writeMainLog("Gateway started successfully");
+      openControlUiInMainWindow();
+    } catch (error) {
+      console.error("[Gateway] ✗ Failed to start gateway:", error);
+      writeMainLog(`Gateway failed to start: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 });
 
@@ -822,12 +1041,13 @@ app.on("window-all-closed", async () => {
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     console.log("[Lifecycle] Reactivating app (create new window)");
-    createWindow();
+    ensureWindow();
   }
 });
 
 app.on("before-quit", async () => {
   console.log("[Lifecycle] App about to quit");
+  writeMainLog("App about to quit");
 
   // Ensure gateway is stopped before quitting
   if (gatewayProcess) {
@@ -839,4 +1059,14 @@ app.on("before-quit", async () => {
       console.error("[Gateway] ✗ Failed to stop gateway:", error);
     }
   }
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("[Main] uncaughtException:", error);
+  writeMainLog(`uncaughtException: ${error?.stack ?? String(error)}`);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[Main] unhandledRejection:", reason);
+  writeMainLog(`unhandledRejection: ${reason instanceof Error ? reason.stack : String(reason)}`);
 });

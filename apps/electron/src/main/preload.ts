@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   openclawInit: (options?: any) => ipcRenderer.invoke("openclaw-init", options),
   openclawIsInitialized: () => ipcRenderer.invoke("openclaw-is-initialized"),
   openclawReset: () => ipcRenderer.invoke("openclaw-reset"),
+  openclawNeedsOnboard: () => ipcRenderer.invoke("openclaw-needs-onboard"),
 
   // Gateway management
   gatewayStart: (apiKey?: string) => ipcRenderer.invoke("gateway-start", apiKey),
@@ -47,5 +48,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     const listener = (_event: any, data: any) => callback(data);
     ipcRenderer.on("gateway-exit", listener);
     return () => ipcRenderer.removeListener("gateway-exit", listener);
+  },
+  onMainLog: (callback: any) => {
+    const listener = (_event: any, data: any) => callback(data);
+    ipcRenderer.on("main-log", listener);
+    return () => ipcRenderer.removeListener("main-log", listener);
   },
 });
