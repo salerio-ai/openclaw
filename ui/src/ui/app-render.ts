@@ -1,24 +1,5 @@
 import { html, nothing } from "lit";
 import type { AppViewState } from "./app-view-state";
-import type { GatewayBrowserClient, GatewayHelloOk } from "./gateway";
-import type { UiSettings } from "./storage";
-import type { ThemeMode } from "./theme";
-import type { ThemeTransitionContext } from "./theme-transition";
-import type {
-  ConfigSnapshot,
-  CronJob,
-  CronRunLogEntry,
-  CronStatus,
-  HealthSnapshot,
-  LogEntry,
-  LogLevel,
-  PresenceEntry,
-  ChannelsStatusSnapshot,
-  SessionsListResult,
-  SkillStatusReport,
-  StatusSummary,
-} from "./types";
-import type { ChatQueueItem, CronFormState } from "./ui-types";
 import { parseAgentSessionKey } from "../../../src/routing/session-key.js";
 import { refreshChatAvatar } from "./app-chat";
 import { renderChatControls, renderTab, renderThemeToggle } from "./app-render.helpers";
@@ -63,17 +44,9 @@ import {
   saveSkillApiKey,
   updateSkillEdit,
   updateSkillEnabled,
-  type SkillMessage,
 } from "./controllers/skills";
 import { icons } from "./icons";
-import {
-  TAB_GROUPS,
-  iconForTab,
-  pathForTab,
-  subtitleForTab,
-  titleForTab,
-  type Tab,
-} from "./navigation";
+import { TAB_GROUPS, subtitleForTab, titleForTab } from "./navigation";
 import { renderChannels } from "./views/channels";
 import { renderChat } from "./views/chat";
 import { renderConfig } from "./views/config";
@@ -99,8 +72,12 @@ function resolveAssistantAvatarUrl(state: AppViewState): string | undefined {
   const agent = list.find((entry) => entry.id === agentId);
   const identity = agent?.identity;
   const candidate = identity?.avatarUrl ?? identity?.avatar;
-  if (!candidate) return undefined;
-  if (AVATAR_DATA_RE.test(candidate) || AVATAR_HTTP_RE.test(candidate)) return candidate;
+  if (!candidate) {
+    return undefined;
+  }
+  if (AVATAR_DATA_RE.test(candidate) || AVATAR_HTTP_RE.test(candidate)) {
+    return candidate;
+  }
   return identity?.avatarUrl;
 }
 
@@ -148,6 +125,26 @@ export function renderApp(state: AppViewState) {
             <span class="mono">${state.connected ? "OK" : "Offline"}</span>
           </div>
           ${renderThemeToggle(state)}
+          ${state.oauthLoginSuccess
+            ? html`
+                <button class="bustly-login-btn bustly-login-btn--success" disabled>
+                  ✓ 已登录
+                </button>
+              `
+            : state.oauthLoginPending
+              ? html`
+                  <button class="bustly-login-btn bustly-login-btn--pending" disabled>
+                    登录中...
+                  </button>
+                `
+              : html`
+                  <button
+                    class="bustly-login-btn"
+                    @click=${() => (state as unknown as { handleBustlyLogin: () => void }).handleBustlyLogin?.()}
+                  >
+                    登录 →
+                  </button>
+                `}
         </div>
       </header>
       <aside class="nav ${state.settings.navCollapsed ? "nav--collapsed" : ""}">
@@ -487,7 +484,9 @@ export function renderApp(state: AppViewState) {
                   return Promise.all([loadChatHistory(state), refreshChatAvatar(state)]);
                 },
                 onToggleFocusMode: () => {
-                  if (state.onboarding) return;
+                  if (state.onboarding) {
+                    return;
+                  }
                   state.applySettings({
                     ...state.settings,
                     chatFocusMode: !state.settings.chatFocusMode,

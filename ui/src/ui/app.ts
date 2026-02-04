@@ -1,4 +1,4 @@
-import { LitElement, html, nothing } from "lit";
+import { LitElement } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import type { EventLogEntry } from "./app-events";
 import type { DevicePairingList } from "./controllers/devices";
@@ -84,10 +84,14 @@ declare global {
 const injectedAssistantIdentity = resolveInjectedAssistantIdentity();
 
 function resolveOnboardingMode(): boolean {
-  if (!window.location.search) return false;
+  if (!window.location.search) {
+    return false;
+  }
   const params = new URLSearchParams(window.location.search);
   const raw = params.get("onboarding");
-  if (!raw) return false;
+  if (!raw) {
+    return false;
+  }
   const normalized = raw.trim().toLowerCase();
   return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
 }
@@ -160,7 +164,7 @@ export class OpenClawApp extends LitElement {
   @state() updateRunning = false;
   @state() applySessionKey = this.settings.lastActiveSessionKey;
   @state() configSnapshot: ConfigSnapshot | null = null;
-  @state() configSchema: unknown | null = null;
+  @state() configSchema: unknown = null;
   @state() configSchemaVersion: string | null = null;
   @state() configSchemaLoading = false;
   @state() configUiHints: ConfigUiHints = {};
@@ -221,7 +225,7 @@ export class OpenClawApp extends LitElement {
   @state() debugStatus: StatusSummary | null = null;
   @state() debugHealth: HealthSnapshot | null = null;
   @state() debugModels: unknown[] = [];
-  @state() debugHeartbeat: unknown | null = null;
+  @state() debugHeartbeat: unknown = null;
   @state() debugCallMethod = "";
   @state() debugCallParams = "{}";
   @state() debugCallResult: string | null = null;
@@ -242,6 +246,13 @@ export class OpenClawApp extends LitElement {
   @state() logsLimit = 500;
   @state() logsMaxBytes = 250_000;
   @state() logsAtBottom = true;
+
+  // OAuth login states
+  @state() oauthLoginPending = false;
+  @state() oauthLoginTraceId: string | null = null;
+  @state() oauthLoginError: string | null = null;
+  @state() oauthLoginSuccess = false;
+  private oauthPollInterval: number | null = null;
 
   client: GatewayBrowserClient | null = null;
   private chatScrollFrame: number | null = null;
@@ -406,7 +417,9 @@ export class OpenClawApp extends LitElement {
 
   async handleExecApprovalDecision(decision: "allow-once" | "allow-always" | "deny") {
     const active = this.execApprovalQueue[0];
-    if (!active || !this.client || this.execApprovalBusy) return;
+    if (!active || !this.client || this.execApprovalBusy) {
+      return;
+    }
     this.execApprovalBusy = true;
     this.execApprovalError = null;
     try {
@@ -424,7 +437,9 @@ export class OpenClawApp extends LitElement {
 
   handleGatewayUrlConfirm() {
     const nextGatewayUrl = this.pendingGatewayUrl;
-    if (!nextGatewayUrl) return;
+    if (!nextGatewayUrl) {
+      return;
+    }
     this.pendingGatewayUrl = null;
     applySettingsInternal(this as unknown as Parameters<typeof applySettingsInternal>[0], {
       ...this.settings,
@@ -455,7 +470,9 @@ export class OpenClawApp extends LitElement {
       window.clearTimeout(this.sidebarCloseTimer);
     }
     this.sidebarCloseTimer = window.setTimeout(() => {
-      if (this.sidebarOpen) return;
+      if (this.sidebarOpen) {
+        return;
+      }
       this.sidebarContent = null;
       this.sidebarError = null;
       this.sidebarCloseTimer = null;
@@ -466,6 +483,115 @@ export class OpenClawApp extends LitElement {
     const newRatio = Math.max(0.4, Math.min(0.7, ratio));
     this.splitRatio = newRatio;
     this.applySettings({ ...this.settings, splitRatio: newRatio });
+  }
+
+  // OAuth login handler
+  async handleBustlyLogin() {
+    console.log("[Bustly Login] handleBustlyLogin called");
+
+    if (!this.client || this.oauthLoginPending) {
+      return;
+    }
+
+    this.oauthLoginPending = true;
+    this.oauthLoginError = null;
+    this.oauthLoginSuccess = false;
+
+    try {
+      // Initiate login flow - request returns payload directly on success
+      const loginResult = await this.client.request<{
+        loginUrl: string;
+        loginTraceId: string;
+      }>("oauth.login", {});
+
+      // loginResult is the payload directly: { loginUrl, loginTraceId }
+      const { loginUrl, loginTraceId } = loginResult;
+
+      this.oauthLoginTraceId = loginTraceId;
+
+      // Open login URL in new browser window
+      window.open(loginUrl, "_blank", "noopener,noreferrer");
+
+      // Start polling for completion
+      this.startOAuthPolling(loginTraceId);
+    } catch (err) {
+      console.error("[Bustly Login] Error:", err);
+      this.oauthLoginPending = false;
+      this.oauthLoginError = err instanceof Error ? err.message : String(err);
+    }
+  }
+
+  private startOAuthPolling(loginTraceId: string) {
+    console.log("[Bustly Login] startOAuthPolling called with traceId:", loginTraceId);
+
+    // Clear any existing poll interval
+    if (this.oauthPollInterval) {
+      console.log("[Bustly Login] Clearing existing poll interval");
+      window.clearInterval(this.oauthPollInterval);
+    }
+
+    // Poll every 2 seconds
+    this.oauthPollInterval = window.setInterval(async () => {
+      console.log("[Bustly Login] Polling oauth.poll...");
+      if (!this.client) {
+        console.log("[Bustly Login] No client, stopping poll");
+        this.stopOAuthPolling();
+        return;
+      }
+
+      try {
+        // request returns payload directly on success
+        const pollData = await this.client.request<{
+          pending: boolean;
+          tokenResponse?: unknown;
+        }>("oauth.poll", {
+          loginTraceId: loginTraceId,
+        });
+        console.log("[Bustly Login] Poll data - pending:", pollData.pending);
+
+        if (!pollData.pending) {
+          console.log("[Bustly Login] Login completed successfully!");
+          // Login completed successfully
+          this.stopOAuthPolling();
+          this.oauthLoginPending = false;
+          this.oauthLoginSuccess = true;
+
+          // Reload config to show updated skills
+          console.log("[Bustly Login] Reloading overview...");
+          await loadOverviewInternal(this as unknown as Parameters<typeof loadOverviewInternal>[0]);
+        }
+      } catch (err) {
+        // Continue polling on error, unless it's a fatal error
+        console.error("[Bustly Login] Poll error:", err);
+        // If it's a fatal error, stop polling
+        if (err instanceof Error && err.message.includes("fatal")) {
+          this.stopOAuthPolling();
+          this.oauthLoginPending = false;
+          this.oauthLoginError = err.message;
+        }
+      }
+    }, 2000);
+
+    console.log("[Bustly Login] Poll interval started (2s)");
+
+    // Stop polling after 5 minutes
+    window.setTimeout(() => {
+      if (this.oauthLoginPending) {
+        console.log("[Bustly Login] Login timeout (5 minutes)");
+        this.stopOAuthPolling();
+        this.oauthLoginPending = false;
+        this.oauthLoginError = "Login timeout";
+      }
+    }, 5 * 60 * 1000);
+  }
+
+  private stopOAuthPolling() {
+    console.log("[Bustly Login] stopOAuthPolling called");
+    if (this.oauthPollInterval) {
+      window.clearInterval(this.oauthPollInterval);
+      this.oauthPollInterval = null;
+      console.log("[Bustly Login] Poll interval cleared");
+    }
   }
 
   render() {

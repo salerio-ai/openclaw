@@ -187,6 +187,41 @@
   height: 12px;
 }
 
+/* Bustly login button */
+.bustly-login-btn {
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
+  border: none;
+  border-radius: 6px;
+  background: var(--bg-soft);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+  font-family: inherit;
+}
+
+.bustly-login-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--accent);
+}
+
+.bustly-login-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.bustly-login-btn--pending {
+  background: var(--bg-hover);
+  color: var(--fg-dim);
+}
+
+.bustly-login-btn--success {
+  background: rgba(39, 174, 96, 0.2);
+  color: #27ae60;
+}
+
 /* ===========================================
    Navigation Sidebar
    =========================================== */

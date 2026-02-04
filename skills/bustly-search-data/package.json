@@ -1,0 +1,26 @@
+{
+  "name": "bustly-search-data",
+  "version": "0.2.0",
+  "description": "Bustly e-commerce data query skill for OpenClaw - Shopify, Google Ads, BigCommerce",
+  "type": "module",
+  "scripts": {
+    "get_tables": "tsx scripts/get_tables.ts",
+    "get_schema": "tsx scripts/get_schema.ts",
+    "query": "tsx scripts/query_data.ts",
+    "shop:info": "tsx -e 'import { getShopInfo } from \"./lib/presets\"; getShopInfo().then(r => console.log(JSON.stringify(r, null, 2)))'",
+    "orders:recent": "tsx -e 'import { getRecentOrders } from \"./lib/presets\"; getRecentOrders(10).then(r => console.log(JSON.stringify(r, null, 2)))'",
+    "orders:summary": "tsx -e 'import { getDailySalesSummary } from \"./lib/presets\"; getDailySalesSummary(30).then(r => console.log(JSON.stringify(r, null, 2)))'",
+    "products:top": "tsx -e 'import { getTopProductsByRevenue } from \"./lib/presets\"; getTopProductsByRevenue(10, 30).then(r => console.log(JSON.stringify(r, null, 2)))'",
+    "customers:top": "tsx -e 'import { getTopCustomers } from \"./lib/presets\"; getTopCustomers(10).then(r => console.log(JSON.stringify(r, null, 2)))'",
+    "ads:campaigns": "tsx -e 'import { getGoogleAdsCampaigns } from \"./lib/presets\"; getGoogleAdsCampaigns(10).then(r => console.log(JSON.stringify(r, null, 2)))'",
+    "catalog": "tsx -e 'import { getDataCatalog } from \"./lib/presets\"; console.log(JSON.stringify(getDataCatalog(), null, 2))'",
+    "test": "npm run get_tables"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.28",
+    "tsx": "^4.21.0"
+  }
+}
