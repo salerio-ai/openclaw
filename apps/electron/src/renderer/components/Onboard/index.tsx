@@ -82,8 +82,21 @@ export default function Onboard({ onComplete, onCancel }: OnboardProps) {
     if (providerId === "openai" && method === "oauth") {
       return "openai-codex";
     }
+    if (providerId === "google" && method === "oauth") {
+      return "google-antigravity";
+    }
     return providerId;
   }, []);
+
+  const formatTokenK = (value?: number) => {
+    if (!value || !Number.isFinite(value)) {
+      return "-";
+    }
+    if (value < 1024) {
+      return `${Math.round(value)}`;
+    }
+    return `${Math.round(value / 1024)}k`;
+  };
 
   const handleAuthenticate = useCallback(async () => {
     if (!window.electronAPI || !selectedProvider || !selectedMethod) return;
@@ -195,8 +208,8 @@ export default function Onboard({ onComplete, onCancel }: OnboardProps) {
           <div className="onboard-info">
             <h3>Supported Providers</h3>
             <ul>
-              <li><strong>OpenAI</strong> - GPT-4o and more</li>
-              <li><strong>Anthropic</strong> - Claude Sonnet 4</li>
+              <li><strong>OpenAI</strong> - GPT-5.2 (Codex) and more</li>
+              <li><strong>Google</strong> - Gemini 3 and more</li>
               <li><strong>OpenRouter</strong> - Access to multiple models</li>
             </ul>
           </div>
@@ -403,10 +416,13 @@ export default function Onboard({ onComplete, onCancel }: OnboardProps) {
                           hintParts.push(model.name);
                         }
                         if (model.contextWindow) {
-                          hintParts.push(`ctx ${model.contextWindow}`);
+                          hintParts.push(`ctx ${formatTokenK(model.contextWindow)}`);
                         }
                         if (model.reasoning) {
                           hintParts.push("reasoning");
+                        }
+                        if (model.aliases && model.aliases.length > 0) {
+                          hintParts.push(`alias: ${model.aliases.join(", ")}`);
                         }
                         const hint = hintParts.length > 0 ? ` (${hintParts.join(" | ")})` : "";
                         return (

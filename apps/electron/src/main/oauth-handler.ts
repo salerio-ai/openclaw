@@ -6,7 +6,7 @@
 import { shell } from "electron";
 import { randomBytes } from "node:crypto";
 import { createServer } from "node:http";
-import { loginOpenAICodex } from "@mariozechner/pi-ai";
+import { loginOpenAICodex, loginAntigravity } from "@mariozechner/pi-ai";
 
 let oauthPromptResolver: ((value: string) => void) | null = null;
 
@@ -27,20 +27,18 @@ const PROVIDERS = {
     label: "OpenAI",
     authMethods: [
       { id: "oauth", label: "Browser Login (OAuth)", kind: "oauth" as AuthMethodKind },
-      { id: "api_key", label: "API Key", kind: "api_key" as AuthMethodKind },
     ],
-    defaultModel: "openai/gpt-4o",
-    envKey: "OPENAI_API_KEY",
+    defaultModel: "openai-codex/gpt-5.2",
+    envKey: "OPENAI_OAUTH",
   },
-  anthropic: {
-    id: "anthropic",
-    label: "Anthropic",
+  google: {
+    id: "google",
+    label: "Google",
     authMethods: [
-      { id: "api_key", label: "API Key", kind: "api_key" as AuthMethodKind },
-      { id: "token", label: "Setup Token (Claude CLI)", kind: "token" as AuthMethodKind },
+      { id: "oauth", label: "Browser Login (OAuth)", kind: "oauth" as AuthMethodKind },
     ],
-    defaultModel: "anthropic/claude-sonnet-4-20250514",
-    envKey: "ANTHROPIC_API_KEY",
+    defaultModel: "google-antigravity/claude-opus-4-5-thinking",
+    envKey: "GOOGLE_OAUTH",
   },
   openrouter: {
     id: "openrouter",
@@ -75,16 +73,17 @@ export interface AuthResult {
   success: boolean;
   provider: string;
   method: string;
-  credential?: {
-    type: "api_key" | "token" | "oauth";
-    provider: string;
-    key?: string;
-    token?: string;
-    access?: string;
-    refresh?: string;
-    expires?: number;
-    email?: string;
-  };
+    credential?: {
+      type: "api_key" | "token" | "oauth";
+      provider: string;
+      key?: string;
+      token?: string;
+      access?: string;
+      refresh?: string;
+      expires?: number;
+      email?: string;
+      projectId?: string;
+    };
   defaultModel?: string;
   error?: string;
 }
@@ -101,91 +100,6 @@ export function listProviders(): ProviderConfig[] {
  */
 export function getProvider(id: string): ProviderConfig | null {
   return PROVIDERS[id as ProviderId] || null;
-}
-
-/**
- * Wait for OAuth callback on local HTTP server
- */
-async function waitForOAuthCallback(params: {
-  port: number;
-  expectedState: string;
-  timeoutMs: number;
-}): Promise<OAuthCallbackResult> {
-  return await new Promise<OAuthCallbackResult>((resolve, reject) => {
-    let timeout: NodeJS.Timeout | null = null;
-    const server = createServer((req, res) => {
-      try {
-        const requestUrl = new URL(req.url ?? "/", `http://127.0.0.1:${params.port}`);
-        const code = requestUrl.searchParams.get("code")?.trim();
-        const state = requestUrl.searchParams.get("state")?.trim();
-
-        if (!code) {
-          res.statusCode = 400;
-          res.setHeader("Content-Type", "text/plain; charset=utf-8");
-          res.end("Missing code");
-          return;
-        }
-        if (!state || state !== params.expectedState) {
-          res.statusCode = 400;
-          res.setHeader("Content-Type", "text/plain; charset=utf-8");
-          res.end("Invalid state");
-          return;
-        }
-
-        res.statusCode = 200;
-        res.setHeader("Content-Type", "text/html; charset=utf-8");
-        res.end(`
-          <!doctype html>
-          <html>
-            <head>
-              <meta charset='utf-8' />
-              <title>Authentication Complete</title>
-              <style>
-                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-                .container { max-width: 500px; margin: 100px auto; padding: 40px; text-align: center; }
-                h2 { color: #333; }
-                p { color: #666; }
-              </style>
-            </head>
-            <body>
-              <div class="container">
-                <h2>Authentication Complete</h2>
-                <p>You can close this window and return to OpenClaw Desktop.</p>
-              </div>
-            </body>
-          </html>
-        `);
-        if (timeout) {
-          clearTimeout(timeout);
-        }
-        server.close();
-        resolve({ code, state });
-      } catch (err) {
-        if (timeout) {
-          clearTimeout(timeout);
-        }
-        server.close();
-        reject(err);
-      }
-    });
-
-    server.once("error", (err) => {
-      if (timeout) {
-        clearTimeout(timeout);
-      }
-      server.close();
-      reject(err);
-    });
-
-    server.listen(params.port, "127.0.0.1");
-
-    timeout = setTimeout(() => {
-      try {
-        server.close();
-      } catch {}
-      reject(new Error("OAuth callback timeout"));
-    }, params.timeoutMs);
-  });
 }
 
 /**
@@ -229,7 +143,7 @@ export async function authenticateWithApiKey(params: {
 }
 
 /**
- * Authenticate using setup token (Anthropic CLI)
+ * Authenticate using setup token
  */
 export async function authenticateWithToken(params: {
   provider: ProviderId;
@@ -309,6 +223,58 @@ export async function authenticateWithOAuth(params: {
           ...creds,
         },
         defaultModel: "openai-codex/gpt-5.2",
+      };
+    } catch (error) {
+      return {
+        success: false,
+        provider: params.provider,
+        method: "oauth",
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  if (params.provider === "google") {
+    try {
+      const creds = await loginAntigravity(
+        ({ url }) => {
+          void shell.openExternal(url);
+        },
+        () => {},
+        async () => {
+          if (!params.onPromptRequired) {
+            throw new Error("Manual OAuth prompt handler unavailable");
+          }
+          let resolved = false;
+          const promptTimer = setTimeout(() => {
+            if (resolved) {
+              return;
+            }
+            params.onPromptRequired?.(
+              "If the browser doesn't finish, paste the full redirect URL here.",
+            );
+          }, 4000);
+          const value = await new Promise<string>((resolve) => {
+            oauthPromptResolver = (input) => {
+              resolved = true;
+              clearTimeout(promptTimer);
+              resolve(input);
+            };
+          });
+          return value;
+        },
+      );
+
+      return {
+        success: true,
+        provider: "google",
+        method: "oauth",
+        credential: {
+          type: "oauth",
+          provider: "google-antigravity",
+          ...creds,
+        },
+        defaultModel: "google-antigravity/claude-opus-4-5-thinking",
       };
     } catch (error) {
       return {

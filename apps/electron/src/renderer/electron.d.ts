@@ -77,6 +77,7 @@ interface AuthResult {
     refresh?: string;
     expires?: number;
     email?: string;
+    projectId?: string;
   };
   defaultModel?: string;
   error?: string;
@@ -89,6 +90,7 @@ interface ModelCatalogEntry {
   contextWindow?: number;
   reasoning?: boolean;
   input?: Array<"text" | "image">;
+  aliases?: string[];
 }
 
 interface ElectronAPI {

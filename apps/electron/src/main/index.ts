@@ -29,9 +29,16 @@ import {
 } from "./oauth-handler.js";
 import { loadModelCatalog } from "../../../../src/agents/model-catalog";
 import { upsertAuthProfile } from "../../../../src/agents/auth-profiles";
+import { DEFAULT_PROVIDER } from "../../../../src/agents/defaults";
+import {
+  buildAllowedModelSet,
+  buildModelAliasIndex,
+  modelKey,
+  normalizeProviderId,
+} from "../../../../src/agents/model-selection";
+import { loadConfig } from "../../../../src/config/config";
 import {
   applyAuthProfileConfig,
-  setAnthropicApiKey,
   setOpenrouterApiKey,
   writeOAuthCredentials,
 } from "../../../../src/commands/onboard-auth";
@@ -899,8 +906,24 @@ function setupIpcHandlers(): void {
   // List available models for provider
   ipcMain.handle("onboard-list-models", async (_event, provider: string) => {
     try {
-      const catalog = await loadModelCatalog({ useCache: false });
-      return catalog.filter((entry) => entry.provider === provider);
+      const cfg = loadConfig();
+      const catalog = await loadModelCatalog({ config: cfg, useCache: false });
+      const aliasIndex = buildModelAliasIndex({ cfg, defaultProvider: DEFAULT_PROVIDER });
+      const { allowedCatalog } = buildAllowedModelSet({
+        cfg,
+        catalog,
+        defaultProvider: DEFAULT_PROVIDER,
+      });
+      const filteredCatalog = allowedCatalog.length > 0 ? allowedCatalog : catalog;
+      const normalizedProvider = normalizeProviderId(provider);
+      const hiddenKeys = new Set(["openrouter/auto"]);
+      return filteredCatalog
+        .filter((entry) => normalizeProviderId(entry.provider) === normalizedProvider)
+        .filter((entry) => !hiddenKeys.has(modelKey(entry.provider, entry.id)))
+        .map((entry) => ({
+          ...entry,
+          aliases: aliasIndex.byKey.get(modelKey(entry.provider, entry.id)) ?? [],
+        }));
     } catch (error) {
       console.warn("[Onboard] Failed to load model catalog:", error);
       return [];
@@ -915,6 +938,9 @@ function setupIpcHandlers(): void {
       const resolveAuthProvider = (result: AuthResult) => {
         if (result.provider === "openai" && result.method === "oauth") {
           return "openai-codex";
+        }
+        if (result.provider === "google" && result.method === "oauth") {
+          return "google-antigravity";
         }
         return result.provider;
       };
@@ -953,6 +979,7 @@ function setupIpcHandlers(): void {
           refresh: credential.refresh || "",
           expires: credential.expires || 0,
           email: credential.email || "default",
+          projectId: credential.projectId,
         });
         nextConfig = applyAuthProfileConfig(nextConfig, {
           profileId: `${provider}:${email}`,
@@ -981,9 +1008,7 @@ function setupIpcHandlers(): void {
         if (!credential.key?.trim()) {
           return { success: false, error: "Missing API key credential" };
         }
-        if (provider === "anthropic") {
-          await setAnthropicApiKey(credential.key);
-        } else if (provider === "openrouter") {
+        if (provider === "openrouter") {
           await setOpenrouterApiKey(credential.key);
         } else {
           upsertAuthProfile({

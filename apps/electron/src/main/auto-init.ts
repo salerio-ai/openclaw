@@ -137,6 +137,8 @@ export interface InitializationResult {
 export interface InitializationOptions extends PresetConfigOptions {
   /** Force re-initialization even if config exists */
   force?: boolean;
+  /** OpenRouter API key for minimax model */
+  openrouterApiKey?: string;
 }
 
 /**
