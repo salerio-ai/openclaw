@@ -1,7 +1,15 @@
-import { app, BrowserWindow, ipcMain, shell } from "electron";
-import { resolve } from "node:path";
+import { app, BrowserWindow, ipcMain, shell, globalShortcut } from "electron";
+import { resolve, dirname } from "node:path";
 import { spawn, spawnSync, ChildProcess } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, appendFileSync } from "node:fs";
+import {
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  rmSync,
+  appendFileSync,
+  cpSync,
+} from "node:fs";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { Socket } from "node:net";
@@ -33,6 +41,7 @@ const __dirname = resolve(fileURLToPath(import.meta.url), "..");
 
 let gatewayProcess: ChildProcess | null = null;
 let mainWindow: BrowserWindow | null = null;
+let devPanelWindow: BrowserWindow | null = null;
 let needsOnboardAtLaunch = false;
 let gatewayPort: number = 18789;
 let gatewayBind: string = "loopback";
@@ -42,6 +51,11 @@ let mainLogPath: string | null = null;
 
 // Gateway configuration
 const GATEWAY_HOST = "127.0.0.1";
+const DEV_PANEL_HASH = "devpanel";
+const DEV_PANEL_SHORTCUT = "CommandOrControl+Shift+Alt+D";
+const PRELOAD_PATH = process.env.NODE_ENV === "development"
+  ? resolve(__dirname, "main/preload.js")
+  : resolve(__dirname, "preload.js");
 
 function ensureMainLogPath(): string {
   if (mainLogPath) {
@@ -64,6 +78,33 @@ function writeMainLog(message: string) {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("main-log", { message });
   }
+}
+
+function ensureBundledExtensionsDir(params: {
+  resourcesPath: string;
+  appPath: string;
+}): string {
+  const bundledDir = resolve(params.resourcesPath, "extensions");
+  if (existsSync(bundledDir)) {
+    return bundledDir;
+  }
+  const bundledSource = resolve(params.appPath, "..", "resources", "openclaw", "extensions");
+  if (!existsSync(bundledSource)) {
+    writeMainLog(`Bundled extensions missing and source not found: ${bundledDir}`);
+    return bundledDir;
+  }
+  try {
+    if (!existsSync(bundledDir)) {
+      mkdirSync(dirname(bundledDir), { recursive: true });
+      cpSync(bundledSource, bundledDir, { recursive: true, dereference: true });
+      writeMainLog(`Bundled extensions copied: ${bundledSource} -> ${bundledDir}`);
+    }
+  } catch (error) {
+    writeMainLog(
+      `Bundled extensions copy failed: ${bundledSource} -> ${bundledDir} (${error instanceof Error ? error.message : String(error)})`,
+    );
+  }
+  return bundledDir;
 }
 
 /**
@@ -262,7 +303,12 @@ async function startGateway(): Promise<boolean> {
     );
     const spawnCommand = isMjs ? nodePath! : cliPath;
     const spawnArgs = isMjs ? [cliPath, ...args] : args;
-    const bundledPluginsDir = resolve(process.resourcesPath, "extensions");
+    const appPath = app.getAppPath();
+    const resourcesPath = process.resourcesPath || appPath;
+    const bundledPluginsDir = ensureBundledExtensionsDir({
+      resourcesPath,
+      appPath,
+    });
     const bundledVersion = resolveBundledOpenClawVersion();
     if (bundledVersion) {
       writeMainLog(`Bundled OpenClaw version: ${bundledVersion}`);
@@ -270,8 +316,6 @@ async function startGateway(): Promise<boolean> {
     const homeDir = app.getPath("home");
     const stateDir = resolve(homeDir, ".openclaw");
     const shellPath = process.env.SHELL?.trim() || "/bin/zsh";
-    const appPath = app.getAppPath();
-    const resourcesPath = process.resourcesPath || appPath;
     const appNodeModules = resolve(appPath, "node_modules");
     const resourcesNodeModules = resolve(resourcesPath, "node_modules");
     const openclawNodeModules = resolve(resourcesPath, "openclaw", "node_modules");
@@ -303,6 +347,9 @@ async function startGateway(): Promise<boolean> {
       NODE_PATH: effectiveNodePath,
       ...(bundledVersion ? { OPENCLAW_BUNDLED_VERSION: bundledVersion } : {}),
     };
+    if (existsSync(bundledPluginsDir)) {
+      spawnEnv.OPENCLAW_BUNDLED_PLUGINS_DIR = bundledPluginsDir;
+    }
     writeMainLog(
       `Gateway env: SHELL=${shellPath} OPENCLAW_LOAD_SHELL_ENV=1 NODE_PATH=${effectiveNodePath || "(empty)"} appPath=${appPath} resourcesPath=${resourcesPath} candidates=${nodePathStatus || "(none)"} rawOpenClawNodeModules=${openclawNodeModules} rawResourcesNodeModules=${resourcesNodeModules} rawAppNodeModules=${appNodeModules} inheritedNodePath=${inheritedNodePath ?? "(none)"}`,
     );
@@ -575,6 +622,57 @@ function openControlUiInMainWindow(): void {
   });
 }
 
+function loadRendererWindow(targetWindow: BrowserWindow, options?: { hash?: string }) {
+  if (process.env.NODE_ENV === "development") {
+    const url = options?.hash ? `http://localhost:5180/#${options.hash}` : "http://localhost:5180";
+    targetWindow.loadURL(url).catch((error) => {
+      writeMainLog(`Renderer load failed: ${error instanceof Error ? error.message : String(error)}`);
+    });
+  } else {
+    const filePath = resolve(__dirname, "../renderer/index.html");
+    const loadOptions = options?.hash ? { hash: options.hash } : undefined;
+    targetWindow.loadFile(filePath, loadOptions).catch((error) => {
+      writeMainLog(`Renderer load failed: ${error instanceof Error ? error.message : String(error)}`);
+    });
+  }
+}
+
+function createDevPanelWindow(): void {
+  if (devPanelWindow && !devPanelWindow.isDestroyed()) {
+    devPanelWindow.focus();
+    return;
+  }
+
+  devPanelWindow = new BrowserWindow({
+    width: 1100,
+    height: 760,
+    minWidth: 800,
+    minHeight: 600,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: PRELOAD_PATH,
+    },
+    title: "OpenClaw DevPanel",
+  });
+
+  loadRendererWindow(devPanelWindow, { hash: DEV_PANEL_HASH });
+
+  devPanelWindow.on("closed", () => {
+    devPanelWindow = null;
+  });
+}
+
+function toggleDevPanelWindow(): boolean {
+  if (devPanelWindow && !devPanelWindow.isDestroyed()) {
+    devPanelWindow.close();
+    return false;
+  }
+
+  createDevPanelWindow();
+  return true;
+}
+
 /**
  * Create the main browser window
  */
@@ -590,19 +688,17 @@ function createWindow(): void {
       // Preload is always in dist/main/preload.js
       // In dev: __dirname = "dist/", so "main/preload.js" = "dist/main/preload.js"
       // In prod: __dirname = "dist/main/", so "preload.js" = "dist/main/preload.js"
-      preload: process.env.NODE_ENV === "development"
-        ? resolve(__dirname, "main/preload.js")
-        : resolve(__dirname, "preload.js"),
+      preload: PRELOAD_PATH,
     },
     title: "OpenClaw",
   });
 
   // Load the app
   if (process.env.NODE_ENV === "development") {
-    mainWindow.loadURL("http://localhost:5180");
+    loadRendererWindow(mainWindow);
     mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(resolve(__dirname, "../renderer/index.html"));
+    loadRendererWindow(mainWindow);
   }
 
   mainWindow.on("closed", () => {
@@ -954,6 +1050,11 @@ function setupIpcHandlers(): void {
       };
     }
   });
+
+  ipcMain.handle("devpanel-toggle-window", () => {
+    const open = toggleDevPanelWindow();
+    return { success: true, open };
+  });
 }
 
 // App lifecycle
@@ -985,6 +1086,17 @@ app.whenReady().then(async () => {
   needsOnboardAtLaunch = needsInit;
 
   ensureWindow();
+
+  const shortcutRegistered = globalShortcut.register(DEV_PANEL_SHORTCUT, () => {
+    const open = toggleDevPanelWindow();
+    writeMainLog(`DevPanel window ${open ? "opened" : "closed"} via shortcut`);
+  });
+  if (!shortcutRegistered) {
+    writeMainLog(`DevPanel shortcut registration failed: ${DEV_PANEL_SHORTCUT}`);
+  }
+  app.on("will-quit", () => {
+    globalShortcut.unregisterAll();
+  });
 
   if (needsInit) {
     console.log("[Init] Skipping auto-initialization; waiting for onboarding.");

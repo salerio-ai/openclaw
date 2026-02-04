@@ -17,8 +17,10 @@ export default function App() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showOnboard, setShowOnboard] = useState(false);
+  const [showOnboardLoading, setShowOnboardLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const logIdRef = useRef(0);
+  const isDevPanelWindow = typeof window !== "undefined" && window.location.hash === "#devpanel";
 
   // Load initial data
   useEffect(() => {
@@ -43,6 +45,8 @@ export default function App() {
         // Show onboarding if needed for this launch
         if (needsOnboard || !initialized) {
           setShowOnboard(true);
+        } else if (!isDevPanelWindow) {
+          setShowOnboardLoading(true);
         }
       } catch (err) {
         console.error("Failed to load initial data:", err);
@@ -175,11 +179,13 @@ export default function App() {
     }
     setIsInitialized(false);
     setShowOnboard(true);
+    setShowOnboardLoading(false);
   }, []);
 
   // Onboard handlers
   const handleOnboardComplete = useCallback(async () => {
     setShowOnboard(false);
+    setShowOnboardLoading(true);
     setIsInitialized(true);
     // Refresh status after onboarding
     if (window.electronAPI) {
@@ -190,11 +196,42 @@ export default function App() {
 
   const handleOnboardCancel = useCallback(() => {
     setShowOnboard(false);
+    setShowOnboardLoading(false);
   }, []);
+
+  if (isDevPanelWindow) {
+    return (
+      <DevPanel
+        appInfo={appInfo}
+        gatewayStatus={gatewayStatus}
+        logs={logs}
+        error={error}
+        onStartGateway={handleStartGateway}
+        onStopGateway={handleStopGateway}
+        onReOnboard={handleReOnboard}
+        onOpenControlUI={handleOpenControlUI}
+        onClearLogs={handleClearLogs}
+      />
+    );
+  }
 
   // Show onboarding if needed
   if (showOnboard) {
     return <Onboard onComplete={handleOnboardComplete} onCancel={handleOnboardCancel} />;
+  }
+
+  if (showOnboardLoading) {
+    return (
+      <div className="onboard-loading">
+        <div className="onboard-loading-card">
+          <div className="onboard-loading-spinner" />
+          <p className="onboard-loading-title">Starting OpenClaw Gateway</p>
+          <p className="onboard-loading-subtitle">
+            Setting up the control UI. This should only take a moment...
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (
