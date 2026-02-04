@@ -1,11 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
+import WelcomeStep from "./WelcomeStep";
+import ProviderStep from "./ProviderStep";
+import AuthStep from "./AuthStep";
+import ModelStep from "./ModelStep";
+import WhatsAppStep from "./WhatsAppStep";
 
 interface OnboardProps {
   onComplete: () => void;
   onCancel: () => void;
 }
 
-type Step = "welcome" | "select-provider" | "authenticate" | "select-model";
+type Step = "welcome" | "select-provider" | "authenticate" | "select-model" | "connect-whatsapp";
 
 export default function Onboard({ onComplete, onCancel }: OnboardProps) {
   const [step, setStep] = useState<Step>("welcome");
@@ -88,16 +93,6 @@ export default function Onboard({ onComplete, onCancel }: OnboardProps) {
     return providerId;
   }, []);
 
-  const formatTokenK = (value?: number) => {
-    if (!value || !Number.isFinite(value)) {
-      return "-";
-    }
-    if (value < 1024) {
-      return `${Math.round(value)}`;
-    }
-    return `${Math.round(value / 1024)}k`;
-  };
-
   const handleAuthenticate = useCallback(async () => {
     if (!window.electronAPI || !selectedProvider || !selectedMethod) return;
 
@@ -106,27 +101,33 @@ export default function Onboard({ onComplete, onCancel }: OnboardProps) {
     setManualOAuthPrompt(null);
 
     try {
-      let authResult: AuthResult;
+      let nextAuthResult: AuthResult;
 
       if (selectedMethod === "api_key") {
-        authResult = await window.electronAPI.onboardAuthApiKey(selectedProvider.id, credential);
+        nextAuthResult = await window.electronAPI.onboardAuthApiKey(
+          selectedProvider.id,
+          credential,
+        );
       } else if (selectedMethod === "token") {
-        authResult = await window.electronAPI.onboardAuthToken(selectedProvider.id, credential);
+        nextAuthResult = await window.electronAPI.onboardAuthToken(
+          selectedProvider.id,
+          credential,
+        );
       } else if (selectedMethod === "oauth") {
-        authResult = await window.electronAPI.onboardAuthOAuth(selectedProvider.id);
+        nextAuthResult = await window.electronAPI.onboardAuthOAuth(selectedProvider.id);
       } else {
         setError("Authentication method not yet supported");
         setLoading(false);
         return;
       }
 
-      if (!authResult.success) {
-        setError(authResult.error || "Authentication failed");
+      if (!nextAuthResult.success) {
+        setError(nextAuthResult.error || "Authentication failed");
         setLoading(false);
         return;
       }
 
-      setAuthResult(authResult);
+      setAuthResult(nextAuthResult);
 
       const modelProvider = resolveModelProvider(selectedProvider.id, selectedMethod);
       setModelLoading(true);
@@ -135,7 +136,7 @@ export default function Onboard({ onComplete, onCancel }: OnboardProps) {
         models = await window.electronAPI.onboardListModels(modelProvider);
       }
       setModelOptions(models);
-      const defaultModel = authResult.defaultModel || selectedProvider.defaultModel;
+      const defaultModel = nextAuthResult.defaultModel || selectedProvider.defaultModel;
       const defaultInOptions = models.some(
         (model) => `${model.provider}/${model.id}` === defaultModel,
       );
@@ -162,18 +163,25 @@ export default function Onboard({ onComplete, onCancel }: OnboardProps) {
 
     const manual = manualModel.trim();
     const model = manual || selectedModel.trim() || authResult.defaultModel || "";
-    const completeResult = await window.electronAPI.onboardComplete(
-      authResult,
-      model ? { model } : undefined,
-    );
+    const completeResult = await window.electronAPI.onboardComplete(authResult, {
+      model: model || undefined,
+      openControlUi: false,
+    });
     if (!completeResult.success) {
       setError(completeResult.error || "Failed to complete onboarding");
       setLoading(false);
       return;
     }
-    onComplete();
     setLoading(false);
-  }, [authResult, manualModel, selectedModel, onComplete]);
+    setStep("connect-whatsapp");
+  }, [authResult, manualModel, selectedModel]);
+
+  const handleWhatsAppDone = useCallback(async () => {
+    if (window.electronAPI?.onboardOpenControlUi) {
+      await window.electronAPI.onboardOpenControlUi();
+    }
+    onComplete();
+  }, [onComplete]);
 
   const handleBack = useCallback(() => {
     if (step === "authenticate") {
@@ -193,277 +201,73 @@ export default function Onboard({ onComplete, onCancel }: OnboardProps) {
       setSelectedModel("");
       setManualModel("");
     }
+    if (step === "connect-whatsapp") {
+      setStep("select-model");
+    }
   }, [step]);
 
-  // Welcome step
   if (step === "welcome") {
-    return (
-      <div className="onboard">
-        <div className="onboard-card">
-          <h1>Welcome to OpenClaw Desktop</h1>
-          <p className="onboard-subtitle">
-            Let's get you set up with a model provider to start using AI.
-          </p>
-
-          <div className="onboard-info">
-            <h3>Supported Providers</h3>
-            <ul>
-              <li><strong>OpenAI</strong> - GPT-5.2 (Codex) and more</li>
-              <li><strong>Google</strong> - Gemini 3 and more</li>
-              <li><strong>OpenRouter</strong> - Access to multiple models</li>
-            </ul>
-          </div>
-
-          <div className="onboard-actions">
-            <button className="btn btn-primary" onClick={() => setStep("select-provider")}>
-              Get Started
-            </button>
-            <button className="btn btn-secondary" onClick={onCancel}>
-              Cancel
-            </button>
-          </div>
-        </div>
-      </div>
-    );
+    return <WelcomeStep onStart={() => setStep("select-provider")} onCancel={onCancel} />;
   }
 
-  // Select provider step
   if (step === "select-provider") {
     return (
-      <div className="onboard">
-        <div className="onboard-card">
-          <h2>Select a Model Provider</h2>
-          <p className="onboard-subtitle">Choose which AI provider you'd like to use</p>
-
-          {error && (
-            <div className="error-message">
-              <strong>Error:</strong> {error}
-            </div>
-          )}
-
-          <div className="provider-grid">
-            {providers.map((provider) => (
-              <button
-                key={provider.id}
-                className={`provider-card ${selectedProvider?.id === provider.id ? "selected" : ""}`}
-                onClick={() => handleProviderSelect(provider)}
-              >
-                <h3>{provider.label}</h3>
-                {provider.isDev && <span className="badge badge-dev">Dev</span>}
-                <p>{provider.defaultModel}</p>
-              </button>
-            ))}
-          </div>
-
-          <div className="onboard-actions">
-            <button className="btn btn-secondary" onClick={handleBack}>
-              Back
-            </button>
-            <button className="btn btn-secondary" onClick={onCancel}>
-              Cancel
-            </button>
-          </div>
-        </div>
-      </div>
+      <ProviderStep
+        providers={providers}
+        selectedProvider={selectedProvider}
+        error={error}
+        onSelect={handleProviderSelect}
+        onBack={handleBack}
+        onCancel={onCancel}
+      />
     );
   }
 
-  // Authenticate step
   if (step === "authenticate" && selectedProvider) {
-    const selectedAuthMethod = selectedProvider.authMethods.find((m) => m.id === selectedMethod);
-
     return (
-      <div className="onboard">
-        <div className="onboard-card">
-          <h2>Authenticate with {selectedProvider.label}</h2>
-          <p className="onboard-subtitle">Choose your authentication method</p>
-
-          {error && (
-            <div className="error-message">
-              <strong>Error:</strong> {error}
-            </div>
-          )}
-
-          {!selectedMethod ? (
-            <div className="method-list">
-              {selectedProvider.authMethods.map((method) => (
-                <button
-                  key={method.id}
-                  className="method-card"
-                  onClick={() => handleMethodSelect(method.id)}
-                >
-                  <h3>{method.label}</h3>
-                  <p className="method-hint">{method.kind}</p>
-                </button>
-              ))}
-              <button className="btn btn-secondary" onClick={handleBack}>
-                Back
-              </button>
-            </div>
-          ) : (
-            <div className="auth-form">
-              <div className="auth-info">
-                <p>
-                  <strong>Method:</strong> {selectedAuthMethod?.label}
-                </p>
-                <p className="auth-hint">
-                  {manualOAuthPrompt ? (
-                     <span style={{ color: "var(--color-warning, #f5a623)" }}>{manualOAuthPrompt}</span>
-                  ) : (
-                    <>
-                      {selectedMethod === "api_key" && "Enter your API key from the provider's dashboard"}
-                      {selectedMethod === "token" && "Paste your setup token from Claude CLI"}
-                      {selectedMethod === "oauth" && "Click Continue to authenticate in your browser"}
-                    </>
-                  )}
-                </p>
-              </div>
-
-              {(selectedMethod !== "oauth" || manualOAuthPrompt) && (
-              <div className="credential-input">
-                <label htmlFor="credential">
-                  {manualOAuthPrompt ? "Redirect URL / Code" : (selectedMethod === "api_key" ? "API Key" : "Token")}
-                </label>
-                <input
-                  id="credential"
-                  type={manualOAuthPrompt ? "text" : "password"}
-                  value={credential}
-                  onChange={(e) => setCredential(e.target.value)}
-                  placeholder={
-                    manualOAuthPrompt 
-                      ? "Paste the full redirect URL or code here"
-                      : (selectedMethod === "api_key" ? "sk-..." : "Setup token")
-                  }
-                  className="input-field"
-                  autoFocus
-                />
-              </div>
-              )}
-
-              <div className="onboard-actions">
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => setSelectedMethod(null)}
-                  disabled={loading}
-                >
-                  Back
-                </button>
-                {manualOAuthPrompt ? (
-                  <button
-                    className="btn btn-primary"
-                    onClick={handleManualOAuthSubmit}
-                    disabled={!credential.trim()}
-                  >
-                    Submit Code
-                  </button>
-                ) : (
-                  <button
-                    className="btn btn-primary"
-                    onClick={handleAuthenticate}
-                    disabled={loading || (selectedMethod !== "oauth" && !credential.trim())}
-                  >
-                    {loading ? "Authenticating..." : "Continue"}
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      <AuthStep
+        provider={selectedProvider}
+        selectedMethod={selectedMethod}
+        manualOAuthPrompt={manualOAuthPrompt}
+        credential={credential}
+        loading={loading}
+        error={error}
+        onMethodSelect={handleMethodSelect}
+        onCredentialChange={setCredential}
+        onAuthenticate={handleAuthenticate}
+        onManualOAuthSubmit={handleManualOAuthSubmit}
+        onResetMethod={() => setSelectedMethod(null)}
+        onBack={handleBack}
+      />
     );
   }
 
-  // Select model step
   if (step === "select-model" && selectedProvider && authResult) {
     return (
-      <div className="onboard">
-        <div className="onboard-card">
-          <h2>Select a Default Model</h2>
-          <p className="onboard-subtitle">
-            Choose which model to use by default for {selectedProvider.label}
-          </p>
+      <ModelStep
+        provider={selectedProvider}
+        authResult={authResult}
+        modelLoading={modelLoading}
+        modelOptions={modelOptions}
+        selectedModel={selectedModel}
+        manualModel={manualModel}
+        loading={loading}
+        error={error}
+        onSelectedModelChange={setSelectedModel}
+        onManualModelChange={setManualModel}
+        onBack={handleBack}
+        onContinue={handleModelContinue}
+      />
+    );
+  }
 
-          {error && (
-            <div className="error-message">
-              <strong>Error:</strong> {error}
-            </div>
-          )}
-
-          <div className="auth-form">
-            <div className="auth-info">
-              <p>
-                <strong>Suggested:</strong> {authResult.defaultModel || selectedProvider.defaultModel}
-              </p>
-            </div>
-
-            {modelLoading ? (
-              <p>Loading models...</p>
-            ) : (
-              <>
-                {modelOptions.length > 0 && (
-                  <div className="credential-input">
-                    <label htmlFor="model-select">Model</label>
-                    <select
-                      id="model-select"
-                      className="input-field"
-                      value={selectedModel}
-                      onChange={(e) => setSelectedModel(e.target.value)}
-                    >
-                      {modelOptions.map((model) => {
-                        const label = `${model.provider}/${model.id}`;
-                        const hintParts: string[] = [];
-                        if (model.name && model.name !== model.id) {
-                          hintParts.push(model.name);
-                        }
-                        if (model.contextWindow) {
-                          hintParts.push(`ctx ${formatTokenK(model.contextWindow)}`);
-                        }
-                        if (model.reasoning) {
-                          hintParts.push("reasoning");
-                        }
-                        if (model.aliases && model.aliases.length > 0) {
-                          hintParts.push(`alias: ${model.aliases.join(", ")}`);
-                        }
-                        const hint = hintParts.length > 0 ? ` (${hintParts.join(" | ")})` : "";
-                        return (
-                          <option key={label} value={label}>
-                            {label}{hint}
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </div>
-                )}
-
-                <div className="credential-input">
-                  <label htmlFor="model-manual">Or enter manually</label>
-                  <input
-                    id="model-manual"
-                    type="text"
-                    value={manualModel}
-                    onChange={(e) => setManualModel(e.target.value)}
-                    placeholder="provider/model"
-                    className="input-field"
-                  />
-                </div>
-              </>
-            )}
-          </div>
-
-          <div className="onboard-actions">
-            <button className="btn btn-secondary" onClick={handleBack} disabled={loading}>
-              Back
-            </button>
-            <button
-              className="btn btn-primary"
-              onClick={handleModelContinue}
-              disabled={loading || (!manualModel.trim() && !selectedModel.trim())}
-            >
-              {loading ? "Saving..." : "Continue"}
-            </button>
-          </div>
-        </div>
-      </div>
+  if (step === "connect-whatsapp") {
+    return (
+      <WhatsAppStep
+        onBack={handleBack}
+        onSkip={handleWhatsAppDone}
+        onDone={handleWhatsAppDone}
+      />
     );
   }
 

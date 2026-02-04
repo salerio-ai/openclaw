@@ -93,6 +93,30 @@ interface ModelCatalogEntry {
   aliases?: string[];
 }
 
+type WhatsAppDmPolicy = "pairing" | "allowlist" | "open" | "disabled";
+
+type WhatsAppAllowFromMode = "keep" | "unset" | "list";
+
+type WhatsAppConfigRequest =
+  | {
+      mode: "personal";
+      personalNumber: string;
+    }
+  | {
+      mode: "separate";
+      dmPolicy: WhatsAppDmPolicy;
+      allowFromMode: WhatsAppAllowFromMode;
+      allowFromList?: string;
+    };
+
+interface WhatsAppStatus {
+  linked: boolean;
+  accountId: string;
+  dmPolicy: WhatsAppDmPolicy;
+  allowFrom: string[];
+  selfChatMode: boolean;
+}
+
 interface ElectronAPI {
   // OpenClaw initialization
   openclawInit: (options?: PresetConfigOptions) => Promise<InitializationResult>;
@@ -115,9 +139,14 @@ interface ElectronAPI {
   onboardListModels: (provider: string) => Promise<ModelCatalogEntry[]>;
   onboardComplete: (
     authResult: AuthResult,
-    options?: { model?: string },
+    options?: { model?: string; openControlUi?: boolean },
   ) => Promise<{ success: boolean; error?: string }>;
   onboardOpenUrl: (url: string) => Promise<{ success: boolean; error?: string }>;
+  onboardOpenControlUi: () => Promise<{ success: boolean; error?: string }>;
+  onboardWhatsAppStatus: () => Promise<WhatsAppStatus>;
+  onboardWhatsAppStart: (options?: { force?: boolean }) => Promise<{ qrDataUrl?: string; message: string }>;
+  onboardWhatsAppWait: (options?: { timeoutMs?: number }) => Promise<{ connected: boolean; message: string }>;
+  onboardWhatsAppConfig: (payload: WhatsAppConfigRequest) => Promise<{ success: boolean; error?: string }>;
 
   // Event listeners
   onOAuthRequestCode: (callback: (message: string) => void) => () => void;

@@ -37,12 +37,21 @@ import {
   normalizeProviderId,
 } from "../../../../src/agents/model-selection";
 import { loadConfig } from "../../../../src/config/config";
+import { mergeWhatsAppConfig } from "../../../../src/config/merge-config";
+import type { DmPolicy, OpenClawConfig } from "../../../../src/config/types";
 import {
   applyAuthProfileConfig,
   setOpenrouterApiKey,
   writeOAuthCredentials,
 } from "../../../../src/commands/onboard-auth";
 import { applyPrimaryModel } from "../../../../src/commands/model-picker";
+import { normalizeE164 } from "../../../../src/utils";
+import {
+  resolveDefaultWhatsAppAccountId,
+  resolveWhatsAppAuthDir,
+} from "../../../../src/web/accounts";
+import { startWebLoginWithQr, waitForWebLogin } from "../../../../src/web/login-qr";
+import { webAuthExists } from "../../../../src/web/session";
 
 const __dirname = resolve(fileURLToPath(import.meta.url), "..");
 
@@ -55,6 +64,18 @@ let gatewayBind: string = "loopback";
 let gatewayToken: string | null = null;
 let initResult: InitializationResult | null = null;
 let mainLogPath: string | null = null;
+
+type WhatsAppConfigRequest =
+  | {
+      mode: "personal";
+      personalNumber: string;
+    }
+  | {
+      mode: "separate";
+      dmPolicy: DmPolicy;
+      allowFromMode: "keep" | "unset" | "list";
+      allowFromList?: string;
+    };
 
 // Gateway configuration
 const GATEWAY_HOST = "127.0.0.1";
@@ -629,6 +650,29 @@ function openControlUiInMainWindow(): void {
   });
 }
 
+function resolveOpenClawConfigPath(): string {
+  return getConfigPath() ?? resolve(app.getPath("home"), ".openclaw/openclaw.json");
+}
+
+function readOpenClawConfigFile(): OpenClawConfig {
+  const configPath = resolveOpenClawConfigPath();
+  return JSON.parse(readFileSync(configPath, "utf-8")) as OpenClawConfig;
+}
+
+function writeOpenClawConfigFile(config: OpenClawConfig): void {
+  const configPath = resolveOpenClawConfigPath();
+  writeFileSync(configPath, JSON.stringify(config, null, 2));
+}
+
+function parseAllowFromList(raw: string): string[] {
+  const parts = String(raw)
+    .split(/[\n,;]+/g)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const normalized = parts.map((part) => (part === "*" ? "*" : normalizeE164(part)));
+  return [...new Set(normalized.filter(Boolean))];
+}
+
 function loadRendererWindow(targetWindow: BrowserWindow, options?: { hash?: string }) {
   if (process.env.NODE_ENV === "development") {
     const url = options?.hash ? `http://localhost:5180/#${options.hash}` : "http://localhost:5180";
@@ -933,7 +977,11 @@ function setupIpcHandlers(): void {
   // Complete onboarding (save credentials and initialize)
   ipcMain.handle(
     "onboard-complete",
-    async (_event, authResult: AuthResult, options?: { model?: string }) => {
+    async (
+      _event,
+      authResult: AuthResult,
+      options?: { model?: string; openControlUi?: boolean },
+    ) => {
       try {
       const resolveAuthProvider = (result: AuthResult) => {
         if (result.provider === "openai" && result.method === "oauth") {
@@ -1048,7 +1096,9 @@ function setupIpcHandlers(): void {
 
       try {
         await startGateway();
-        openControlUiInMainWindow();
+        if (options?.openControlUi !== false) {
+          openControlUiInMainWindow();
+        }
       } catch (error) {
         console.warn("[Gateway] Failed to auto-start or open Control UI:", error);
       }
@@ -1062,6 +1112,91 @@ function setupIpcHandlers(): void {
       }
     },
   );
+
+  ipcMain.handle("onboard-whatsapp-status", async () => {
+    const cfg = loadConfig();
+    const accountId = resolveDefaultWhatsAppAccountId(cfg);
+    const { authDir } = resolveWhatsAppAuthDir({ cfg, accountId });
+    const linked = await webAuthExists(authDir);
+    return {
+      linked,
+      accountId,
+      dmPolicy: cfg.channels?.whatsapp?.dmPolicy ?? "pairing",
+      allowFrom: cfg.channels?.whatsapp?.allowFrom ?? [],
+      selfChatMode: cfg.channels?.whatsapp?.selfChatMode ?? false,
+    };
+  });
+
+  ipcMain.handle("onboard-whatsapp-start", async (_event, options?: { force?: boolean }) => {
+    return await startWebLoginWithQr({ force: options?.force });
+  });
+
+  ipcMain.handle("onboard-whatsapp-wait", async (_event, options?: { timeoutMs?: number }) => {
+    return await waitForWebLogin({ timeoutMs: options?.timeoutMs });
+  });
+
+  ipcMain.handle(
+    "onboard-whatsapp-config",
+    async (_event, payload: WhatsAppConfigRequest) => {
+      try {
+        const cfg = readOpenClawConfigFile();
+        const existingAllowFrom = cfg.channels?.whatsapp?.allowFrom ?? [];
+        let next = cfg;
+
+        if (payload.mode === "personal") {
+          const normalized = normalizeE164(payload.personalNumber);
+          const merged = [
+            ...existingAllowFrom
+              .filter((item) => item !== "*")
+              .map((item) => normalizeE164(String(item)))
+              .filter(Boolean),
+            normalized,
+          ];
+          const unique = [...new Set(merged.filter(Boolean))];
+          next = mergeWhatsAppConfig(next, { selfChatMode: true });
+          next = mergeWhatsAppConfig(next, { dmPolicy: "allowlist" });
+          next = mergeWhatsAppConfig(next, { allowFrom: unique });
+        } else {
+          next = mergeWhatsAppConfig(next, { selfChatMode: false });
+          next = mergeWhatsAppConfig(next, { dmPolicy: payload.dmPolicy as DmPolicy });
+          if (payload.dmPolicy === "open") {
+            next = mergeWhatsAppConfig(next, { allowFrom: ["*"] });
+          }
+          if (payload.dmPolicy !== "disabled") {
+            if (payload.allowFromMode === "unset") {
+              next = mergeWhatsAppConfig(next, { allowFrom: undefined }, { unsetOnUndefined: ["allowFrom"] });
+            } else if (payload.allowFromMode === "list") {
+              const allowFrom = parseAllowFromList(payload.allowFromList ?? "");
+              if (allowFrom.length === 0) {
+                return { success: false, error: "AllowFrom list cannot be empty." };
+              }
+              next = mergeWhatsAppConfig(next, { allowFrom });
+            }
+          }
+        }
+
+        writeOpenClawConfigFile(next);
+        return { success: true };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    },
+  );
+
+  ipcMain.handle("onboard-open-control-ui", () => {
+    try {
+      openControlUiInMainWindow();
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  });
 
   // Open OAuth URL in browser
   ipcMain.handle("onboard-open-url", async (_event, url: string) => {

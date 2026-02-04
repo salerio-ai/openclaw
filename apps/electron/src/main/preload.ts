@@ -1,5 +1,17 @@
 import { contextBridge, ipcRenderer } from "electron";
 
+type WhatsAppConfigRequest =
+  | {
+      mode: "personal";
+      personalNumber: string;
+    }
+  | {
+      mode: "separate";
+      dmPolicy: string;
+      allowFromMode: "keep" | "unset" | "list";
+      allowFromList?: string;
+    };
+
 /**
  * Expose protected methods that allow the renderer process to use
  * the ipcRenderer without exposing the entire object
@@ -28,9 +40,17 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onboardAuthOAuth: (provider: string) => ipcRenderer.invoke("onboard-auth-oauth", provider),
   onboardOAuthSubmitCode: (code: string) => ipcRenderer.invoke("onboard-oauth-submit-code", code),
   onboardListModels: (provider: string) => ipcRenderer.invoke("onboard-list-models", provider),
-  onboardComplete: (authResult: any, options?: { model?: string }) =>
+  onboardComplete: (authResult: any, options?: { model?: string; openControlUi?: boolean }) =>
     ipcRenderer.invoke("onboard-complete", authResult, options),
   onboardOpenUrl: (url: string) => ipcRenderer.invoke("onboard-open-url", url),
+  onboardOpenControlUi: () => ipcRenderer.invoke("onboard-open-control-ui"),
+  onboardWhatsAppStatus: () => ipcRenderer.invoke("onboard-whatsapp-status"),
+  onboardWhatsAppStart: (options?: { force?: boolean }) =>
+    ipcRenderer.invoke("onboard-whatsapp-start", options),
+  onboardWhatsAppWait: (options?: { timeoutMs?: number }) =>
+    ipcRenderer.invoke("onboard-whatsapp-wait", options),
+  onboardWhatsAppConfig: (payload: WhatsAppConfigRequest) =>
+    ipcRenderer.invoke("onboard-whatsapp-config", payload),
 
   // Event listeners
   onOAuthRequestCode: (callback: any) => {
