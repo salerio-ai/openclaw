@@ -113,6 +113,25 @@ function ensureBundledExtensionsDir(params: {
   resourcesPath: string;
   appPath: string;
 }): string {
+  // Check if we're in development mode by looking for the project root extensions
+  // Try multiple possible paths from the app directory
+  const possibleProjectExtensions = [
+    // From apps/electron/dist, go up to project root (4 levels: dist -> electron -> apps -> project root)
+    resolve(params.appPath, "..", "..", "..", "extensions"),
+    // From apps/electron/dist, go up to apps (2 levels: dist -> electron)
+    resolve(params.appPath, "..", "..", "extensions"),
+    // From apps/electron (if running without dist)
+    resolve(params.appPath, "..", "extensions"),
+  ];
+
+  for (const projectExtensions of possibleProjectExtensions) {
+    if (existsSync(projectExtensions)) {
+      writeMainLog(`Using project extensions dir: ${projectExtensions}`);
+      return projectExtensions;
+    }
+  }
+
+  // Production: try bundled extensions in resources
   const bundledDir = resolve(params.resourcesPath, "extensions");
   if (existsSync(bundledDir)) {
     return bundledDir;
