@@ -222,6 +222,136 @@
   color: #27ae60;
 }
 
+/* Bustly user avatar section */
+.bustly-user-section {
+  position: relative;
+  display: inline-block;
+}
+
+.bustly-user-avatar-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bustly-user-avatar-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+}
+
+.bustly-user-avatar {
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+/* Bustly user dropdown menu */
+.bustly-user-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 200px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  z-index: 100;
+  animation: bustlyDropdownFadeIn 0.15s ease;
+}
+
+@keyframes bustlyDropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.bustly-user-dropdown__header {
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bustly-user-dropdown__avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.bustly-user-dropdown__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.bustly-user-dropdown__name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bustly-user-dropdown__email {
+  font-size: 12px;
+  color: var(--fg-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bustly-user-dropdown__divider {
+  height: 1px;
+  background: var(--border);
+  margin: 0;
+}
+
+.bustly-user-dropdown__logout {
+  width: 100%;
+  padding: 10px 16px;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--fg-dim);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.1s ease, color 0.1s ease;
+  font-family: inherit;
+}
+
+.bustly-user-dropdown__logout:hover {
+  background: var(--bg-soft);
+  color: var(--fg);
+}
+
+/* Close dropdown when clicking outside */
+.bustly-user-section--menu-open {
+  /* Additional styling if needed */
+}
+
 /* ===========================================
    Navigation Sidebar
    =========================================== */

@@ -10,10 +10,10 @@ interface OnboardProps {
   onCancel: () => void;
 }
 
-type Step = "welcome" | "select-provider" | "authenticate" | "select-model" | "connect-whatsapp";
+type Step = "bustly-login" | "welcome" | "select-provider" | "authenticate" | "select-model"  | "connect-whatsapp";
 
 export default function Onboard({ onComplete, onCancel }: OnboardProps) {
-  const [step, setStep] = useState<Step>("welcome");
+  const [step, setStep] = useState<Step>("bustly-login");
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<ProviderConfig | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
@@ -26,6 +26,68 @@ export default function Onboard({ onComplete, onCancel }: OnboardProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [manualOAuthPrompt, setManualOAuthPrompt] = useState<string | null>(null);
+  // Bustly login state
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userInfo, setUserInfo] = useState<BustlyUserInfo | null>(null);
+  const [checkingLogin, setCheckingLogin] = useState(true);
+
+  // Check Bustly login status on mount and when returning to bustly-login step
+  useEffect(() => {
+    const checkLoginStatus = async () => {
+      if (!window.electronAPI?.bustlyIsLoggedIn) return;
+
+      try {
+        setCheckingLogin(true);
+        const loggedIn = await window.electronAPI.bustlyIsLoggedIn();
+        setIsLoggedIn(loggedIn);
+
+        if (loggedIn && window.electronAPI.bustlyGetUserInfo) {
+          const info = await window.electronAPI.bustlyGetUserInfo();
+          setUserInfo(info);
+        } else {
+          setUserInfo(null);
+        }
+      } catch (err) {
+        console.error("Failed to check login status:", err);
+        setIsLoggedIn(false);
+        setUserInfo(null);
+      } finally {
+        setCheckingLogin(false);
+      }
+    };
+
+    checkLoginStatus();
+  }, []); // Run on mount to check initial login status
+
+  // Check login status again when returning to bustly-login step
+  useEffect(() => {
+    if (step === "bustly-login") {
+      const checkLoginStatus = async () => {
+        if (!window.electronAPI?.bustlyIsLoggedIn) return;
+
+        try {
+          setCheckingLogin(true);
+          const loggedIn = await window.electronAPI.bustlyIsLoggedIn();
+          setIsLoggedIn(loggedIn);
+
+          if (loggedIn && window.electronAPI.bustlyGetUserInfo) {
+            const info = await window.electronAPI.bustlyGetUserInfo();
+            setUserInfo(info);
+          } else {
+            setUserInfo(null);
+          }
+        } catch (err) {
+          console.error("Failed to check login status:", err);
+          setIsLoggedIn(false);
+          setUserInfo(null);
+        } finally {
+          setCheckingLogin(false);
+        }
+      };
+
+      checkLoginStatus();
+    }
+  }, [step]);
 
   // Load providers on mount
   useEffect(() => {
@@ -70,6 +132,53 @@ export default function Onboard({ onComplete, onCancel }: OnboardProps) {
     setSelectedMethod(methodId);
     setError(null);
     setManualOAuthPrompt(null);
+  }, []);
+
+  const handleBustlyLogin = useCallback(async () => {
+    if (!window.electronAPI) return;
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = await window.electronAPI.bustlyLogin();
+      // Only proceed to welcome step if login was successful
+      if (result.success) {
+        // Update login state
+        setIsLoggedIn(true);
+        if (window.electronAPI.bustlyGetUserInfo) {
+          const info = await window.electronAPI.bustlyGetUserInfo();
+          setUserInfo(info);
+        }
+        setStep("welcome");
+      } else {
+        setError(result.error || "Login failed");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const handleBustlyLogout = useCallback(async () => {
+    if (!window.electronAPI) return;
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = await window.electronAPI.bustlyLogout();
+      if (result.success) {
+        // Clear login state
+        setIsLoggedIn(false);
+        setUserInfo(null);
+      } else {
+        setError(result.error || "Logout failed");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   const handleManualOAuthSubmit = useCallback(async () => {
@@ -184,6 +293,15 @@ export default function Onboard({ onComplete, onCancel }: OnboardProps) {
   }, [onComplete]);
 
   const handleBack = useCallback(() => {
+    if (step === "bustly-login") {
+      // Can't go back from login page
+      return;
+    }
+    if (step === "welcome") {
+      setStep("bustly-login");
+      setError(null);
+      return;
+    }
     if (step === "authenticate") {
       setStep("select-provider");
       setSelectedProvider(null);
@@ -206,8 +324,39 @@ export default function Onboard({ onComplete, onCancel }: OnboardProps) {
     }
   }, [step]);
 
+  // Welcome step
   if (step === "welcome") {
-    return <WelcomeStep onStart={() => setStep("select-provider")} onCancel={onCancel} />;
+    return (
+      <div className="onboard">
+        <div className="onboard-card">
+          <h1>Welcome to OpenClaw Desktop</h1>
+          <p className="onboard-subtitle">
+            Let's get you set up with a model provider to start using AI.
+          </p>
+
+          <div className="onboard-info">
+            <h3>Supported Providers</h3>
+            <ul>
+              <li><strong>OpenAI</strong> - GPT-5.2 (Codex) and more</li>
+              <li><strong>Google</strong> - Gemini 3 and more</li>
+              <li><strong>OpenRouter</strong> - Access to multiple models</li>
+            </ul>
+          </div>
+
+          <div className="onboard-actions">
+            <button className="btn btn-secondary" onClick={handleBack}>
+              Back
+            </button>
+            <button className="btn btn-primary" onClick={() => setStep("select-provider")}>
+              Get Started
+            </button>
+            <button className="btn btn-secondary" onClick={onCancel}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (step === "select-provider") {

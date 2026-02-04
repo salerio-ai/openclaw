@@ -254,6 +254,17 @@ export class OpenClawApp extends LitElement {
   @state() oauthLoginSuccess = false;
   private oauthPollInterval: number | null = null;
 
+  // Bustly user authentication state
+  @state() bustlyIsLoggedIn = false;
+  @state() bustlyUserInfo: {
+    userId: string;
+    userName: string;
+    userEmail: string;
+    workspaceId: string;
+    skills: string[];
+  } | null = null;
+  @state() bustlyUserMenuOpen = false;
+
   client: GatewayBrowserClient | null = null;
   private chatScrollFrame: number | null = null;
   private chatScrollTimeout: number | null = null;
@@ -280,6 +291,7 @@ export class OpenClawApp extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     handleConnected(this as unknown as Parameters<typeof handleConnected>[0]);
+    document.addEventListener('click', this.handleBustlyUserMenuClose.bind(this));
   }
 
   protected firstUpdated() {
@@ -288,6 +300,7 @@ export class OpenClawApp extends LitElement {
 
   disconnectedCallback() {
     handleDisconnected(this as unknown as Parameters<typeof handleDisconnected>[0]);
+    document.removeEventListener('click', this.handleBustlyUserMenuClose.bind(this));
     super.disconnectedCallback();
   }
 
@@ -591,6 +604,63 @@ export class OpenClawApp extends LitElement {
       window.clearInterval(this.oauthPollInterval);
       this.oauthPollInterval = null;
       console.log("[Bustly Login] Poll interval cleared");
+    }
+  }
+
+  async checkBustlyLoginStatus() {
+    if (!this.client) return;
+
+    try {
+      const result = await this.client.request<{ loggedIn: boolean }>("oauth.is-logged-in", {});
+      this.bustlyIsLoggedIn = result.loggedIn;
+
+      if (result.loggedIn) {
+        const userInfoResult = await this.client.request<{
+          user: {
+            userId: string;
+            userName: string;
+            userEmail: string;
+            workspaceId: string;
+            skills: string[];
+          } | null;
+        }>("oauth.get-user-info", {});
+        this.bustlyUserInfo = userInfoResult.user ?? null;
+      } else {
+        this.bustlyUserInfo = null;
+      }
+    } catch (err) {
+      console.error("[Bustly Auth] Failed to check login status:", err);
+      this.bustlyIsLoggedIn = false;
+      this.bustlyUserInfo = null;
+    }
+  }
+
+  handleBustlyUserMenuToggle() {
+    this.bustlyUserMenuOpen = !this.bustlyUserMenuOpen;
+  }
+
+  handleBustlyUserMenuClose(event: MouseEvent) {
+    const target = event.target as HTMLElement;
+    const menu = this.querySelector('.bustly-user-section');
+    if (menu && !menu.contains(target)) {
+      this.bustlyUserMenuOpen = false;
+    }
+  }
+
+  async handleBustlyLogout() {
+    if (!this.client) return;
+
+    try {
+      await this.client.request<{ success: boolean }>("oauth.logout", {});
+      this.bustlyIsLoggedIn = false;
+      this.bustlyUserInfo = null;
+      this.bustlyUserMenuOpen = false;
+      this.oauthLoginSuccess = false;
+
+      // Reload overview to reflect logout
+      await loadOverviewInternal(this as unknown as Parameters<typeof loadOverviewInternal>[0]);
+    } catch (err) {
+      console.error("[Bustly Auth] Logout failed:", err);
     }
   }
 

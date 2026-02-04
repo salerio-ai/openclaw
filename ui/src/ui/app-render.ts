@@ -81,6 +81,75 @@ function resolveAssistantAvatarUrl(state: AppViewState): string | undefined {
   return identity?.avatarUrl;
 }
 
+function renderBustlyUserSection(state: AppViewState) {
+  const bustlyState = state as unknown as {
+    bustlyIsLoggedIn: boolean;
+    bustlyUserInfo: { userName: string; userEmail: string } | null;
+    bustlyUserMenuOpen: boolean;
+    oauthLoginPending: boolean;
+    oauthLoginSuccess: boolean;
+    handleBustlyLogin: () => void;
+    handleBustlyUserMenuToggle: () => void;
+    handleBustlyLogout: () => void;
+  };
+
+  // If logged in, show avatar with dropdown
+  if (bustlyState.bustlyIsLoggedIn && bustlyState.bustlyUserInfo) {
+    return html`
+      <div class="bustly-user-section ${bustlyState.bustlyUserMenuOpen ? 'bustly-user-section--menu-open' : ''}">
+        <button
+          class="bustly-user-avatar-btn"
+          @click=${bustlyState.handleBustlyUserMenuToggle}
+          title="Account"
+        >
+          <span class="bustly-user-avatar">
+            ${(bustlyState.bustlyUserInfo.userName || bustlyState.bustlyUserInfo.userEmail || 'U').charAt(0).toUpperCase()}
+          </span>
+        </button>
+        ${bustlyState.bustlyUserMenuOpen ? html`
+          <div class="bustly-user-dropdown">
+            <div class="bustly-user-dropdown__header">
+              <div class="bustly-user-dropdown__avatar">
+                ${(bustlyState.bustlyUserInfo.userName || bustlyState.bustlyUserInfo.userEmail || 'U').charAt(0).toUpperCase()}
+              </div>
+              <div class="bustly-user-dropdown__info">
+                <div class="bustly-user-dropdown__name">${bustlyState.bustlyUserInfo.userName || 'User'}</div>
+                <div class="bustly-user-dropdown__email">${bustlyState.bustlyUserInfo.userEmail || ''}</div>
+              </div>
+            </div>
+            <div class="bustly-user-dropdown__divider"></div>
+            <button
+              class="bustly-user-dropdown__logout"
+              @click=${bustlyState.handleBustlyLogout}
+            >
+              Log out
+            </button>
+          </div>
+        ` : nothing}
+      </div>
+    `;
+  }
+
+  // Login in progress
+  if (bustlyState.oauthLoginPending) {
+    return html`
+      <button class="bustly-login-btn bustly-login-btn--pending" disabled>
+        登录中...
+      </button>
+    `;
+  }
+
+  // Not logged in - show login button
+  return html`
+    <button
+      class="bustly-login-btn"
+      @click=${bustlyState.handleBustlyLogin}
+    >
+      登录 →
+    </button>
+  `;
+}
+
 export function renderApp(state: AppViewState) {
   const presenceCount = state.presenceEntries.length;
   const sessionsCount = state.sessionsResult?.count ?? null;
@@ -125,26 +194,7 @@ export function renderApp(state: AppViewState) {
             <span class="mono">${state.connected ? "OK" : "Offline"}</span>
           </div>
           ${renderThemeToggle(state)}
-          ${state.oauthLoginSuccess
-            ? html`
-                <button class="bustly-login-btn bustly-login-btn--success" disabled>
-                  ✓ 已登录
-                </button>
-              `
-            : state.oauthLoginPending
-              ? html`
-                  <button class="bustly-login-btn bustly-login-btn--pending" disabled>
-                    登录中...
-                  </button>
-                `
-              : html`
-                  <button
-                    class="bustly-login-btn"
-                    @click=${() => (state as unknown as { handleBustlyLogin: () => void }).handleBustlyLogin?.()}
-                  >
-                    登录 →
-                  </button>
-                `}
+          ${renderBustlyUserSection(state)}
         </div>
       </header>
       <aside class="nav ${state.settings.navCollapsed ? "nav--collapsed" : ""}">

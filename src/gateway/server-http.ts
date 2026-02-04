@@ -27,7 +27,6 @@ import {
   resolveHookChannel,
   resolveHookDeliver,
 } from "./hooks.js";
-import { handleOAuthCallback } from "./oauth-handler.js";
 import { handleOpenAiHttpRequest } from "./openai-http.js";
 import { handleOpenResponsesHttpRequest } from "./openresponses-http.js";
 import { handleToolsInvokeHttpRequest } from "./tools-invoke-http.js";
@@ -243,14 +242,6 @@ export function createGatewayHttpServer(opts: {
     try {
       const configSnapshot = loadConfig();
       const trustedProxies = configSnapshot.gateway?.trustedProxies ?? [];
-      // Handle OAuth callback early (before auth checks)
-      if (
-        await handleOAuthCallback(req, res, {
-          config: configSnapshot,
-        })
-      ) {
-        return;
-      }
       if (await handleHooksRequest(req, res)) {
         return;
       }

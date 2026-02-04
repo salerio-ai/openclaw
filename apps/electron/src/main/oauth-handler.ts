@@ -1,14 +1,377 @@
 /**
  * OAuth handler for Electron app
- * Provides browser-based OAuth authentication for model providers
+ * Provides browser-based OAuth authentication for Bustly login and model providers
  */
 
 import { shell } from "electron";
-import { randomBytes } from "node:crypto";
-import { createServer } from "node:http";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { loginOpenAICodex, loginAntigravity } from "@mariozechner/pi-ai";
+import { loadConfig } from "../../../../src/config/config.js";
+import * as BustlyOAuth from "./bustly-oauth.js";
 
 let oauthPromptResolver: ((value: string) => void) | null = null;
+
+// ============================================================================
+// Bustly OAuth HTTP Server
+// ============================================================================
+
+/** Default port for OAuth callback server (separate from gateway to avoid conflicts). */
+const DEFAULT_OAUTH_CALLBACK_PORT = 18790;
+
+let oauthServer: ReturnType<typeof createServer> | null = null;
+let oauthCodeResolver: ((code: string) => void) | null = null;
+
+/**
+ * Get OAuth callback port from config, with fallback to default value
+ */
+function getOAuthCallbackPort(): number {
+  try {
+    const config = loadConfig();
+    const port = config.bustlyOAuth?.callbackPort ?? DEFAULT_OAUTH_CALLBACK_PORT;
+    console.log(`[Bustly OAuth] Using callback port: ${port} (from ${config.bustlyOAuth?.callbackPort ? 'config' : 'default'})`);
+    return port;
+  } catch (error) {
+    console.log(`[Bustly OAuth] Failed to load config, using default port: ${DEFAULT_OAUTH_CALLBACK_PORT}`);
+    return DEFAULT_OAUTH_CALLBACK_PORT;
+  }
+}
+
+/**
+ * Generate the login URL for opening in browser
+ */
+export function generateLoginUrl(
+  loginTraceId: string,
+  redirectUri: string,
+): string {
+  // Load config from environment variables
+  const apiBaseUrl = process.env.BUSTLY_API_BASE_URL;
+  const webBaseUrl = process.env.BUSTLY_WEB_BASE_URL;
+  const clientId = process.env.BUSTLY_CLIENT_ID;
+
+  if (!apiBaseUrl || !webBaseUrl || !clientId) {
+    throw new Error(
+      "Bustly OAuth configuration not found. Please set BUSTLY_API_BASE_URL, BUSTLY_WEB_BASE_URL, and BUSTLY_CLIENT_ID environment variables.",
+    );
+  }
+
+  const state = BustlyOAuth.readBustlyOAuthState();
+  const deviceId = state?.deviceId ?? "";
+
+  console.log("[Bustly OAuth] generateLoginUrl - loginTraceId:", loginTraceId);
+  console.log("[Bustly OAuth] generateLoginUrl - deviceId:", deviceId);
+  console.log("[Bustly OAuth] generateLoginUrl - redirectUri:", redirectUri);
+  console.log("[Bustly OAuth] generateLoginUrl - apiBaseUrl:", apiBaseUrl);
+  console.log("[Bustly OAuth] generateLoginUrl - webBaseUrl:", webBaseUrl);
+  console.log("[Bustly OAuth] generateLoginUrl - clientId:", clientId);
+
+  // Build the OAuth URL with all the parameters
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    device_id: deviceId,
+    login_trace_id: loginTraceId,
+  });
+
+  const loginUrl = `${webBaseUrl}/admin/auth?${params.toString()}`;
+
+  console.log("[Bustly OAuth] Final loginUrl:", loginUrl);
+  return loginUrl;
+}
+
+/**
+ * Start the OAuth callback HTTP server
+ */
+export function startOAuthCallbackServer(): number {
+  if (oauthServer) {
+    const port = getOAuthCallbackPort();
+    console.log("[Bustly OAuth] OAuth server already running on port", port);
+    return port;
+  }
+
+  const port = getOAuthCallbackPort();
+  console.log("[Bustly OAuth] Starting OAuth callback server on port", port);
+
+  oauthServer = createServer((req: IncomingMessage, res: ServerResponse) => {
+    console.log("=".repeat(60));
+    console.log("[Bustly OAuth] Received request:", req.method, req.url);
+    console.log("=".repeat(60));
+
+    const urlRaw = req.url;
+    if (!urlRaw) {
+      console.log("[Bustly OAuth] No URL in request");
+      res.statusCode = 400;
+      res.end("Bad Request");
+      return;
+    }
+
+    const url = new URL(urlRaw, `http://127.0.0.1:${port}`);
+    console.log("[Bustly OAuth] Pathname:", url.pathname);
+
+    // Check if this is an OAuth callback
+    if (url.pathname !== "/authorize") {
+      console.log("[Bustly OAuth] Not an OAuth callback, returning 404");
+      res.statusCode = 404;
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.end("Not Found");
+      return;
+    }
+
+    console.log("[Bustly OAuth] OAuth callback detected!");
+
+    const code = url.searchParams.get("code");
+    const state = url.searchParams.get("state");
+    console.log("[Bustly OAuth] Authorization Code:", code ? code.substring(0, 10) + "..." : "MISSING");
+    console.log("[Bustly OAuth] State (loginTraceId):", state);
+
+    if (!code) {
+      console.log("[Bustly OAuth] Missing authorization code - rendering error page");
+      res.statusCode = 400;
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.end(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>登录失败</title>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; padding: 50px; }
+            h1 { color: #e74c3c; }
+          </style>
+        </head>
+        <body>
+          <h1>❌ 登录失败</h1>
+          <p>缺少授权码，请重试。</p>
+        </body>
+        </html>
+      `);
+      return;
+    }
+
+    // Verify state matches our login trace ID
+    const oauthState = BustlyOAuth.readBustlyOAuthState();
+    if (!oauthState || oauthState.loginTraceId !== state) {
+      console.log("[Bustly OAuth] Invalid state, not matching our login trace ID");
+      res.statusCode = 400;
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.end(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>登录失败</title>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; padding: 50px; }
+            h1 { color: #e74c3c; }
+          </style>
+        </head>
+        <body>
+          <h1>❌ 登录失败</h1>
+          <p>无效的请求状态，请重试。</p>
+        </body>
+        </html>
+      `);
+      return;
+    }
+
+    // Store the auth code in state
+    BustlyOAuth.setBustlyAuthCode(code);
+    console.log("[Bustly OAuth] Authorization code stored in state");
+
+    // Notify the waiting promise if any
+    if (oauthCodeResolver) {
+      console.log("[Bustly OAuth] Notifying waiting promise");
+      oauthCodeResolver(code);
+      oauthCodeResolver = null;
+    }
+
+    // Automatically exchange token (fire and forget)
+    console.log("[Bustly OAuth] Exchanging token...");
+    exchangeToken(code)
+      .then((apiResponse) => {
+        console.log("[Bustly OAuth] Token exchange successful!");
+        console.log("   User:", apiResponse.data.userName);
+        console.log("   Email:", apiResponse.data.userEmail);
+        console.log("   Workspace:", apiResponse.data.workspaceId);
+
+        // Store user info and access token in OAuth state
+        const userInfo: BustlyOAuth.BustlyUserInfo = {
+          userId: apiResponse.data.userId,
+          userName: apiResponse.data.userName,
+          userEmail: apiResponse.data.userEmail,
+          workspaceId: apiResponse.data.workspaceId,
+          skills: apiResponse.data.skills ?? [],
+        };
+
+        BustlyOAuth.completeBustlyLogin({
+          user: userInfo,
+          supabaseAccessToken: apiResponse.data.extras?.supabase_session?.access_token ?? "",
+        });
+
+        console.log("[Bustly OAuth] User info and token stored in state");
+      })
+      .catch((err) => {
+        console.error("[Bustly OAuth] Token exchange failed:", err);
+      });
+
+    // Render success page
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.end(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>登录成功</title>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; padding: 50px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+          .container { background: white; border-radius: 12px; padding: 40px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); }
+          h1 { color: #27ae60; margin-bottom: 10px; }
+          p { color: #555; font-size: 16px; line-height: 1.6; }
+          .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #667eea; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }
+          @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>✅ 登录成功</h1>
+          <p>正在完成配置，请稍候...</p>
+          <div class="spinner"></div>
+          <p style="font-size: 14px; color: #999;">您可以关闭此页面并返回 OpenClaw 桌面应用</p>
+        </div>
+        <script>
+          setTimeout(() => window.close(), 3000);
+        </script>
+      </body>
+      </html>
+    `);
+
+    console.log("[Bustly OAuth] Success page rendered, callback handled successfully");
+    console.log("=".repeat(60));
+  });
+
+  oauthServer.listen(port, "127.0.0.1", () => {
+    console.log("[Bustly OAuth] OAuth callback server listening on http://127.0.0.1:" + port);
+  });
+
+  oauthServer.on("error", (err: Error) => {
+    console.error("[Bustly OAuth] OAuth server error:", err);
+  });
+
+  return port;
+}
+
+/**
+ * Stop the OAuth callback HTTP server
+ */
+export function stopOAuthCallbackServer(): void {
+  if (oauthServer) {
+    console.log("[Bustly OAuth] Stopping OAuth callback server...");
+    oauthServer.close(() => {
+      console.log("[Bustly OAuth] OAuth callback server stopped");
+    });
+    oauthServer = null;
+  }
+}
+
+/**
+ * Token exchange API response format
+ */
+export type BustlyTokenApiResponse = {
+  code: string;
+  message: string;
+  status: string;
+  data: {
+    accessToken: string;
+    refreshToken: string;
+    tokenType: string;
+    expiresIn: number;
+    workspaceId: string;
+    userId: string;
+    userName: string;
+    userEmail: string;
+    extras?: {
+      "bustly-search-data"?: {
+        search_DATA_TOKEN: string;
+        search_DATA_SUPABASE_URL: string;
+        search_DATA_SUPABASE_ANON_KEY: string;
+        search_DATA_WORKSPACE_ID: string;
+      };
+      supabase_session?: {
+        access_token: string;
+      };
+    };
+    skills?: string[];
+  };
+};
+
+/**
+ * Exchange authorization code for access token
+ * Returns the full API response including extras field
+ */
+export async function exchangeToken(code: string): Promise<BustlyTokenApiResponse> {
+  console.log("[Bustly OAuth] Exchanging authorization code for access token");
+  console.log("[Bustly OAuth] Auth code:", code.substring(0, 10) + "...");
+
+  const clientId = process.env.BUSTLY_CLIENT_ID ?? "openclaw-desktop";
+  console.log("[Bustly OAuth] Client ID:", clientId);
+
+  const apiEndpoint = "http://127.0.0.1:8080/api/oauth/getToken";
+  console.log("[Bustly OAuth] API endpoint:", apiEndpoint);
+
+  const response = await fetch(apiEndpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      code: code,
+      client_id: clientId,
+      grant_type: "authorization_code",
+    }),
+  });
+
+  console.log("[Bustly OAuth] Response status:", response.status, response.statusText);
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("[Bustly OAuth] Failed:", response.status, errorText);
+    throw new Error(`Token exchange failed: ${response.status} ${errorText}`);
+  }
+
+  const apiResponse = (await response.json()) as BustlyTokenApiResponse;
+
+  console.log(
+    "[Bustly OAuth] API response - code:",
+    apiResponse.code,
+    "status:",
+    apiResponse.status,
+    "message:",
+    apiResponse.message,
+  );
+
+  // Check API response: status must be "0" for success
+  if (apiResponse.status !== "0") {
+    console.error(
+      "[Bustly OAuth] API returned error status:",
+      apiResponse.status,
+      "-",
+      apiResponse.message,
+    );
+    throw new Error(apiResponse.message || "Token exchange failed");
+  }
+
+  console.log("[Bustly OAuth] Token exchange successful!");
+  console.log("   User:", apiResponse.data.userName);
+  console.log("   Email:", apiResponse.data.userEmail);
+  console.log("   Workspace:", apiResponse.data.workspaceId);
+  console.log("   Has extras:", !!apiResponse.data.extras);
+
+  return apiResponse;
+}
+
+// ============================================================================
+// Provider OAuth (OpenAI, Google, etc.)
+// ============================================================================
 
 /**
  * Handle manual OAuth code/URL input from renderer
@@ -73,17 +436,17 @@ export interface AuthResult {
   success: boolean;
   provider: string;
   method: string;
-    credential?: {
-      type: "api_key" | "token" | "oauth";
-      provider: string;
-      key?: string;
-      token?: string;
-      access?: string;
-      refresh?: string;
-      expires?: number;
-      email?: string;
-      projectId?: string;
-    };
+  credential?: {
+    type: "api_key" | "token" | "oauth";
+    provider: string;
+    key?: string;
+    token?: string;
+    access?: string;
+    refresh?: string;
+    expires?: number;
+    email?: string;
+    projectId?: string;
+  };
   defaultModel?: string;
   error?: string;
 }
@@ -305,7 +668,9 @@ async function openOAuthUrl(url: string): Promise<void> {
  * Generate OAuth state parameter
  */
 function generateOAuthState(): string {
-  return randomBytes(16).toString("hex");
+  const randomValues = new Uint8Array(16);
+  crypto.getRandomValues(randomValues);
+  return Array.from(randomValues, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 /**

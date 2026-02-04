@@ -54,6 +54,15 @@ interface MainLogData {
   message: string;
 }
 
+// Bustly OAuth types
+interface BustlyUserInfo {
+  userId: string;
+  userName: string;
+  userEmail: string;
+  workspaceId: string;
+  skills: string[];
+}
+
 // Onboarding types
 interface ProviderConfig {
   id: string;
@@ -131,6 +140,10 @@ interface ElectronAPI {
   getAppInfo: () => Promise<AppInfo>;
 
   // Onboarding
+  bustlyLogin: () => Promise<{ success: boolean; error?: string }>;
+  bustlyIsLoggedIn: () => Promise<boolean>;
+  bustlyGetUserInfo: () => Promise<BustlyUserInfo | null>;
+  bustlyLogout: () => Promise<{ success: boolean; error?: string }>;
   onboardListProviders: () => Promise<ProviderConfig[]>;
   onboardAuthApiKey: (provider: string, apiKey: string) => Promise<AuthResult>;
   onboardAuthToken: (provider: string, token: string) => Promise<AuthResult>;
