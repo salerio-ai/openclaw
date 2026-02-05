@@ -6,7 +6,7 @@
 import { existsSync, readFileSync, writeFileSync, unlinkSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import * as os from "node:os";
-import type { BustlyOAuthState } from "../../../../src/config/types.base.js";
+import type { BustlyOAuthState, BustlySearchDataConfig } from "../../../../src/config/types.base.js";
 
 const BUSTLY_OAUTH_FILE = resolve(os.homedir(), ".openclaw", "bustlyOauth.json");
 const DEFAULT_CALLBACK_PORT = 18790;
@@ -66,13 +66,13 @@ export function writeBustlyOAuthState(state: BustlyOAuthState): void {
 /**
  * Check if user is logged in
  * Login state is determined by either:
- * 1. Presence of Supabase access token (new format)
+ * 1. Presence of Supabase access token in search data config (new format)
  * 2. Presence of user info (old format, for backward compatibility)
  */
 export function isBustlyLoggedIn(): boolean {
   const state = readBustlyOAuthState();
-  // Check for new format (supabaseAccessToken) or old format (user exists)
-  return !!state?.supabaseAccessToken || !!state?.user;
+  // Check for new format (supabase access token in search data) or old format (user exists)
+  return !!state?.bustlySearchData?.SEARCH_DATA_SUPABASE_ACCESS_TOKEN || !!state?.user;
 }
 
 /**
@@ -147,8 +147,9 @@ export function getBustlyAuthCode(): string | null {
 }
 
 /**
- * Complete login - store user info and Supabase access token
- * Other API tokens are stored in openclaw.json skills configuration
+ * Complete login - store user info and search data config
+ * All configuration is stored in bustlyOauth.json
+ * Supabase access token is stored within bustlySearchData.SEARCH_DATA_SUPABASE_ACCESS_TOKEN
  */
 export function completeBustlyLogin(params: {
   user: {
@@ -158,16 +159,16 @@ export function completeBustlyLogin(params: {
     workspaceId: string;
     skills: string[];
   };
-  supabaseAccessToken: string;
+  bustlySearchData?: BustlySearchDataConfig;
 }): void {
   const state = readBustlyOAuthState();
   if (!state) {
     throw new Error("[BustlyOAuth] No active OAuth flow found");
   }
 
-  // Update state with user info and Supabase access token
+  // Update state with user info and search data config
   state.user = params.user;
-  state.supabaseAccessToken = params.supabaseAccessToken;
+  state.bustlySearchData = params.bustlySearchData;
   state.loggedInAt = Date.now();
 
   // Clear transient fields

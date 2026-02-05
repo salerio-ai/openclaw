@@ -5,7 +5,7 @@
  */
 
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -116,28 +116,6 @@ export async function initializeOpenClaw(
       if (!existsSync(configPath)) {
         throw new Error("OpenClaw CLI did not create config file");
       }
-
-      // After onboarding, automatically enable bustly-search-data skill
-      console.log("Adding bustly-search-data skill to config...");
-      const config = JSON.parse(readFileSync(configPath, "utf-8"));
-
-      // Ensure skills section exists
-      if (!config.skills) {
-        config.skills = {};
-      }
-      if (!config.skills.entries) {
-        config.skills.entries = {};
-      }
-
-      // Enable bustly-search-data skill (no env variables needed, always: true makes it eligible)
-      config.skills.entries["bustly-search-data"] = {
-        enabled: true,
-        env: {}
-      };
-
-      // Write updated config
-      writeFileSync(configPath, JSON.stringify(config, null, 2), "utf-8");
-      console.log("bustly-search-data skill enabled by default");
     }
 
     const config = JSON.parse(readFileSync(configPath, "utf-8"));

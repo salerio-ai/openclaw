@@ -7,27 +7,11 @@ import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync, unlinkSync, mkdirSync } from "node:fs";
 import * as os from "node:os";
 import { resolve } from "node:path";
+import type { BustlyOAuthState, BustlySearchDataConfig } from "./config/types.base.js";
 
 const BUSTLY_OAUTH_FILE = resolve(os.homedir(), ".openclaw", "bustlyOauth.json");
 
-export type BustlyUserInfo = {
-  userId: string;
-  userName: string;
-  userEmail: string;
-  workspaceId: string;
-  skills: string[];
-};
-
-export type BustlyOAuthState = {
-  loginTraceId?: string;
-  deviceId: string;
-  callbackPort: number;
-  authCode?: string;
-  expiresAt?: number;
-  user?: BustlyUserInfo;
-  supabaseAccessToken?: string;
-  loggedInAt?: number;
-};
+export type { BustlyOAuthState, BustlySearchDataConfig };
 
 /**
  * Ensure ~/.openclaw directory exists
@@ -135,14 +119,14 @@ export function readBustlyOAuthState(): BustlyOAuthState | null {
  */
 export function isBustlyLoggedIn(): boolean {
   const state = readBustlyOAuthState();
-  // Check for new format (supabaseAccessToken) or old format (user exists)
-  return !!state?.supabaseAccessToken || !!state?.user;
+  // Check for Supabase access token in search data config, or old format (user exists)
+  return !!state?.bustlySearchData?.SEARCH_DATA_SUPABASE_ACCESS_TOKEN || !!state?.user;
 }
 
 /**
  * Get current logged-in user info
  */
-export function getBustlyUserInfo(): BustlyUserInfo | null {
+export function getBustlyUserInfo(): BustlyOAuthState["user"] | null {
   const state = readBustlyOAuthState();
   if (!isBustlyLoggedIn()) {
     return null;
@@ -159,12 +143,13 @@ export function logoutBustly(): void {
 }
 
 /**
- * Complete login - store user info and Supabase access token
+ * Complete login - store user info and search data config
  * This is the final step after successful token exchange
+ * Supabase access token is stored within bustlySearchData
  */
 export function completeBustlyLogin(params: {
-  user: BustlyUserInfo;
-  supabaseAccessToken: string;
+  user: BustlyOAuthState["user"];
+  bustlySearchData?: BustlySearchDataConfig;
 }): void {
   const currentState = readBustlyOAuthState();
   if (!currentState) {
@@ -174,11 +159,11 @@ export function completeBustlyLogin(params: {
       deviceId: generateDeviceId(),
       callbackPort,
       user: params.user,
-      supabaseAccessToken: params.supabaseAccessToken,
       loggedInAt: Date.now(),
+      bustlySearchData: params.bustlySearchData,
     };
     writeBustlyOAuthState(newState);
-    console.log("[BustlyOAuth] Login completed for user:", params.user.userEmail);
+    console.log("[BustlyOAuth] Login completed for user:", params.user?.userEmail);
     return;
   }
 
@@ -186,14 +171,14 @@ export function completeBustlyLogin(params: {
   const newState: BustlyOAuthState = {
     ...currentState,
     user: params.user,
-    supabaseAccessToken: params.supabaseAccessToken,
     loggedInAt: Date.now(),
+    bustlySearchData: params.bustlySearchData,
     // Clear transient fields
     authCode: undefined,
     expiresAt: undefined,
   };
   writeBustlyOAuthState(newState);
-  console.log("[BustlyOAuth] Login completed for user:", params.user.userEmail);
+  console.log("[BustlyOAuth] Login completed for user:", params.user?.userEmail);
 }
 
 /**

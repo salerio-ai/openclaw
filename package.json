@@ -258,6 +258,11 @@
       "node-llama-cpp",
       "protobufjs",
       "sharp"
+    ],
+    "ignoredBuiltDependencies": [
+      "core-js",
+      "electron",
+      "electron-winstaller"
     ]
   },
   "vitest": {
