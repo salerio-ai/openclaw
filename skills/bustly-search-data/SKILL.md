@@ -1,7 +1,7 @@
 ---
 name: bustly-search-data
 description: E-commerce data query skill for Shopify, Google Ads, BigCommerce, and other platforms. Supports common query templates, automatic retry, and multiple output formats.
-metadata: {"openclaw":{"requires":{"env":["SEARCH_DATA_SUPABASE_URL","SEARCH_DATA_SUPABASE_ANON_KEY","SEARCH_DATA_TOKEN","SEARCH_DATA_WORKSPACE_ID"]}}}
+metadata: {"openclaw":{"always":true,"requires":{"env":["SEARCH_DATA_SUPABASE_URL","SEARCH_DATA_SUPABASE_ANON_KEY","SEARCH_DATA_TOKEN","SEARCH_DATA_WORKSPACE_ID"]}}}
 ---
 
 This skill provides e-commerce SaaS data query capabilities, reading business data from platforms like Shopify, Google Ads, and BigCommerce via a Supabase data warehouse.

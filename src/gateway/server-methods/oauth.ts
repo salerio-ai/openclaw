@@ -1,114 +1,201 @@
 /**
- * Gateway methods for OAuth login flow with Salerio
+ * OAuth request handlers for Bustly integration
  */
 
-import type { OAuthTokenResponse } from "../../gateway/oauth-types.js";
-import type { GatewayRequestHandlers } from "./types.js";
-import {
-  clearSession,
-  exchangeToken,
-  generateLoginTraceId,
-  generateLoginUrl,
-  getStoredCode,
-  writeTokenConfig,
-} from "../../gateway/oauth-handler.js";
-import { ErrorCodes, errorShape } from "../../gateway/protocol/index.js";
+import { randomBytes } from "node:crypto";
+import type { GatewayRequestHandler, GatewayRequestHandlerOptions } from "./types.js";
+import * as BustlyOAuth from "../../bustly-oauth.js";
 
-export const oauthHandlers: GatewayRequestHandlers = {
-  "oauth.login": ({ params, respond }) => {
-    console.log("[Gateway oauth.login] Received request, params:", params);
-    try {
-      const loginTraceId = generateLoginTraceId();
-      const redirectUri =
-        (params.redirectUri as string | undefined) ?? "http://127.0.0.1:18789/authorize";
-      const loginUrl = generateLoginUrl(loginTraceId, redirectUri);
+// In-memory OAuth state storage (for pending logins)
+const pendingOAuthLogins = new Map<string, { expiresAt: number }>();
 
-      console.log("[Gateway oauth.login] Generated loginTraceId:", loginTraceId);
-      console.log("[Gateway oauth.login] Generated loginUrl:", loginUrl);
+/**
+ * Get OAuth callback port from environment or default
+ */
+function getOAuthCallbackPort(): number {
+  const port = process.env.BUSTLY_OAUTH_CALLBACK_PORT
+    ? parseInt(process.env.BUSTLY_OAUTH_CALLBACK_PORT, 10)
+    : 18790;
+  return port;
+}
 
-      respond(true, { loginUrl, loginTraceId }, undefined);
-    } catch (err) {
-      console.error("[Gateway oauth.login] Error:", err);
-      respond(
-        false,
-        undefined,
-        errorShape(ErrorCodes.UNAVAILABLE, err instanceof Error ? err.message : String(err)),
-      );
+/**
+ * Generate a random trace ID for OAuth login
+ */
+function generateTraceId(): string {
+  return randomBytes(16).toString("hex");
+}
+
+/**
+ * Initiate Bustly OAuth login flow
+ */
+export const oauthLogin: GatewayRequestHandler = async ({
+  respond,
+}: Pick<GatewayRequestHandlerOptions, "respond">) => {
+  try {
+    // Load environment variables for OAuth configuration
+    const apiBaseUrl = process.env.BUSTLY_API_BASE_URL;
+    const webBaseUrl = process.env.BUSTLY_WEB_BASE_URL;
+    const clientId = process.env.BUSTLY_CLIENT_ID;
+
+    if (!apiBaseUrl || !webBaseUrl || !clientId) {
+      respond(false, undefined, {
+        code: "OAUTH_ERROR",
+        message:
+          "Bustly OAuth configuration not found. Please set BUSTLY_API_BASE_URL, BUSTLY_WEB_BASE_URL, and BUSTLY_CLIENT_ID environment variables.",
+      });
+      return;
     }
-  },
 
-  "oauth.poll": async ({ params, respond }) => {
-    console.log("[Gateway oauth.poll] Received request, params:", params);
-    try {
-      const loginTraceId = params.loginTraceId as string | undefined;
-      if (!loginTraceId) {
-        console.log("[Gateway oauth.poll] Missing loginTraceId");
-        respond(
-          false,
-          undefined,
-          errorShape(ErrorCodes.INVALID_REQUEST, "loginTraceId is required"),
-        );
-        return;
-      }
+    // Read current OAuth state to get device ID
+    const currentState = BustlyOAuth.readBustlyOAuthState();
+    const deviceId = currentState?.deviceId ?? generateTraceId();
 
-      const code = getStoredCode(loginTraceId);
-      console.log("[Gateway oauth.poll] Got code:", !!code);
+    // Generate login trace ID
+    const loginTraceId = generateTraceId();
 
-      if (!code) {
-        // Still waiting for callback
-        console.log("[Gateway oauth.poll] Still waiting for callback");
-        respond(true, { pending: true }, undefined);
-        return;
-      }
+    // Build OAuth login URL
+    const redirectUri = `http://127.0.0.1:${getOAuthCallbackPort()}/authorize`;
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      device_id: deviceId,
+      login_trace_id: loginTraceId,
+    });
+    const loginUrl = `${webBaseUrl}/admin/auth?${params.toString()}`;
 
-      // Got the code, now exchange for token
-      console.log("[Gateway oauth.poll] Exchanging token...");
-      const tokenResponse = await exchangeToken(code);
-      console.log("[Gateway oauth.poll] Got tokenResponse:", tokenResponse);
+    // Store pending login state
+    pendingOAuthLogins.set(loginTraceId, {
+      expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes
+    });
 
-      // Write config
-      console.log("[Gateway oauth.poll] Writing token config...");
-      await writeTokenConfig(tokenResponse);
-      console.log("[Gateway oauth.poll] Token config written");
+    // Initialize OAuth state with login trace ID
+    BustlyOAuth.initBustlyOAuthFlow();
+    BustlyOAuth.updateBustlyOAuthState({ loginTraceId });
 
-      // Clear the session
-      clearSession(loginTraceId);
+    respond(true, { loginUrl, loginTraceId }, undefined);
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    respond(false, undefined, {
+      code: "OAUTH_ERROR",
+      message: `Failed to initiate login: ${errorMsg}`,
+    });
+  }
+};
 
-      respond(true, { pending: false, tokenResponse }, undefined);
-    } catch (err) {
-      console.error("[Gateway oauth.poll] Error:", err);
-      respond(
-        false,
-        undefined,
-        errorShape(ErrorCodes.UNAVAILABLE, err instanceof Error ? err.message : String(err)),
-      );
+/**
+ * Poll for OAuth login completion
+ */
+export const oauthPoll: GatewayRequestHandler = async ({
+  params,
+  respond,
+}: Pick<GatewayRequestHandlerOptions, "params" | "respond">) => {
+  try {
+    const loginTraceId = params?.loginTraceId as string | undefined;
+
+    if (!loginTraceId) {
+      respond(false, undefined, {
+        code: "OAUTH_ERROR",
+        message: "Missing loginTraceId parameter",
+      });
+      return;
     }
-  },
 
-  "oauth.exchange": async ({ params, respond }) => {
-    console.log("[Gateway oauth.exchange] Received request, params:", params);
-    try {
-      const code = params.code as string | undefined;
-      if (!code) {
-        console.log("[Gateway oauth.exchange] Missing code");
-        respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "code is required"));
-        return;
-      }
-
-      const tokenResponse = await exchangeToken(code);
-      console.log("[Gateway oauth.exchange] Got tokenResponse:", tokenResponse);
-
-      // Write config
-      await writeTokenConfig(tokenResponse);
-
-      respond(true, { tokenResponse }, undefined);
-    } catch (err) {
-      console.error("[Gateway oauth.exchange] Error:", err);
-      respond(
-        false,
-        undefined,
-        errorShape(ErrorCodes.UNAVAILABLE, err instanceof Error ? err.message : String(err)),
-      );
+    // Check if pending login exists
+    const pendingLogin = pendingOAuthLogins.get(loginTraceId);
+    if (!pendingLogin) {
+      // Login might have already completed, check current state
+      const isLoggedIn = BustlyOAuth.isBustlyLoggedIn();
+      respond(true, { pending: !isLoggedIn }, undefined);
+      return;
     }
-  },
+
+    // Check if login has expired
+    if (Date.now() > pendingLogin.expiresAt) {
+      pendingOAuthLogins.delete(loginTraceId);
+      respond(false, undefined, {
+        code: "OAUTH_ERROR",
+        message: "Login session expired",
+      });
+      return;
+    }
+
+    // Check if user is now logged in
+    const isLoggedIn = BustlyOAuth.isBustlyLoggedIn();
+
+    // If logged in, clear pending state
+    if (isLoggedIn) {
+      pendingOAuthLogins.delete(loginTraceId);
+    }
+
+    respond(true, { pending: !isLoggedIn }, undefined);
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    respond(false, undefined, {
+      code: "OAUTH_ERROR",
+      message: `Failed to poll login status: ${errorMsg}`,
+    });
+  }
+};
+
+/**
+ * Check if user is logged in to Bustly
+ */
+export const oauthIsLoggedIn: GatewayRequestHandler = async ({
+  respond,
+}: Pick<GatewayRequestHandlerOptions, "respond">) => {
+  try {
+    const loggedIn = BustlyOAuth.isBustlyLoggedIn();
+    respond(true, { loggedIn }, undefined);
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    respond(false, undefined, {
+      code: "OAUTH_ERROR",
+      message: `Failed to check login status: ${errorMsg}`,
+    });
+  }
+};
+
+/**
+ * Get current Bustly user info
+ */
+export const oauthGetUserInfo: GatewayRequestHandler = async ({
+  respond,
+}: Pick<GatewayRequestHandlerOptions, "respond">) => {
+  try {
+    const userInfo = BustlyOAuth.getBustlyUserInfo();
+    respond(true, { user: userInfo }, undefined);
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    respond(false, undefined, {
+      code: "OAUTH_ERROR",
+      message: `Failed to get user info: ${errorMsg}`,
+    });
+  }
+};
+
+/**
+ * Logout from Bustly
+ */
+export const oauthLogout: GatewayRequestHandler = async ({
+  respond,
+}: Pick<GatewayRequestHandlerOptions, "respond">) => {
+  try {
+    BustlyOAuth.logoutBustly();
+    respond(true, { success: true }, undefined);
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    respond(false, undefined, {
+      code: "OAUTH_ERROR",
+      message: `Failed to logout: ${errorMsg}`,
+    });
+  }
+};
+
+export const oauthHandlers = {
+  "oauth.login": oauthLogin,
+  "oauth.poll": oauthPoll,
+  "oauth.is-logged-in": oauthIsLoggedIn,
+  "oauth.get-user-info": oauthGetUserInfo,
+  "oauth.logout": oauthLogout,
 };

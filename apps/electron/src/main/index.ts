@@ -26,8 +26,13 @@ import {
   authenticateWithToken,
   authenticateWithOAuth,
   handleOAuthPromptResponse,
+  exchangeToken,
+  generateLoginUrl,
+  startOAuthCallbackServer,
+  stopOAuthCallbackServer,
   type AuthResult,
 } from "./oauth-handler.js";
+import * as BustlyOAuth from "./bustly-oauth.js";
 import { loadModelCatalog } from "../../../../src/agents/model-catalog";
 import { upsertAuthProfile } from "../../../../src/agents/auth-profiles";
 import { DEFAULT_PROVIDER } from "../../../../src/agents/defaults";
@@ -118,10 +123,38 @@ function ensureBundledExtensionsDir(params: {
   resourcesPath: string;
   appPath: string;
 }): string {
+  // Check if we're in development mode by looking for the project root extensions
+  // Try multiple possible paths from the app directory
+  const possibleProjectExtensions = [
+    // From apps/electron/dist, go up to project root (4 levels: dist -> electron -> apps -> project root)
+    resolve(params.appPath, "..", "..", "..", "extensions"),
+    // From apps/electron/dist, go up to apps (2 levels: dist -> electron)
+    resolve(params.appPath, "..", "..", "extensions"),
+    // From apps/electron (if running without dist)
+    resolve(params.appPath, "..", "extensions"),
+  ];
+
+  for (const projectExtensions of possibleProjectExtensions) {
+    if (existsSync(projectExtensions)) {
+      writeMainLog(`Using project extensions dir: ${projectExtensions}`);
+      return projectExtensions;
+    }
+  }
+
+  // Production: try bundled extensions in resources
   const bundledDir = resolve(params.resourcesPath, "extensions");
   if (existsSync(bundledDir)) {
     return bundledDir;
   }
+
+  // Development mode: try to find extensions in the project root
+  // The app is in apps/electron/dist, so we need to go up 3 levels to reach project root
+  const devExtensionsDir = resolve(params.appPath, "..", "..", "..", "extensions");
+  if (existsSync(devExtensionsDir)) {
+    writeMainLog(`Using development extensions dir: ${devExtensionsDir}`);
+    return devExtensionsDir;
+  }
+
   const bundledSource = resolve(params.appPath, "..", "resources", "openclaw", "extensions");
   if (!existsSync(bundledSource)) {
     writeMainLog(`Bundled extensions missing and source not found: ${bundledDir}`);
@@ -313,8 +346,54 @@ async function startGateway(): Promise<boolean> {
       .filter((value) => Boolean(value && value.length > 0))
       .map((value) => `${value}(${existsSync(value!) ? "exists" : "missing"})`)
       .join(" | ");
+
+    // Load .env file for Bustly OAuth configuration
+    const loadEnvVars = () => {
+      const envVars: Record<string, string> = {};
+      const envPaths = [
+        // Try apps/electron/.env first (Bustly config location)
+        // In dev: dist/main-dev.js -> ../.env = apps/electron/.env
+        // In prod: dist/main/index.js -> ../../.env = apps/electron/.env
+        process.env.NODE_ENV === "development"
+          ? resolve(__dirname, "../.env")
+          : resolve(__dirname, "../../.env"),
+        // Fallback to root .env
+        resolve(app.getAppPath(), ".env"),
+      ];
+
+      for (const envPath of envPaths) {
+        try {
+          if (existsSync(envPath)) {
+            const envContent = readFileSync(envPath, "utf-8");
+            for (const line of envContent.split("\n")) {
+              const trimmedLine = line.trim();
+              if (trimmedLine && !trimmedLine.startsWith("#")) {
+                const [key, ...valueParts] = trimmedLine.split("=");
+                const value = valueParts.join("=").trim();
+                if (key && value) {
+                  envVars[key] = value;
+                }
+              }
+            }
+            console.log(`[Env] Loaded environment variables from ${envPath}:`, Object.keys(envVars));
+            break; // Stop after loading first found .env file
+          }
+        } catch (error) {
+          console.error(`[Env] Failed to load ${envPath}:`, error);
+        }
+      }
+      return envVars;
+    };
+
+    const envVars = loadEnvVars();
+
+    // Start OAuth callback server for Bustly login
+    const oauthCallbackPort = startOAuthCallbackServer();
+    console.log("[Bustly] OAuth callback server started on port", oauthCallbackPort);
+
     const spawnEnv = {
       ...process.env,
+      ...envVars,
       NODE_ENV: "production",
       OPENCLAW_BUNDLED_PLUGINS_DIR: bundledPluginsDir,
       OPENCLAW_STATE_DIR: stateDir,
@@ -331,6 +410,7 @@ async function startGateway(): Promise<boolean> {
       COLORTERM: process.env.COLORTERM?.trim() || "truecolor",
       TERM_PROGRAM: process.env.TERM_PROGRAM?.trim() || "OpenClaw",
       NODE_PATH: effectiveNodePath,
+      BUSTLY_OAUTH_CALLBACK_PORT: String(oauthCallbackPort),
       ...(bundledVersion ? { OPENCLAW_BUNDLED_VERSION: bundledVersion } : {}),
     };
     if (existsSync(bundledPluginsDir)) {
@@ -841,6 +921,162 @@ function setupIpcHandlers(): void {
 
   // === Onboarding handlers ===
 
+  // === Bustly OAuth handlers ===
+
+  // Check if user is logged in to Bustly
+  ipcMain.handle("bustly-is-logged-in", () => {
+    return BustlyOAuth.isBustlyLoggedIn();
+  });
+
+  // Get current Bustly user info
+  ipcMain.handle("bustly-get-user-info", () => {
+    return BustlyOAuth.getBustlyUserInfo();
+  });
+
+  // Bustly OAuth login
+  ipcMain.handle("bustly-login", async () => {
+    try {
+      console.log("[Bustly Login] Starting Bustly OAuth login flow");
+
+      // Initialize OAuth flow (clears any existing state)
+      const oauthState = BustlyOAuth.initBustlyOAuthFlow();
+      console.log("[Bustly Login] OAuth state initialized, traceId:", oauthState.loginTraceId);
+
+      // Start OAuth callback server
+      const oauthPort = startOAuthCallbackServer();
+      console.log("[Bustly Login] OAuth callback server started on port", oauthPort);
+
+      // Generate login URL
+      const redirectUri = `http://127.0.0.1:${oauthPort}/authorize`;
+      const loginUrl = generateLoginUrl(oauthState.loginTraceId!, redirectUri);
+
+      console.log("[Bustly Login] Got login URL, opening browser...");
+
+      // Open login URL in browser
+      await shell.openExternal(loginUrl);
+
+      // Poll for completion
+      const maxPollAttempts = 60; // 2 minutes (60 * 2s)
+      let pollAttempts = 0;
+
+      while (pollAttempts < maxPollAttempts) {
+        await delay(2000);
+
+        const code = BustlyOAuth.getBustlyAuthCode();
+
+        if (code) {
+          // Got the code, now exchange for token
+          console.log("[Bustly Login] Got authorization code, exchanging token...");
+          const apiResponse = await exchangeToken(code);
+
+          // Extract Supabase access token from extras (for login state)
+          const supabaseAccessToken = apiResponse.data.extras?.supabase_session?.access_token ?? "";
+          if (!supabaseAccessToken) {
+            throw new Error("Missing Supabase access token in API response");
+          }
+
+          // Complete login - store user info and Supabase access token (for login state)
+          BustlyOAuth.completeBustlyLogin({
+            user: {
+              userId: apiResponse.data.userId,
+              userName: apiResponse.data.userName,
+              userEmail: apiResponse.data.userEmail,
+              workspaceId: apiResponse.data.workspaceId,
+              skills: apiResponse.data.extras?.["bustly-search-data"]
+                ? ["search-data"]
+                : apiResponse.data.skills ?? [],
+            },
+            supabaseAccessToken,
+          });
+
+          // Write config with skills configuration from API extras
+          console.log("[Bustly Login] Writing token config...");
+          const { writeConfigFile } = await import("../../../../src/config/io.js");
+          const currentConfig = loadConfig();
+
+          // Build search data config from API extras
+          const searchDataConfig = apiResponse.data.extras?.["bustly-search-data"];
+
+          const updatedConfig = {
+            ...currentConfig,
+            skills: {
+              ...currentConfig.skills,
+              entries: {
+                ...currentConfig.skills?.entries,
+                "bustly-search-data": {
+                  enabled: true,
+                  env: {
+                    SEARCH_DATA_SUPABASE_URL: searchDataConfig?.search_DATA_SUPABASE_URL ?? "",
+                    SEARCH_DATA_SUPABASE_ANON_KEY: searchDataConfig?.search_DATA_SUPABASE_ANON_KEY ?? "",
+                    SEARCH_DATA_TOKEN: searchDataConfig?.search_DATA_TOKEN ?? apiResponse.data.accessToken,
+                    SEARCH_DATA_WORKSPACE_ID: searchDataConfig?.search_DATA_WORKSPACE_ID ?? apiResponse.data.workspaceId,
+                  },
+                },
+              },
+            },
+          };
+
+          await writeConfigFile(updatedConfig);
+
+          // Stop OAuth callback server
+          stopOAuthCallbackServer();
+
+          console.log("[Bustly Login] Login successful!");
+          return { success: true };
+        }
+
+        pollAttempts++;
+      }
+
+      // Stop OAuth callback server on timeout
+      stopOAuthCallbackServer();
+      throw new Error("Login timed out. Please try again.");
+    } catch (error) {
+      console.error("[Bustly Login] Error:", error);
+      // Stop OAuth callback server on error
+      stopOAuthCallbackServer();
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  });
+
+  // Bustly OAuth logout
+  ipcMain.handle("bustly-logout", async () => {
+    try {
+      console.log("[Bustly Logout] Logging out...");
+      BustlyOAuth.logoutBustly();
+
+      // Remove Bustly skill configuration from config
+      const { writeConfigFile } = await import("../../../../src/config/io.js");
+      const currentConfig = loadConfig();
+
+      if (currentConfig.skills?.entries?.["bustly-search-data"]) {
+        const { ["bustly-search-data"]: _removed, ...remainingEntries } = currentConfig.skills.entries;
+        const updatedConfig = {
+          ...currentConfig,
+          skills: {
+            ...currentConfig.skills,
+            entries: remainingEntries,
+          },
+        };
+        await writeConfigFile(updatedConfig);
+        console.log("[Bustly Logout] Removed Bustly skill configuration");
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error("[Bustly Logout] Error:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  });
+
+  // === Onboarding handlers ===
+
   // List available providers
   ipcMain.handle("onboard-list-providers", () => {
     return listProviders();
@@ -1178,6 +1414,40 @@ function setupIpcHandlers(): void {
 // App lifecycle
 app.whenReady().then(async () => {
   powerSaveBlocker.start("prevent-app-suspension");
+  // Load .env file at startup (must be after app is ready to get correct paths)
+  const loadDotEnv = () => {
+    const envPaths = [
+      // Development: dist/main-dev.js -> ../.env = apps/electron/.env
+      // Production: dist/main/index.js -> ../../.env = apps/electron/.env
+      process.env.NODE_ENV === "development"
+        ? resolve(__dirname, "../.env")
+        : resolve(__dirname, "../../.env"),
+    ];
+
+    for (const envPath of envPaths) {
+      try {
+        if (existsSync(envPath)) {
+          const envContent = readFileSync(envPath, "utf-8");
+          for (const line of envContent.split("\n")) {
+            const trimmedLine = line.trim();
+            if (trimmedLine && !trimmedLine.startsWith("#")) {
+              const [key, ...valueParts] = trimmedLine.split("=");
+              const value = valueParts.join("=").trim();
+              if (key && value) {
+                process.env[key] = value;
+              }
+            }
+          }
+          console.log(`[Env] Loaded environment variables from ${envPath}:`, Object.keys(process.env).filter(k => k.startsWith("BUSTLY_")));
+          break;
+        }
+      } catch (error) {
+        console.error(`[Env] Failed to load ${envPath}:`, error);
+      }
+    }
+  };
+  loadDotEnv();
+
   setupIpcHandlers();
 
   console.log("=== OpenClaw Desktop starting ===");
@@ -1291,6 +1561,10 @@ app.on("before-quit", async () => {
       console.error("[Gateway] ✗ Failed to stop gateway:", error);
     }
   }
+
+  // Stop OAuth callback server
+  console.log("[Bustly] Stopping OAuth callback server...");
+  stopOAuthCallbackServer();
 });
 
 process.on("uncaughtException", (error) => {

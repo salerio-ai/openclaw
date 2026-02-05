@@ -49,6 +49,7 @@ type GatewayHost = {
   refreshSessionsAfterChat: Set<string>;
   execApprovalQueue: ExecApprovalRequest[];
   execApprovalError: string | null;
+  checkBustlyLoginStatus: () => Promise<void>;
 };
 
 type SessionDefaultsSnapshot = {
@@ -140,6 +141,7 @@ export function connectGateway(host: GatewayHost) {
       void loadNodes(host as unknown as OpenClawApp, { quiet: true });
       void loadDevices(host as unknown as OpenClawApp, { quiet: true });
       void refreshActiveTab(host as unknown as Parameters<typeof refreshActiveTab>[0]);
+      void host.checkBustlyLoginStatus();
     },
     onClose: ({ code, reason }) => {
       host.connected = false;

@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState, useEffect } from "react";
 
 type DevPanelProps = {
   appInfo: AppInfo | null;
@@ -28,9 +28,69 @@ export default function DevPanel({
   onOpenControlUI,
   onClearLogs,
 }: DevPanelProps) {
+  const [bustlyUserInfo, setBustlyUserInfo] = useState<BustlyUserInfo | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [isLoadingUserInfo, setIsLoadingUserInfo] = useState<boolean>(false);
+
+  // Load Bustly user info on mount
+  useEffect(() => {
+    const loadBustlyUserInfo = async () => {
+      if (!window.electronAPI) return;
+
+      try {
+        const loggedIn = await window.electronAPI.bustlyIsLoggedIn();
+        setIsLoggedIn(loggedIn);
+
+        if (loggedIn) {
+          const userInfo = await window.electronAPI.bustlyGetUserInfo();
+          setBustlyUserInfo(userInfo);
+        }
+      } catch (err) {
+        console.error("Failed to load Bustly user info:", err);
+      }
+    };
+
+    loadBustlyUserInfo();
+  }, []);
+
   const handleOpenControlUI = useCallback(() => {
     onOpenControlUI();
   }, [onOpenControlUI]);
+
+  const handleBustlyLogin = useCallback(async () => {
+    if (!window.electronAPI) return;
+
+    setIsLoadingUserInfo(true);
+    try {
+      const result = await window.electronAPI.bustlyLogin();
+      if (result.success) {
+        const loggedIn = await window.electronAPI.bustlyIsLoggedIn();
+        setIsLoggedIn(loggedIn);
+        if (loggedIn) {
+          const userInfo = await window.electronAPI.bustlyGetUserInfo();
+          setBustlyUserInfo(userInfo);
+        }
+      }
+    } catch (err) {
+      console.error("Bustly login failed:", err);
+    } finally {
+      setIsLoadingUserInfo(false);
+    }
+  }, []);
+
+  const handleBustlyLogout = useCallback(async () => {
+    if (!window.electronAPI) return;
+
+    try {
+      const result = await window.electronAPI.bustlyLogout();
+      if (result.success) {
+        setIsLoggedIn(false);
+        setBustlyUserInfo(null);
+      }
+    } catch (err) {
+      console.error("Bustly logout failed:", err);
+    }
+  }, []);
 
   return (
     <div className="app">
@@ -49,6 +109,38 @@ export default function DevPanel({
             <span className="status-dot" />
             Gateway: {gatewayStatus?.running ? "Running" : "Stopped"}
           </div>
+
+          {/* User Profile Section */}
+          {isLoggedIn && bustlyUserInfo ? (
+            <div className="user-profile">
+              <div className="user-avatar">
+                {bustlyUserInfo.userName.charAt(0).toUpperCase()}
+              </div>
+              <div className="user-info">
+                <div className="user-name">{bustlyUserInfo.userName}</div>
+                <div className="user-email">
+                  {bustlyUserInfo.userEmail.slice(0, 3)}***{bustlyUserInfo.userEmail.split('@')[1]}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleBustlyLogout}
+                className="btn-logout"
+                title="Logout"
+              >
+                Logout
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={handleBustlyLogin}
+              disabled={isLoadingUserInfo}
+              className="btn-login"
+            >
+              {isLoadingUserInfo ? "Logging in..." : "Login"}
+            </button>
+          )}
         </div>
       </header>
 

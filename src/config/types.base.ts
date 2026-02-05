@@ -167,12 +167,57 @@ export type IdentityConfig = {
   avatar?: string;
 };
 
-/** Salerio OAuth configuration for desktop client login. */
-export type SalerioOAuthConfig = {
-  /** Base URL for Salerio API (e.g., "https://test-www.bustly.shop"). */
+/** Bustly OAuth configuration for desktop client login. */
+export type BustlyOAuthConfig = {
+  /** Base URL for Bustly API (e.g., "https://test-www.bustly.shop"). */
   apiBaseUrl: string;
-  /** Base URL for Salerio Web interface (e.g., "https://test-www.bustly.shop"). */
+  /** Base URL for Bustly Web interface (e.g., "https://test-www.bustly.shop"). */
   webBaseUrl: string;
   /** Client ID for OpenClaw desktop application. */
   clientId: string;
+  /** Port for OAuth callback server (default: 18790). This is separate from gateway port to avoid conflicts. */
+  callbackPort?: number;
+};
+
+/** Bustly OAuth login state stored in ~/.openclaw/bustlyOauth.json. */
+export type BustlyOAuthState = {
+  /** Login trace ID for OAuth flow tracking. */
+  loginTraceId?: string;
+  /** Device ID for this client. */
+  deviceId: string;
+  /** OAuth callback port. */
+  callbackPort: number;
+  /** Authorization code (transient, cleared after token exchange). */
+  authCode?: string;
+  /** Session expiration timestamp (milliseconds since epoch, transient). */
+  expiresAt?: number;
+  /** User information (populated after successful login). */
+  user?: {
+    /** User ID. */
+    userId: string;
+    /** User name. */
+    userName: string;
+    /** User email. */
+    userEmail: string;
+    /** Workspace ID. */
+    workspaceId: string;
+    /** Assigned skills. */
+    skills: string[];
+  };
+  /** Supabase session access token (for login state and API calls). */
+  supabaseAccessToken?: string;
+  /** Login timestamp (milliseconds since epoch). */
+  loggedInAt?: number;
+};
+
+/** Bustly search data configuration from API extras. */
+export type BustlySearchDataConfig = {
+  /** Search data access token (same as Bustly access token). */
+  SEARCH_DATA_TOKEN: string;
+  /** Supabase API URL. */
+  SEARCH_DATA_SUPABASE_URL: string;
+  /** Supabase anonymous key. */
+  SEARCH_DATA_SUPABASE_ANON_KEY: string;
+  /** Workspace ID. */
+  SEARCH_DATA_WORKSPACE_ID: string;
 };
