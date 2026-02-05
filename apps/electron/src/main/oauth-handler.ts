@@ -105,7 +105,7 @@ export function startOAuthCallbackServer(): number {
     }
 
     const url = new URL(urlRaw, `http://127.0.0.1:${port}`);
-    console.log("[Bustly OAuth] Pathname:", url.pathname);
+    console.log("[Bustly OAuth] Pathname:", url);
 
     // Check if this is an OAuth callback
     if (url.pathname !== "/authorize") {
@@ -289,7 +289,13 @@ export async function exchangeToken(code: string): Promise<BustlyTokenApiRespons
   const clientId = process.env.BUSTLY_CLIENT_ID ?? "openclaw-desktop";
   console.log("[Bustly OAuth] Client ID:", clientId);
 
-  const apiEndpoint = "http://127.0.0.1:8080/api/oauth/getToken";
+  const apiBaseUrl = process.env.BUSTLY_API_BASE_URL;
+  if (!apiBaseUrl) {
+    throw new Error(
+      "Bustly OAuth configuration not found. Please set BUSTLY_API_BASE_URL environment variable.",
+    );
+  }
+  const apiEndpoint = `${apiBaseUrl.replace(/\/+$/, "")}/api/oauth/getToken`;
   console.log("[Bustly OAuth] API endpoint:", apiEndpoint);
 
   const response = await fetch(apiEndpoint, {
