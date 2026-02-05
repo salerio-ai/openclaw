@@ -1076,6 +1076,24 @@ function setupIpcHandlers(): void {
     }
   });
 
+  ipcMain.handle("bustly-open-settings", async () => {
+    try {
+      const baseUrl = process.env.BUSTLY_WEB_BASE_URL;
+      if (!baseUrl) {
+        throw new Error("Missing BUSTLY_WEB_BASE_URL");
+      }
+      const url = `${baseUrl.replace(/\/+$/, "")}/admin?setting_modal=profile`;
+      await shell.openExternal(url);
+      return { success: true };
+    } catch (error) {
+      console.error("[Bustly Settings] Error:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  });
+
   // === Onboarding handlers ===
 
   // List available providers

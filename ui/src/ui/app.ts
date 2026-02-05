@@ -511,6 +511,21 @@ export class OpenClawApp extends LitElement {
     this.oauthLoginSuccess = false;
 
     try {
+      const electronAPI = (window as unknown as { electronAPI?: {
+        bustlyLogin?: () => Promise<{ success: boolean; error?: string }>;
+      } }).electronAPI;
+      if (electronAPI?.bustlyLogin) {
+        const result = await electronAPI.bustlyLogin();
+        if (!result?.success) {
+          throw new Error(result?.error ?? "Login failed");
+        }
+        this.oauthLoginPending = false;
+        this.oauthLoginSuccess = true;
+        await loadOverviewInternal(this as unknown as Parameters<typeof loadOverviewInternal>[0]);
+        await this.checkBustlyLoginStatus();
+        return;
+      }
+
       // Initiate login flow - request returns payload directly on success
       const loginResult = await this.client.request<{
         loginUrl: string;
@@ -572,6 +587,7 @@ export class OpenClawApp extends LitElement {
           // Reload config to show updated skills
           console.log("[Bustly Login] Reloading overview...");
           await loadOverviewInternal(this as unknown as Parameters<typeof loadOverviewInternal>[0]);
+          await this.checkBustlyLoginStatus();
         }
       } catch (err) {
         // Continue polling on error, unless it's a fatal error
@@ -611,6 +627,28 @@ export class OpenClawApp extends LitElement {
     if (!this.client) return;
 
     try {
+      const electronAPI = (window as unknown as { electronAPI?: {
+        bustlyIsLoggedIn?: () => Promise<boolean>;
+        bustlyGetUserInfo?: () => Promise<{
+          userId: string;
+          userName: string;
+          userEmail: string;
+          workspaceId: string;
+          skills: string[];
+        } | null>;
+      } }).electronAPI;
+      if (electronAPI?.bustlyIsLoggedIn) {
+        const loggedIn = await electronAPI.bustlyIsLoggedIn();
+        this.bustlyIsLoggedIn = loggedIn;
+        if (loggedIn && electronAPI.bustlyGetUserInfo) {
+          const userInfo = await electronAPI.bustlyGetUserInfo();
+          this.bustlyUserInfo = userInfo ?? null;
+        } else {
+          this.bustlyUserInfo = null;
+        }
+        return;
+      }
+
       const result = await this.client.request<{ loggedIn: boolean }>("oauth.is-logged-in", {});
       this.bustlyIsLoggedIn = result.loggedIn;
 
@@ -639,6 +677,17 @@ export class OpenClawApp extends LitElement {
     this.bustlyUserMenuOpen = !this.bustlyUserMenuOpen;
   }
 
+  handleBustlyOpenSettings() {
+    const electronAPI = (window as unknown as {
+      electronAPI?: { bustlyOpenSettings?: () => Promise<{ success: boolean; error?: string }> };
+    }).electronAPI;
+    if (electronAPI?.bustlyOpenSettings) {
+      void electronAPI.bustlyOpenSettings();
+      return;
+    }
+    console.warn("[Bustly Auth] Settings link unavailable outside Electron.");
+  }
+
   handleBustlyUserMenuClose(event: MouseEvent) {
     const target = event.target as HTMLElement;
     const menu = this.querySelector('.bustly-user-section');
@@ -651,7 +700,17 @@ export class OpenClawApp extends LitElement {
     if (!this.client) return;
 
     try {
-      await this.client.request<{ success: boolean }>("oauth.logout", {});
+      const electronAPI = (window as unknown as { electronAPI?: {
+        bustlyLogout?: () => Promise<{ success: boolean; error?: string }>;
+      } }).electronAPI;
+      if (electronAPI?.bustlyLogout) {
+        const result = await electronAPI.bustlyLogout();
+        if (!result?.success) {
+          throw new Error(result?.error ?? "Logout failed");
+        }
+      } else {
+        await this.client.request<{ success: boolean }>("oauth.logout", {});
+      }
       this.bustlyIsLoggedIn = false;
       this.bustlyUserInfo = null;
       this.bustlyUserMenuOpen = false;

@@ -131,7 +131,7 @@ export function startOAuthCallbackServer(): number {
         <!DOCTYPE html>
         <html>
         <head>
-          <title>登录失败</title>
+          <title>Login Failed</title>
           <meta charset="utf-8">
           <style>
             body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; padding: 50px; }
@@ -139,8 +139,8 @@ export function startOAuthCallbackServer(): number {
           </style>
         </head>
         <body>
-          <h1>❌ 登录失败</h1>
-          <p>缺少授权码，请重试。</p>
+          <h1>❌ Login Failed</h1>
+          <p>Missing authorization code. Please try again.</p>
         </body>
         </html>
       `);
@@ -157,7 +157,7 @@ export function startOAuthCallbackServer(): number {
         <!DOCTYPE html>
         <html>
         <head>
-          <title>登录失败</title>
+          <title>Login Failed</title>
           <meta charset="utf-8">
           <style>
             body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; padding: 50px; }
@@ -165,8 +165,8 @@ export function startOAuthCallbackServer(): number {
           </style>
         </head>
         <body>
-          <h1>❌ 登录失败</h1>
-          <p>无效的请求状态，请重试。</p>
+          <h1>❌ Login Failed</h1>
+          <p>Invalid request state. Please try again.</p>
         </body>
         </html>
       `);
@@ -194,7 +194,7 @@ export function startOAuthCallbackServer(): number {
       <!DOCTYPE html>
       <html>
       <head>
-        <title>登录成功</title>
+        <title>Login Successful</title>
         <meta charset="utf-8">
         <style>
           body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; padding: 50px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
@@ -207,10 +207,10 @@ export function startOAuthCallbackServer(): number {
       </head>
       <body>
         <div class="container">
-          <h1>✅ 登录成功</h1>
-          <p>正在完成配置，请稍候...</p>
+          <h1>✅ Login Successful</h1>
+          <p>Finishing setup, please wait...</p>
           <div class="spinner"></div>
-          <p style="font-size: 14px; color: #999;">您可以关闭此页面并返回 OpenClaw 桌面应用</p>
+          <p style="font-size: 14px; color: #999;">You can close this page and return to the OpenClaw desktop app.</p>
         </div>
         <script>
           setTimeout(() => window.close(), 3000);

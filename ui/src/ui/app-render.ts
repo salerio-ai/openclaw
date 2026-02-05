@@ -90,11 +90,13 @@ function renderBustlyUserSection(state: AppViewState) {
     oauthLoginSuccess: boolean;
     handleBustlyLogin: () => void;
     handleBustlyUserMenuToggle: () => void;
+    handleBustlyOpenSettings: () => void;
     handleBustlyLogout: () => void;
   };
 
   // If logged in, show avatar with dropdown
   if (bustlyState.bustlyIsLoggedIn && bustlyState.bustlyUserInfo) {
+    const email = bustlyState.bustlyUserInfo.userEmail || "";
     return html`
       <div class="bustly-user-section ${bustlyState.bustlyUserMenuOpen ? 'bustly-user-section--menu-open' : ''}">
         <button
@@ -103,21 +105,26 @@ function renderBustlyUserSection(state: AppViewState) {
           title="Account"
         >
           <span class="bustly-user-avatar">
-            ${(bustlyState.bustlyUserInfo.userName || bustlyState.bustlyUserInfo.userEmail || 'U').charAt(0).toUpperCase()}
+            ${(email || "U").charAt(0).toUpperCase()}
           </span>
         </button>
         ${bustlyState.bustlyUserMenuOpen ? html`
           <div class="bustly-user-dropdown">
             <div class="bustly-user-dropdown__header">
               <div class="bustly-user-dropdown__avatar">
-                ${(bustlyState.bustlyUserInfo.userName || bustlyState.bustlyUserInfo.userEmail || 'U').charAt(0).toUpperCase()}
+                ${(email || "U").charAt(0).toUpperCase()}
               </div>
               <div class="bustly-user-dropdown__info">
-                <div class="bustly-user-dropdown__name">${bustlyState.bustlyUserInfo.userName || 'User'}</div>
-                <div class="bustly-user-dropdown__email">${bustlyState.bustlyUserInfo.userEmail || ''}</div>
+                <div class="bustly-user-dropdown__name">${email || "User"}</div>
               </div>
             </div>
             <div class="bustly-user-dropdown__divider"></div>
+            <button
+              class="bustly-user-dropdown__settings"
+              @click=${bustlyState.handleBustlyOpenSettings}
+            >
+              Settings
+            </button>
             <button
               class="bustly-user-dropdown__logout"
               @click=${bustlyState.handleBustlyLogout}
@@ -134,7 +141,7 @@ function renderBustlyUserSection(state: AppViewState) {
   if (bustlyState.oauthLoginPending) {
     return html`
       <button class="bustly-login-btn bustly-login-btn--pending" disabled>
-        登录中...
+        Logging in...
       </button>
     `;
   }
@@ -145,7 +152,7 @@ function renderBustlyUserSection(state: AppViewState) {
       class="bustly-login-btn"
       @click=${bustlyState.handleBustlyLogin}
     >
-      登录 →
+      Log in →
     </button>
   `;
 }
@@ -182,8 +189,7 @@ export function renderApp(state: AppViewState) {
               <img src="/favicon.svg" alt="OpenClaw" />
             </div>
             <div class="brand-text">
-              <div class="brand-title">OPENCLAW</div>
-              <div class="brand-sub">Gateway Dashboard</div>
+              <div class="brand-title">Bustly</div>
             </div>
           </div>
         </div>
@@ -224,23 +230,7 @@ export function renderApp(state: AppViewState) {
             </div>
           `;
         })}
-        <div class="nav-group nav-group--links">
-          <div class="nav-label nav-label--static">
-            <span class="nav-label__text">Resources</span>
-          </div>
-          <div class="nav-group__items">
-            <a
-              class="nav-item nav-item--external"
-              href="https://docs.openclaw.ai"
-              target="_blank"
-              rel="noreferrer"
-              title="Docs (opens in new tab)"
-            >
-              <span class="nav-item__icon" aria-hidden="true">${icons.book}</span>
-              <span class="nav-item__text">Docs</span>
-            </a>
-          </div>
-        </div>
+        ${nothing}
       </aside>
       <main class="content ${isChat ? "content--chat" : ""}">
         <section class="content-header">

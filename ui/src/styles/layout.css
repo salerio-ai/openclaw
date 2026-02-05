@@ -329,7 +329,8 @@
   margin: 0;
 }
 
-.bustly-user-dropdown__logout {
+.bustly-user-dropdown__logout,
+.bustly-user-dropdown__settings {
   width: 100%;
   padding: 10px 16px;
   text-align: left;
@@ -342,8 +343,9 @@
   font-family: inherit;
 }
 
-.bustly-user-dropdown__logout:hover {
-  background: var(--bg-soft);
+.bustly-user-dropdown__logout:hover,
+.bustly-user-dropdown__settings:hover {
+  background: var(--bg-hover);
   color: var(--fg);
 }
 
