@@ -324,6 +324,79 @@ export default function Onboard({ onComplete, onCancel }: OnboardProps) {
     }
   }, [step]);
 
+  if (step === "bustly-login") {
+    return (
+      <div className="onboard">
+        <div className="onboard-card">
+          <h1>Sign in to Bustly</h1>
+          <p className="onboard-subtitle">
+            Sign in to sync your OpenClaw workspace and unlock provider setup.
+          </p>
+
+          {error && (
+            <div className="error-message">
+              <strong>Error:</strong> {error}
+            </div>
+          )}
+
+          <div className="onboard-info">
+            {checkingLogin ? (
+              <p>Checking your sign-in status...</p>
+            ) : isLoggedIn ? (
+              <>
+                <h3>Signed in</h3>
+                <p>
+                  {userInfo?.userName ?? "Bustly user"}{" "}
+                  {userInfo?.userEmail ? `(${userInfo.userEmail})` : ""}
+                </p>
+                {userInfo?.workspaceId && (
+                  <p>Workspace: {userInfo.workspaceId}</p>
+                )}
+              </>
+            ) : (
+              <>
+                <h3>What happens next</h3>
+                <p>We will open your browser to complete a secure OAuth login.</p>
+              </>
+            )}
+          </div>
+
+          <div className="onboard-actions">
+            {isLoggedIn ? (
+              <>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => setStep("welcome")}
+                  disabled={checkingLogin || loading}
+                >
+                  Continue
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={handleBustlyLogout}
+                  disabled={checkingLogin || loading}
+                >
+                  {loading ? "Signing out..." : "Sign out"}
+                </button>
+              </>
+            ) : (
+              <button
+                className="btn btn-primary"
+                onClick={handleBustlyLogin}
+                disabled={checkingLogin || loading}
+              >
+                {loading ? "Opening browser..." : "Sign in with Bustly"}
+              </button>
+            )}
+            <button className="btn btn-secondary" onClick={onCancel} disabled={loading}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Welcome step
   if (step === "welcome") {
     return (
