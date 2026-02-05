@@ -110,9 +110,10 @@ export function initBustlyOAuthFlow(port?: number): BustlyOAuthState {
 
 /**
  * Generate a login trace ID for tracking the login flow
+ * Returns a UUID v4 format string
  */
 export function generateLoginTraceId(): string {
-  return Buffer.from(`${Date.now()}-${Math.random()}`).toString("base64").slice(0, 32);
+  return crypto.randomUUID();
 }
 
 /**

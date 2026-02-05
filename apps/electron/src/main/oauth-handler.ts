@@ -178,40 +178,14 @@ export function startOAuthCallbackServer(): number {
     console.log("[Bustly OAuth] Authorization code stored in state");
 
     // Notify the waiting promise if any
+    // The IPC handler in index.ts will handle token exchange
     if (oauthCodeResolver) {
       console.log("[Bustly OAuth] Notifying waiting promise");
       oauthCodeResolver(code);
       oauthCodeResolver = null;
     }
 
-    // Automatically exchange token (fire and forget)
-    console.log("[Bustly OAuth] Exchanging token...");
-    exchangeToken(code)
-      .then((apiResponse) => {
-        console.log("[Bustly OAuth] Token exchange successful!");
-        console.log("   User:", apiResponse.data.userName);
-        console.log("   Email:", apiResponse.data.userEmail);
-        console.log("   Workspace:", apiResponse.data.workspaceId);
-
-        // Store user info and access token in OAuth state
-        const userInfo: BustlyOAuth.BustlyUserInfo = {
-          userId: apiResponse.data.userId,
-          userName: apiResponse.data.userName,
-          userEmail: apiResponse.data.userEmail,
-          workspaceId: apiResponse.data.workspaceId,
-          skills: apiResponse.data.skills ?? [],
-        };
-
-        BustlyOAuth.completeBustlyLogin({
-          user: userInfo,
-          supabaseAccessToken: apiResponse.data.extras?.supabase_session?.access_token ?? "",
-        });
-
-        console.log("[Bustly OAuth] User info and token stored in state");
-      })
-      .catch((err) => {
-        console.error("[Bustly OAuth] Token exchange failed:", err);
-      });
+    console.log("[Bustly OAuth] Waiting for IPC handler to exchange token...");
 
     // Render success page
     res.statusCode = 200;
