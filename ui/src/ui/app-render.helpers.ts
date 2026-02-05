@@ -16,6 +16,7 @@ export function renderTab(state: AppViewState, tab: Tab) {
     <a
       href=${href}
       class="nav-item ${state.tab === tab ? "active" : ""}"
+      data-label="${titleForTab(tab)}"
       @click=${(event: MouseEvent) => {
         if (
           event.defaultPrevented ||
@@ -104,7 +105,7 @@ export function renderChatControls(state: AppViewState) {
               lastActiveSessionKey: next,
             });
             void state.loadAssistantIdentity();
-            syncUrlWithSessionKey(state, next, true);
+            syncUrlWithSessionKey(state as any, next, true);
             void loadChatHistory(state);
           }}
         >
@@ -125,7 +126,7 @@ export function renderChatControls(state: AppViewState) {
           state.resetToolStream();
           void refreshChat(state as unknown as Parameters<typeof refreshChat>[0]);
         }}
-        title="Refresh chat data"
+        title="刷新聊天数据"
       >
         ${refreshIcon}
       </button>
@@ -141,11 +142,7 @@ export function renderChatControls(state: AppViewState) {
           });
         }}
         aria-pressed=${showThinking}
-        title=${
-          disableThinkingToggle
-            ? "Disabled during onboarding"
-            : "Toggle assistant thinking/working output"
-        }
+        title=${disableThinkingToggle ? "新手引导期间不可用" : "切换助手思考过程显示"}
       >
         ${icons.brain}
       </button>
@@ -160,11 +157,7 @@ export function renderChatControls(state: AppViewState) {
           });
         }}
         aria-pressed=${focusActive}
-        title=${
-          disableFocusToggle
-            ? "Disabled during onboarding"
-            : "Toggle focus mode (hide sidebar + page header)"
-        }
+        title=${disableFocusToggle ? "新手引导期间不可用" : "切换专注模式 (隐藏侧边栏和页头)"}
       >
         ${focusIcon}
       </button>
@@ -206,7 +199,9 @@ function resolveSessionOptions(
   const seen = new Set<string>();
   const options: Array<{ key: string; displayName?: string }> = [];
 
-  const resolvedMain = mainSessionKey && sessions?.sessions?.find((s) => s.key === mainSessionKey);
+  const resolvedMain = mainSessionKey
+    ? sessions?.sessions?.find((s) => s.key === mainSessionKey)
+    : undefined;
   const resolvedCurrent = sessions?.sessions?.find((s) => s.key === sessionKey);
 
   // Add main session key first
@@ -265,8 +260,8 @@ export function renderThemeToggle(state: AppViewState) {
           class="theme-toggle__button ${state.theme === "system" ? "active" : ""}"
           @click=${applyTheme("system")}
           aria-pressed=${state.theme === "system"}
-          aria-label="System theme"
-          title="System"
+          aria-label="跟随系统"
+          title="跟随系统"
         >
           ${renderMonitorIcon()}
         </button>
@@ -274,8 +269,8 @@ export function renderThemeToggle(state: AppViewState) {
           class="theme-toggle__button ${state.theme === "light" ? "active" : ""}"
           @click=${applyTheme("light")}
           aria-pressed=${state.theme === "light"}
-          aria-label="Light theme"
-          title="Light"
+          aria-label="浅色模式"
+          title="浅色模式"
         >
           ${renderSunIcon()}
         </button>
@@ -283,8 +278,8 @@ export function renderThemeToggle(state: AppViewState) {
           class="theme-toggle__button ${state.theme === "dark" ? "active" : ""}"
           @click=${applyTheme("dark")}
           aria-pressed=${state.theme === "dark"}
-          aria-label="Dark theme"
-          title="Dark"
+          aria-label="深色模式"
+          title="深色模式"
         >
           ${renderMoonIcon()}
         </button>

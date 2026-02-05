@@ -1,4 +1,6 @@
 @import "./chat/layout.css";
+@import "./chat/home.css";
+@import "./chat/history.css";
 @import "./chat/text.css";
 @import "./chat/grouped.css";
 @import "./chat/tool-cards.css";

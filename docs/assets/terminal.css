@@ -1,8 +1,8 @@
 :root {
   --font-body: "Fragment Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   --font-pixel: "Pixelify Sans", system-ui, sans-serif;
-  --radius: 14px;
-  --radius-sm: 10px;
+  --radius: 16px;
+  --radius-sm: 8px;
   --border: 2px;
   --shadow-px: 0 0 0 var(--border) var(--frame-border), 0 12px 0 -4px rgba(0, 0, 0, 0.25);
   --scanline-size: 6px;
@@ -101,7 +101,7 @@ body::after {
   left: 10px;
   z-index: 10;
   padding: 10px 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: var(--panel);
   color: var(--text);
   text-decoration: none;
@@ -191,7 +191,7 @@ body::after {
   align-items: center;
   gap: 8px;
   padding: 8px 12px 8px 10px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   background:
     linear-gradient(140deg, color-mix(in oklab, var(--accent) 10%, transparent), transparent 60%),
     color-mix(in oklab, var(--panel) 92%, transparent);

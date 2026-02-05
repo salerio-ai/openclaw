@@ -77,7 +77,6 @@ export function renderStreamingGroup(
     hour: "numeric",
     minute: "2-digit",
   });
-  const name = assistant?.name ?? "Assistant";
 
   return html`
     <div class="chat-group assistant">
@@ -93,7 +92,6 @@ export function renderStreamingGroup(
           onOpenSidebar,
         )}
         <div class="chat-group-footer">
-          <span class="chat-sender-name">${name}</span>
           <span class="chat-group-timestamp">${timestamp}</span>
         </div>
       </div>
@@ -112,12 +110,6 @@ export function renderMessageGroup(
 ) {
   const normalizedRole = normalizeRoleForGrouping(group.role);
   const assistantName = opts.assistantName ?? "Assistant";
-  const who =
-    normalizedRole === "user"
-      ? "You"
-      : normalizedRole === "assistant"
-        ? assistantName
-        : normalizedRole;
   const roleClass =
     normalizedRole === "user" ? "user" : normalizedRole === "assistant" ? "assistant" : "other";
   const timestamp = new Date(group.timestamp).toLocaleTimeString([], {
@@ -143,7 +135,6 @@ export function renderMessageGroup(
           ),
         )}
         <div class="chat-group-footer">
-          <span class="chat-sender-name">${who}</span>
           <span class="chat-group-timestamp">${timestamp}</span>
         </div>
       </div>
@@ -172,15 +163,12 @@ function renderAvatar(role: string, assistant?: Pick<AssistantIdentity, "name" |
           ? "tool"
           : "other";
 
-  if (assistantAvatar && normalized === "assistant") {
-    if (isAvatarUrl(assistantAvatar)) {
-      return html`<img
-        class="chat-avatar ${className}"
-        src="${assistantAvatar}"
-        alt="${assistantName}"
-      />`;
-    }
-    return html`<div class="chat-avatar ${className}">${assistantAvatar}</div>`;
+  if (normalized === "assistant") {
+    return html`<img
+      class="chat-avatar ${className}"
+      src="/bustly-icon.png"
+      alt="${assistantName}"
+    />`;
   }
 
   return html`<div class="chat-avatar ${className}">${initial}</div>`;

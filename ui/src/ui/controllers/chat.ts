@@ -56,7 +56,7 @@ export async function sendChatMessage(
   message: string,
   attachments?: ChatAttachment[],
 ): Promise<string | null> {
-  if (!state.client || !state.connected) return null;
+  if (!state.connected) return null;
   const msg = message.trim();
   const hasAttachments = attachments && attachments.length > 0;
   if (!msg && !hasAttachments) return null;
@@ -93,6 +93,36 @@ export async function sendChatMessage(
   state.chatRunId = runId;
   state.chatStream = "";
   state.chatStreamStartedAt = now;
+
+  // Mock mode for UI Designer (when no client is connected)
+  if (!state.client) {
+    console.log("[Mock] Sending message:", msg);
+    setTimeout(() => {
+      state.chatStream =
+        "This is a simulated AI response for design verification. The input box, dynamic placeholders, and new chat button should be working correctly now.";
+      state.chatThinkingLevel = "low";
+      setTimeout(() => {
+        state.chatStream = null;
+        state.chatRunId = null;
+        state.chatThinkingLevel = null;
+        state.chatMessages = [
+          ...state.chatMessages,
+          {
+            role: "assistant",
+            content: [
+              {
+                type: "text",
+                text: "This is a simulated AI response for design verification. The input box, dynamic placeholders, and new chat button should be working correctly now.",
+              },
+            ],
+            timestamp: Date.now(),
+          },
+        ];
+        state.chatSending = false;
+      }, 1500);
+    }, 600);
+    return runId;
+  }
 
   // Convert attachments to API format
   const apiAttachments = hasAttachments

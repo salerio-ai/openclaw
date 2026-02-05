@@ -2,6 +2,7 @@ import { html, nothing } from "lit";
 import type { ChannelAccountSnapshot, TelegramStatus } from "../types";
 import type { ChannelsProps } from "./channels.types";
 import { formatAgo } from "../format";
+import { renderChannelCard } from "./channels.card";
 import { renderChannelConfigSection } from "./channels.config";
 
 export function renderTelegramCard(params: {
@@ -52,69 +53,52 @@ export function renderTelegramCard(params: {
     `;
   };
 
-  return html`
-    <div class="card">
-      <div class="card-title">Telegram</div>
-      <div class="card-sub">Bot status and channel configuration.</div>
+  return renderChannelCard({
+    title: "Telegram",
+    description: "Connect your Telegram bot.",
+    icon: html`
+      <img src="https://cdn.brandfetch.io/telegram.org/w/100/h/100" class="channel-logo" alt="Telegram" />
+    `,
+    connected: !!telegram?.running,
+    configured: !!telegram?.configured,
+    error: telegram?.lastError,
+    children: html`
       ${accountCountLabel}
-
       ${
         hasMultipleAccounts
           ? html`
-            <div class="account-card-list">
+            <div class="account-card-list" style="margin-top: 16px;">
               ${telegramAccounts.map((account) => renderAccountCard(account))}
             </div>
           `
-          : html`
-            <div class="status-list" style="margin-top: 16px;">
-              <div>
-                <span class="label">Configured</span>
-                <span>${telegram?.configured ? "Yes" : "No"}</span>
-              </div>
-              <div>
-                <span class="label">Running</span>
-                <span>${telegram?.running ? "Yes" : "No"}</span>
-              </div>
-              <div>
-                <span class="label">Mode</span>
-                <span>${telegram?.mode ?? "n/a"}</span>
-              </div>
-              <div>
-                <span class="label">Last start</span>
-                <span>${telegram?.lastStartAt ? formatAgo(telegram.lastStartAt) : "n/a"}</span>
-              </div>
-              <div>
-                <span class="label">Last probe</span>
-                <span>${telegram?.lastProbeAt ? formatAgo(telegram.lastProbeAt) : "n/a"}</span>
-              </div>
-            </div>
-          `
-      }
-
-      ${
-        telegram?.lastError
-          ? html`<div class="callout danger" style="margin-top: 12px;">
-            ${telegram.lastError}
-          </div>`
-          : nothing
-      }
-
-      ${
-        telegram?.probe
-          ? html`<div class="callout" style="margin-top: 12px;">
-            Probe ${telegram.probe.ok ? "ok" : "failed"} ·
-            ${telegram.probe.status ?? ""} ${telegram.probe.error ?? ""}
-          </div>`
           : nothing
       }
 
       ${renderChannelConfigSection({ channelId: "telegram", props })}
 
-      <div class="row" style="margin-top: 12px;">
-        <button class="btn" @click=${() => props.onRefresh(true)}>
-          Probe
-        </button>
+      <div class="row" style="margin-top: 12px; justify-content: space-between; align-items: flex-start;">
+        <details class="advanced-config">
+          <summary style="font-size: 12px; color: var(--muted); cursor: pointer;">Advanced</summary>
+          <div style="margin-top: 8px;">
+            <button class="btn" @click=${() => props.onRefresh(true)}>
+              Probe Connection
+            </button>
+          </div>
+        </details>
+
+        ${
+          telegram?.running
+            ? html`
+                <button
+                  class="btn"
+                  @click=${() => alert("To disconnect, please clear the configuration above and save.")}
+                >
+                  Disconnect
+                </button>
+              `
+            : nothing
+        }
       </div>
-    </div>
-  `;
+    `,
+  });
 }

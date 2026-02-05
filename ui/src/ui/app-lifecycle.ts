@@ -1,4 +1,9 @@
 import type { Tab } from "./navigation";
+import {
+  removeQueuedMessage as removeQueuedMessageInternal,
+  refreshChat as refreshChatInternal,
+} from "./app-chat";
+import { DEFAULT_CRON_FORM, DEFAULT_LOG_LEVEL_FILTERS } from "./app-defaults";
 import { connectGateway } from "./app-gateway";
 import {
   startLogsPolling,
@@ -47,6 +52,9 @@ export function handleConnected(host: LifecycleHost) {
   }
   if (host.tab === "debug") {
     startDebugPolling(host as unknown as Parameters<typeof startDebugPolling>[0]);
+  }
+  if (host.tab === "chat") {
+    refreshChatInternal(host as unknown as Parameters<typeof refreshChatInternal>[0]);
   }
 }
 

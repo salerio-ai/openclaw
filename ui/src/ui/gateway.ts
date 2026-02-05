@@ -135,6 +135,7 @@ export class GatewayBrowserClient {
     const scopes = ["operator.admin", "operator.approvals", "operator.pairing"];
     const role = "operator";
     let deviceIdentity: Awaited<ReturnType<typeof loadOrCreateDeviceIdentity>> | null = null;
+    let storedDeviceToken: string | null = null;
     let canFallbackToShared = false;
     let authToken = this.opts.token;
 
@@ -144,6 +145,7 @@ export class GatewayBrowserClient {
         deviceId: deviceIdentity.deviceId,
         role,
       })?.token;
+      storedDeviceToken = storedToken ?? null;
       authToken = storedToken ?? this.opts.token;
       canFallbackToShared = Boolean(storedToken && this.opts.token);
     }
@@ -219,8 +221,17 @@ export class GatewayBrowserClient {
         this.backoffMs = 800;
         this.opts.onHello?.(hello);
       })
-      .catch(() => {
-        if (canFallbackToShared && deviceIdentity) {
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : String(err ?? "");
+        const lower = message.toLowerCase();
+        const authFailed =
+          lower.includes("unauthorized") ||
+          lower.includes("token mismatch") ||
+          lower.includes("token_mismatch");
+
+        if (authFailed && storedDeviceToken && deviceIdentity) {
+          clearDeviceAuthToken({ deviceId: deviceIdentity.deviceId, role });
+        } else if (canFallbackToShared && deviceIdentity) {
           clearDeviceAuthToken({ deviceId: deviceIdentity.deviceId, role });
         }
         this.ws?.close(CONNECT_FAILED_CLOSE_CODE, "connect failed");

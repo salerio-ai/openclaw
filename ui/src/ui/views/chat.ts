@@ -61,17 +61,69 @@ export type ChatProps = {
   onAbort?: () => void;
   onQueueRemove: (id: string) => void;
   onNewSession: () => void;
+  onViewHistory: () => void;
+  showHistory: boolean;
+  onToggleHistory: () => void;
+  onLoadSession: (key: string) => void;
   onOpenSidebar?: (content: string) => void;
   onCloseSidebar?: () => void;
   onSplitRatioChange?: (ratio: number) => void;
   onChatScroll?: (event: Event) => void;
+  placeholderText?: string;
 };
 
 const COMPACTION_TOAST_DURATION_MS = 5000;
 
 function adjustTextareaHeight(el: HTMLTextAreaElement) {
+  if (!el.value) {
+    el.style.height = "";
+    return;
+  }
   el.style.height = "auto";
   el.style.height = `${el.scrollHeight}px`;
+}
+
+function renderHistoryModal(props: ChatProps) {
+  if (!props.showHistory) return nothing;
+
+  const sessions = props.sessions?.sessions ?? [];
+
+  return html`
+    <div class="modal-overlay" @click=${props.onToggleHistory}>
+      <div class="modal-content" @click=${(e: Event) => e.stopPropagation()}>
+        <div class="modal-header">
+          <h3>Task History</h3>
+          <button class="btn icon-only" @click=${props.onToggleHistory}>
+            ${icons.x}
+          </button>
+        </div>
+        <div class="modal-body history-list">
+          ${
+            sessions.length === 0
+              ? html`
+                  <div class="muted">No task history yet</div>
+                `
+              : sessions.map(
+                  (s) => html`
+                  <button
+                    class="history-item ${s.key === props.sessionKey ? "active" : ""}"
+                    @click=${() => {
+                      props.onSessionKeyChange(s.key);
+                      props.onToggleHistory();
+                    }}
+                  >
+                    <div class="history-item__main">
+                      <span class="history-item__title">${s.displayName || s.key}</span>
+                      <span class="history-item__date">${s.updatedAt ? new Date(s.updatedAt).toLocaleString() : ""}</span>
+                    </div>
+                  </button>
+                `,
+                )
+          }
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function renderCompactionIndicator(status: CompactionIndicatorStatus | null | undefined) {
@@ -81,7 +133,7 @@ function renderCompactionIndicator(status: CompactionIndicatorStatus | null | un
   if (status.active) {
     return html`
       <div class="callout info compaction-indicator compaction-indicator--active">
-        ${icons.loader} Compacting context...
+        ${icons.loader} Compressing context...
       </div>
     `;
   }
@@ -92,7 +144,7 @@ function renderCompactionIndicator(status: CompactionIndicatorStatus | null | un
     if (elapsed < COMPACTION_TOAST_DURATION_MS) {
       return html`
         <div class="callout success compaction-indicator compaction-indicator--complete">
-          ${icons.check} Context compacted
+          ${icons.check} Context compressed
         </div>
       `;
     }
@@ -172,7 +224,40 @@ function renderAttachmentPreview(props: ChatProps) {
   `;
 }
 
-export function renderChat(props: ChatProps) {
+function renderHistorySidebar(props: ChatProps) {
+  const sessions = props.sessions?.sessions ?? [];
+  const sortedSessions = [...sessions].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+
+  return html`
+    <aside class="history-sidebar">
+      <button class="new-chat-btn" @click=${props.onNewSession}>
+        ${icons.fileText} New Chat
+      </button>
+      <div class="session-list">
+        <div class="session-group-title">History</div>
+        ${
+          sortedSessions.length === 0
+            ? html`
+                <div class="muted" style="padding: 0 12px; font-size: 13px">No history yet</div>
+              `
+            : sortedSessions.map(
+                (s) => html`
+                <button
+                  class="session-item ${s.key === props.sessionKey ? "active" : ""}"
+                  @click=${() => props.onSessionKeyChange(s.key)}
+                  title="${s.displayName || s.key}"
+                >
+                  ${s.displayName || s.key}
+                </button>
+              `,
+              )
+        }
+      </div>
+    </aside>
+  `;
+}
+
+function renderChatContent(props: ChatProps) {
   const canCompose = props.connected;
   const isBusy = props.sending || props.stream !== null;
   const canAbort = Boolean(props.canAbort && props.onAbort);
@@ -187,15 +272,90 @@ export function renderChat(props: ChatProps) {
   const hasAttachments = (props.attachments?.length ?? 0) > 0;
   const composePlaceholder = props.connected
     ? hasAttachments
-      ? "Add a message or paste more images..."
-      : "Message (↩ to send, Shift+↩ for line breaks, paste images)"
-    : "Connect to the gateway to start chatting…";
+      ? "Add message..."
+      : (props.placeholderText ?? "Send message (Enter to send, Shift+Enter for new line)")
+    : "Connect gateway to start chatting...";
+
+  const messageCount = Array.isArray(props.messages) ? props.messages.length : 0;
+  // Is Home if no messages and not loading/streaming
+  const isHome = false;
+
+  const modal = renderHistoryModal(props);
+
+  if (isHome) {
+    return html`
+      <section class="card chat">
+        ${modal}
+        ${renderCompactionIndicator(props.compactionStatus)}
+        
+        <div class="chat-home">
+          <div class="chat-home__header">
+             <button class="chat-home__history-btn" @click=${props.onToggleHistory}>
+                ${icons.book}
+                Task History
+             </button>
+          </div>
+
+          <div class="chat-home__hero">
+             <h1>Every merchant deserves an <span class="highlight">AI analyst</span></h1>
+          </div>
+
+          <div class="chat-input-card">
+             <div class="chat-input-card__inner">
+                ${renderAttachmentPreview(props)}
+                <textarea
+                  class="chat-home__textarea"
+                  ${ref((el) => el && adjustTextareaHeight(el as HTMLTextAreaElement))}
+                  .value=${props.draft}
+                  ?disabled=${!props.connected}
+                  @keydown=${(e: KeyboardEvent) => {
+                    if (e.key !== "Enter") return;
+                    if (e.isComposing || e.keyCode === 229) return;
+                    if (e.shiftKey) return;
+                    if (!props.connected) return;
+                    e.preventDefault();
+                    if (canCompose) props.onSend();
+                  }}
+                  @input=${(e: Event) => {
+                    const target = e.target as HTMLTextAreaElement;
+                    adjustTextareaHeight(target);
+                    props.onDraftChange(target.value);
+                  }}
+                  @paste=${(e: ClipboardEvent) => handlePaste(e, props)}
+                  placeholder=${props.connected ? (props.placeholderText ?? "How can I help you?") : "Connect gateway to start chatting..."}
+                ></textarea>
+                
+                <div class="chat-input-card__footer">
+                   <div class="chat-input-card__tools">
+                   </div>
+                   <button
+                    class="chat-input-card__send-btn"
+                    ?disabled=${!props.connected || (!props.draft.trim() && !hasAttachments)}
+                    @click=${props.onSend}
+                  >
+                    ${icons.arrowRight}
+                  </button>
+                </div>
+             </div>
+          </div>
+          
+          <div class="chat-suggestions">
+              <button class="chip" @click=${() => props.onDraftChange("Explain Code")}>${icons.code} Explain Code</button>
+              <button class="chip" @click=${() => props.onDraftChange("Generate Report")}>${icons.fileText} Generate Report</button>
+              <button class="chip" @click=${() => props.onDraftChange("Code Analysis")}>${icons.terminal} Code Analysis</button>
+              <button class="chip" @click=${() => props.onDraftChange("Optimize Performance")}>${icons.zap} Optimize Performance</button>
+           </div>
+        </div>
+      </section>
+    `;
+  }
 
   const splitRatio = props.splitRatio ?? 0.6;
   const sidebarOpen = Boolean(props.sidebarOpen && props.onCloseSidebar);
   const thread = html`
-    <div
-      class="chat-thread"
+     ${modal}
+     <div
+       class="chat-thread"
       role="log"
       aria-live="polite"
       @scroll=${props.onChatScroll}
@@ -203,7 +363,7 @@ export function renderChat(props: ChatProps) {
       ${
         props.loading
           ? html`
-              <div class="muted">Loading chat…</div>
+              <div class="muted">Loading chat...</div>
             `
           : nothing
       }
@@ -240,32 +400,34 @@ export function renderChat(props: ChatProps) {
   `;
 
   return html`
-    <section class="card chat">
-      ${props.disabledReason ? html`<div class="callout">${props.disabledReason}</div>` : nothing}
+    <div style="display: flex; flex-direction: column; height: 100%; width: 100%; min-width: 0; flex: 1; min-height: 0;">
+      <div style="padding: 24px 32px; flex-shrink: 0;">
+        <div style="font-size: 28px; font-weight: 700; color: #1d1d1f; letter-spacing: -0.02em; margin-bottom: 4px;">Chat</div>
+        <div style="font-size: 17px; color: #86868b;">Direct gateway chat session for quick interventions.</div>
+      </div>
 
-      ${props.error ? html`<div class="callout danger">${props.error}</div>` : nothing}
+      <section class="card chat" style="flex: 1; min-height: 0; width: 100%; min-width: 0;">
+        ${renderCompactionIndicator(props.compactionStatus)}
 
-      ${renderCompactionIndicator(props.compactionStatus)}
+        ${
+          props.focusMode
+            ? html`
+              <button
+                class="chat-focus-exit"
+                type="button"
+                @click=${props.onToggleFocusMode}
+                aria-label="Exit focus mode"
+                title="Exit focus mode"
+              >
+                ${icons.x}
+              </button>
+            `
+            : nothing
+        }
 
-      ${
-        props.focusMode
-          ? html`
-            <button
-              class="chat-focus-exit"
-              type="button"
-              @click=${props.onToggleFocusMode}
-              aria-label="Exit focus mode"
-              title="Exit focus mode"
-            >
-              ${icons.x}
-            </button>
-          `
-          : nothing
-      }
-
-      <div
-        class="chat-split-container ${sidebarOpen ? "chat-split-container--open" : ""}"
-      >
+        <div
+          class="chat-split-container ${sidebarOpen ? "chat-split-container--open" : ""}"
+        >
         <div
           class="chat-main"
           style="flex: ${sidebarOpen ? `0 0 ${splitRatio * 100}%` : "1 1 100%"}"
@@ -308,7 +470,7 @@ export function renderChat(props: ChatProps) {
                       <div class="chat-queue__text">
                         ${
                           item.text ||
-                          (item.attachments?.length ? `Image (${item.attachments.length})` : "")
+                          (item.attachments?.length ? `Images (${item.attachments.length})` : "")
                         }
                       </div>
                       <button
@@ -357,11 +519,23 @@ export function renderChat(props: ChatProps) {
           <div class="chat-compose__actions">
             <button
               class="btn"
-              ?disabled=${!props.connected || (!canAbort && props.sending)}
-              @click=${canAbort ? props.onAbort : props.onNewSession}
+              @click=${props.onNewSession}
+              title="Start a new session"
             >
-              ${canAbort ? "Stop" : "New session"}
+              New session
             </button>
+            ${
+              canAbort
+                ? html`
+                  <button
+                    class="btn"
+                    @click=${props.onAbort}
+                  >
+                    Stop
+                  </button>
+                `
+                : nothing
+            }
             <button
               class="btn primary"
               ?disabled=${!props.connected}
@@ -373,6 +547,15 @@ export function renderChat(props: ChatProps) {
         </div>
       </div>
     </section>
+    </div>
+  `;
+}
+
+export function renderChat(props: ChatProps) {
+  return html`
+    <div class="chat-layout">
+      ${renderChatContent(props)}
+    </div>
   `;
 }
 
@@ -426,7 +609,7 @@ function buildChatItems(props: ChatProps): Array<ChatItem | MessageGroup> {
       key: "chat:history:notice",
       message: {
         role: "system",
-        content: `Showing last ${CHAT_HISTORY_RENDER_LIMIT} messages (${historyStart} hidden).`,
+        content: `Showing last ${CHAT_HISTORY_RENDER_LIMIT} messages (hiding ${historyStart}).`,
         timestamp: Date.now(),
       },
     });

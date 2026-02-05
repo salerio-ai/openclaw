@@ -1,7 +1,15 @@
 import { spawn } from "node:child_process";
+import fs from "node:fs/promises";
 import os from "node:os";
+import path from "node:path";
 
 const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+
+const explicitStateDir =
+  process.env.OPENCLAW_STATE_DIR?.trim() || process.env.CLAWDBOT_STATE_DIR?.trim();
+const ownsStateDir = !explicitStateDir;
+const stateDir =
+  explicitStateDir || (await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-test-state-")));
 
 const runs = [
   {
@@ -61,9 +69,16 @@ const runOnce = (entry, extraArgs = []) =>
       (acc, flag) => (acc.includes(flag) ? acc : `${acc} ${flag}`.trim()),
       nodeOptions,
     );
+    const groupStateDir = path.join(stateDir, entry.name);
     const child = spawn(pnpm, args, {
       stdio: "inherit",
-      env: { ...process.env, VITEST_GROUP: entry.name, NODE_OPTIONS: nextNodeOptions },
+      env: {
+        ...process.env,
+        OPENCLAW_STATE_DIR: groupStateDir,
+        CLAWDBOT_STATE_DIR: groupStateDir,
+        VITEST_GROUP: entry.name,
+        NODE_OPTIONS: nextNodeOptions,
+      },
       shell: process.platform === "win32",
     });
     children.add(child);
@@ -110,4 +125,7 @@ for (const entry of serialRuns) {
   }
 }
 
+if (ownsStateDir) {
+  await fs.rm(stateDir, { recursive: true, force: true });
+}
 process.exit(0);

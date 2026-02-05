@@ -1,7 +1,7 @@
 import { html, nothing } from "lit";
 import type { SlackStatus } from "../types";
 import type { ChannelsProps } from "./channels.types";
-import { formatAgo } from "../format";
+import { renderChannelCard } from "./channels.card";
 import { renderChannelConfigSection } from "./channels.config";
 
 export function renderSlackCard(params: {
@@ -11,55 +11,42 @@ export function renderSlackCard(params: {
 }) {
   const { props, slack, accountCountLabel } = params;
 
-  return html`
-    <div class="card">
-      <div class="card-title">Slack</div>
-      <div class="card-sub">Socket mode status and channel configuration.</div>
+  return renderChannelCard({
+    title: "Slack",
+    description: "Connect via Socket Mode.",
+    icon: html`
+      <img src="https://cdn.brandfetch.io/slack.com/w/100/h/100" class="channel-logo" alt="Slack" />
+    `,
+    connected: !!slack?.running,
+    configured: !!slack?.configured,
+    error: slack?.lastError,
+    children: html`
       ${accountCountLabel}
-
-      <div class="status-list" style="margin-top: 16px;">
-        <div>
-          <span class="label">Configured</span>
-          <span>${slack?.configured ? "Yes" : "No"}</span>
-        </div>
-        <div>
-          <span class="label">Running</span>
-          <span>${slack?.running ? "Yes" : "No"}</span>
-        </div>
-        <div>
-          <span class="label">Last start</span>
-          <span>${slack?.lastStartAt ? formatAgo(slack.lastStartAt) : "n/a"}</span>
-        </div>
-        <div>
-          <span class="label">Last probe</span>
-          <span>${slack?.lastProbeAt ? formatAgo(slack.lastProbeAt) : "n/a"}</span>
-        </div>
-      </div>
-
-      ${
-        slack?.lastError
-          ? html`<div class="callout danger" style="margin-top: 12px;">
-            ${slack.lastError}
-          </div>`
-          : nothing
-      }
-
-      ${
-        slack?.probe
-          ? html`<div class="callout" style="margin-top: 12px;">
-            Probe ${slack.probe.ok ? "ok" : "failed"} ·
-            ${slack.probe.status ?? ""} ${slack.probe.error ?? ""}
-          </div>`
-          : nothing
-      }
-
       ${renderChannelConfigSection({ channelId: "slack", props })}
 
-      <div class="row" style="margin-top: 12px;">
-        <button class="btn" @click=${() => props.onRefresh(true)}>
-          Probe
-        </button>
+      <div class="row" style="margin-top: 12px; justify-content: space-between; align-items: flex-start;">
+        <details class="advanced-config">
+          <summary style="font-size: 12px; color: var(--muted); cursor: pointer;">Advanced</summary>
+          <div style="margin-top: 8px;">
+            <button class="btn" @click=${() => props.onRefresh(true)}>
+              Probe Connection
+            </button>
+          </div>
+        </details>
+
+        ${
+          slack?.running
+            ? html`
+                <button
+                  class="btn"
+                  @click=${() => alert("To disconnect, please clear the configuration above and save.")}
+                >
+                  Disconnect
+                </button>
+              `
+            : nothing
+        }
       </div>
-    </div>
-  `;
+    `,
+  });
 }

@@ -121,6 +121,16 @@
 
 ## Agent-Specific Notes
 
+- **Designer Mode:** The user is a Designer focusing on UI/Interaction. Restrict changes primarily to the `ui/` directory (styles, views, components). Avoid core logic changes unless they directly support UI needs.
+- **Design System Specs:**
+  - **Icons:** [Phosphor Icons](https://phosphoricons.com/?size=24&weight=bold) (Weight: Bold, Size: 24px).
+  - **Colors:**
+    - Text Primary: `#1A162F`
+    - Text Secondary: `#667085`
+    - Background (Gray): `#F8F8F8`
+    - Border: `#D5D5D5`
+  - **Radius:** 12px, 16px, 20px, 24px (Consistent usage).
+  - **Style:** Frosted Glass / Glassmorphism (Backdrop blur, translucent backgrounds).
 - Vocabulary: "makeup" = "mac app".
 - Never edit `node_modules` (global/Homebrew/npm/git installs too). Updates overwrite. Skill notes go in `tools.md` or `AGENTS.md`.
 - Signal: "update fly" => `fly ssh console -a flawd-bot -C "bash -lc 'cd /data/clawd/openclaw && git pull --rebase origin main'"` then `fly machines restart e825232f34d058 -a flawd-bot`.

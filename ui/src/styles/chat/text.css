@@ -5,9 +5,9 @@
 .chat-thinking {
   margin-bottom: 10px;
   padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px dashed rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.04);
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--border-subtle);
+  background: var(--bg-surface-transparent);
   color: var(--muted);
   font-size: 12px;
   line-height: 1.4;
@@ -57,14 +57,14 @@
 }
 
 .chat-text :where(:not(pre) > code) {
-  background: rgba(0, 0, 0, 0.15);
+  background: var(--bg-surface-transparent);
   padding: 0.15em 0.4em;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
 .chat-text :where(pre) {
-  background: rgba(0, 0, 0, 0.15);
-  border-radius: 6px;
+  background: var(--bg-surface-transparent);
+  border-radius: var(--radius-sm);
   padding: 10px 12px;
   overflow-x: auto;
 }

@@ -72,11 +72,7 @@ export {
   waitForever,
 };
 
-const isMain = isMainModule({
-  currentFile: fileURLToPath(import.meta.url),
-});
-
-if (isMain) {
+export async function run() {
   // Global error handlers to prevent silent crashes from unhandled rejections/exceptions.
   // These log the error and exit gracefully instead of crashing without trace.
   installUnhandledRejectionHandler();
@@ -86,8 +82,16 @@ if (isMain) {
     process.exit(1);
   });
 
-  void program.parseAsync(process.argv).catch((err) => {
+  await program.parseAsync(process.argv).catch((err) => {
     console.error("[openclaw] CLI failed:", formatUncaughtError(err));
     process.exit(1);
   });
+}
+
+const isMain = isMainModule({
+  currentFile: fileURLToPath(import.meta.url),
+});
+
+if (isMain) {
+  void run();
 }

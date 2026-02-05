@@ -5,6 +5,9 @@ import path from "node:path";
 import process from "node:process";
 
 const args = process.argv.slice(2);
+if (args[0] === "--") {
+  args.shift();
+}
 const env = { ...process.env };
 const cwd = process.cwd();
 const compilerOverride = env.OPENCLAW_TS_COMPILER ?? env.CLAWDBOT_TS_COMPILER;
@@ -12,7 +15,7 @@ const compiler = compilerOverride === "tsc" ? "tsc" : "tsgo";
 const projectArgs = ["--project", "tsconfig.json"];
 
 const distRoot = path.join(cwd, "dist");
-const distEntry = path.join(distRoot, "/entry.js");
+const distEntry = path.join(distRoot, "/index.js");
 const buildStampPath = path.join(distRoot, ".buildstamp");
 const srcRoot = path.join(cwd, "src");
 const configFiles = [path.join(cwd, "tsconfig.json"), path.join(cwd, "package.json")];

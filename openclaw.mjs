@@ -11,4 +11,5 @@ if (module.enableCompileCache && !process.env.NODE_DISABLE_COMPILE_CACHE) {
   }
 }
 
-await import("./dist/entry.js");
+const { run } = await import("./dist/index.js");
+await run();

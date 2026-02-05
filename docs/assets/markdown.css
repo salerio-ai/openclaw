@@ -79,7 +79,7 @@
 .markdown img {
   max-width: 100%;
   height: auto;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   border: 1px solid color-mix(in oklab, var(--frame-border) 20%, transparent);
   box-shadow: 0 12px 0 -8px rgba(0, 0, 0, 0.18);
 }
@@ -134,7 +134,7 @@
   font-family: var(--font-body);
   font-size: 0.95em;
   padding: 0.15em 0.35em;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: color-mix(in oklab, var(--panel) 70%, var(--code-bg));
   border: 1px solid color-mix(in oklab, var(--frame-border) 18%, transparent);
 }

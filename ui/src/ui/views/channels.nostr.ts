@@ -2,6 +2,7 @@ import { html, nothing } from "lit";
 import type { ChannelAccountSnapshot, NostrStatus } from "../types";
 import type { ChannelsProps } from "./channels.types";
 import { formatAgo } from "../format";
+import { renderChannelCard } from "./channels.card";
 import { renderChannelConfigSection } from "./channels.config";
 import {
   renderNostrProfileForm,
@@ -117,7 +118,7 @@ export function renderNostrCard(params: {
     const hasAnyProfileData = name || displayName || about || picture || nip05;
 
     return html`
-      <div style="margin-top: 16px; padding: 12px; background: var(--bg-secondary); border-radius: 8px;">
+      <div style="margin-top: 16px; padding: 12px; background: var(--panel); border-radius: var(--radius-sm);">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
           <div style="font-weight: 500;">Profile</div>
           ${
@@ -145,7 +146,7 @@ export function renderNostrCard(params: {
                         <img
                           src=${picture}
                           alt="Profile picture"
-                          style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border-color);"
+                          style="width: 48px; height: 48px; border-radius: var(--radius-full); object-fit: cover; border: 2px solid var(--border);"
                           @error=${(e: Event) => {
                             (e.target as HTMLImageElement).style.display = "none";
                           }}
@@ -169,7 +170,7 @@ export function renderNostrCard(params: {
               </div>
             `
             : html`
-                <div style="color: var(--text-muted); font-size: 13px">
+                <div style="color: var(--muted); font-size: 13px">
                   No profile set. Click "Edit Profile" to add your name, bio, and avatar.
                 </div>
               `
@@ -178,56 +179,53 @@ export function renderNostrCard(params: {
     `;
   };
 
-  return html`
-    <div class="card">
-      <div class="card-title">Nostr</div>
-      <div class="card-sub">Decentralized DMs via Nostr relays (NIP-04).</div>
+  return renderChannelCard({
+    title: "Nostr",
+    description: "Decentralized DMs via relays.",
+    icon: html`
+      <img src="https://cdn.brandfetch.io/nostr.com/w/100/h/100" class="channel-logo" alt="Nostr" />
+    `,
+    connected: !!summaryRunning,
+    configured: !!summaryConfigured,
+    error: summaryLastError,
+    children: html`
       ${accountCountLabel}
-
       ${
         hasMultipleAccounts
           ? html`
-            <div class="account-card-list">
+            <div class="account-card-list" style="margin-top: 16px;">
               ${nostrAccounts.map((account) => renderAccountCard(account))}
             </div>
           `
-          : html`
-            <div class="status-list" style="margin-top: 16px;">
-              <div>
-                <span class="label">Configured</span>
-                <span>${summaryConfigured ? "Yes" : "No"}</span>
-              </div>
-              <div>
-                <span class="label">Running</span>
-                <span>${summaryRunning ? "Yes" : "No"}</span>
-              </div>
-              <div>
-                <span class="label">Public Key</span>
-                <span class="monospace" title="${summaryPublicKey ?? ""}"
-                  >${truncatePubkey(summaryPublicKey)}</span
-                >
-              </div>
-              <div>
-                <span class="label">Last start</span>
-                <span>${summaryLastStartAt ? formatAgo(summaryLastStartAt) : "n/a"}</span>
-              </div>
-            </div>
-          `
-      }
-
-      ${
-        summaryLastError
-          ? html`<div class="callout danger" style="margin-top: 12px;">${summaryLastError}</div>`
           : nothing
       }
 
+      ${renderChannelConfigSection({ channelId: "nostr", props })}
       ${renderProfileSection()}
 
-      ${renderChannelConfigSection({ channelId: "nostr", props })}
+      <div class="row" style="margin-top: 12px; justify-content: space-between; align-items: flex-start;">
+        <details class="advanced-config">
+          <summary style="font-size: 12px; color: var(--muted); cursor: pointer;">Advanced</summary>
+          <div style="margin-top: 8px;">
+            <button class="btn" @click=${() => props.onRefresh(true)}>
+              Probe Connection
+            </button>
+          </div>
+        </details>
 
-      <div class="row" style="margin-top: 12px;">
-        <button class="btn" @click=${() => props.onRefresh(false)}>Refresh</button>
+        ${
+          summaryRunning
+            ? html`
+                <button
+                  class="btn"
+                  @click=${() => alert("To disconnect, please clear the configuration above and save.")}
+                >
+                  Disconnect
+                </button>
+              `
+            : nothing
+        }
       </div>
-    </div>
-  `;
+    `,
+  });
 }

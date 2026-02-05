@@ -1,7 +1,7 @@
 import { html, nothing } from "lit";
 import type { IMessageStatus } from "../types";
 import type { ChannelsProps } from "./channels.types";
-import { formatAgo } from "../format";
+import { renderChannelCard } from "./channels.card";
 import { renderChannelConfigSection } from "./channels.config";
 
 export function renderIMessageCard(params: {
@@ -11,55 +11,46 @@ export function renderIMessageCard(params: {
 }) {
   const { props, imessage, accountCountLabel } = params;
 
-  return html`
-    <div class="card">
-      <div class="card-title">iMessage</div>
-      <div class="card-sub">macOS bridge status and channel configuration.</div>
+  return renderChannelCard({
+    title: "iMessage",
+    description: "macOS bridge integration.",
+    icon: html`
+      <img
+        src="https://cdn.brandfetch.io/apple.com/w/100/h/100"
+        class="channel-logo"
+        alt="Apple iMessage"
+      />
+    `,
+    connected: !!imessage?.running,
+    configured: !!imessage?.configured,
+    error: imessage?.lastError,
+    children: html`
       ${accountCountLabel}
-
-      <div class="status-list" style="margin-top: 16px;">
-        <div>
-          <span class="label">Configured</span>
-          <span>${imessage?.configured ? "Yes" : "No"}</span>
-        </div>
-        <div>
-          <span class="label">Running</span>
-          <span>${imessage?.running ? "Yes" : "No"}</span>
-        </div>
-        <div>
-          <span class="label">Last start</span>
-          <span>${imessage?.lastStartAt ? formatAgo(imessage.lastStartAt) : "n/a"}</span>
-        </div>
-        <div>
-          <span class="label">Last probe</span>
-          <span>${imessage?.lastProbeAt ? formatAgo(imessage.lastProbeAt) : "n/a"}</span>
-        </div>
-      </div>
-
-      ${
-        imessage?.lastError
-          ? html`<div class="callout danger" style="margin-top: 12px;">
-            ${imessage.lastError}
-          </div>`
-          : nothing
-      }
-
-      ${
-        imessage?.probe
-          ? html`<div class="callout" style="margin-top: 12px;">
-            Probe ${imessage.probe.ok ? "ok" : "failed"} ·
-            ${imessage.probe.error ?? ""}
-          </div>`
-          : nothing
-      }
-
       ${renderChannelConfigSection({ channelId: "imessage", props })}
 
-      <div class="row" style="margin-top: 12px;">
-        <button class="btn" @click=${() => props.onRefresh(true)}>
-          Probe
-        </button>
+      <div class="row" style="margin-top: 12px; justify-content: space-between; align-items: flex-start;">
+        <details class="advanced-config">
+          <summary style="font-size: 12px; color: var(--muted); cursor: pointer;">Advanced</summary>
+          <div style="margin-top: 8px;">
+            <button class="btn" @click=${() => props.onRefresh(true)}>
+              Probe Connection
+            </button>
+          </div>
+        </details>
+
+        ${
+          imessage?.running
+            ? html`
+                <button
+                  class="btn"
+                  @click=${() => alert("To disconnect, please clear the configuration above and save.")}
+                >
+                  Disconnect
+                </button>
+              `
+            : nothing
+        }
       </div>
-    </div>
-  `;
+    `,
+  });
 }

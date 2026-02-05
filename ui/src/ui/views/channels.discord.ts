@@ -2,6 +2,7 @@ import { html, nothing } from "lit";
 import type { DiscordStatus } from "../types";
 import type { ChannelsProps } from "./channels.types";
 import { formatAgo } from "../format";
+import { renderChannelCard } from "./channels.card";
 import { renderChannelConfigSection } from "./channels.config";
 
 export function renderDiscordCard(params: {
@@ -11,55 +12,43 @@ export function renderDiscordCard(params: {
 }) {
   const { props, discord, accountCountLabel } = params;
 
-  return html`
-    <div class="card">
-      <div class="card-title">Discord</div>
-      <div class="card-sub">Bot status and channel configuration.</div>
+  return renderChannelCard({
+    title: "Discord",
+    description: "Connect your Discord bot.",
+    icon: html`
+      <img src="https://cdn.brandfetch.io/discord.com/w/100/h/100" class="channel-logo" alt="Discord" />
+    `,
+    connected: !!discord?.running,
+    configured: !!discord?.configured,
+    error: discord?.lastError,
+    children: html`
       ${accountCountLabel}
-
-      <div class="status-list" style="margin-top: 16px;">
-        <div>
-          <span class="label">Configured</span>
-          <span>${discord?.configured ? "Yes" : "No"}</span>
-        </div>
-        <div>
-          <span class="label">Running</span>
-          <span>${discord?.running ? "Yes" : "No"}</span>
-        </div>
-        <div>
-          <span class="label">Last start</span>
-          <span>${discord?.lastStartAt ? formatAgo(discord.lastStartAt) : "n/a"}</span>
-        </div>
-        <div>
-          <span class="label">Last probe</span>
-          <span>${discord?.lastProbeAt ? formatAgo(discord.lastProbeAt) : "n/a"}</span>
-        </div>
-      </div>
-
-      ${
-        discord?.lastError
-          ? html`<div class="callout danger" style="margin-top: 12px;">
-            ${discord.lastError}
-          </div>`
-          : nothing
-      }
-
-      ${
-        discord?.probe
-          ? html`<div class="callout" style="margin-top: 12px;">
-            Probe ${discord.probe.ok ? "ok" : "failed"} ·
-            ${discord.probe.status ?? ""} ${discord.probe.error ?? ""}
-          </div>`
-          : nothing
-      }
 
       ${renderChannelConfigSection({ channelId: "discord", props })}
 
-      <div class="row" style="margin-top: 12px;">
-        <button class="btn" @click=${() => props.onRefresh(true)}>
-          Probe
-        </button>
+      <div class="row" style="margin-top: 12px; justify-content: space-between; align-items: flex-start;">
+        <details class="advanced-config">
+          <summary style="font-size: 12px; color: var(--muted); cursor: pointer;">Advanced</summary>
+          <div style="margin-top: 8px;">
+            <button class="btn" @click=${() => props.onRefresh(true)}>
+              Probe Connection
+            </button>
+          </div>
+        </details>
+
+        ${
+          discord?.running
+            ? html`
+                <button
+                  class="btn"
+                  @click=${() => alert("To disconnect, please clear the configuration above and save.")}
+                >
+                  Disconnect
+                </button>
+              `
+            : nothing
+        }
       </div>
-    </div>
-  `;
+    `,
+  });
 }

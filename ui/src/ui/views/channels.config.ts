@@ -63,14 +63,19 @@ export function renderChannelConfigForm(props: ChannelConfigFormProps) {
   const analysis = analyzeConfigSchema(props.schema);
   const normalized = analysis.schema;
   if (!normalized) {
+    // Schema unavailable: likely gateway offline or token mismatch
     return html`
-      <div class="callout danger">Schema unavailable. Use Raw.</div>
+      <div class="callout warn" style="margin-bottom: 16px;">
+        Configuration unavailable (Gateway offline).
+      </div>
     `;
   }
   const node = resolveSchemaNode(normalized, ["channels", props.channelId]);
   if (!node) {
     return html`
-      <div class="callout danger">Channel config schema unavailable.</div>
+      <div class="muted" style="padding: 12px; font-size: 13px;">
+        No configuration options available for this channel.
+      </div>
     `;
   }
   const configValue = props.configValue ?? {};

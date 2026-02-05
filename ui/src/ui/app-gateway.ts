@@ -107,7 +107,7 @@ function applySessionDefaults(host: GatewayHost, defaults?: SessionDefaultsSnaps
 export function connectGateway(host: GatewayHost) {
   host.lastError = null;
   host.hello = null;
-  host.connected = false;
+  // host.connected = false;
   host.execApprovalQueue = [];
   host.execApprovalError = null;
 
@@ -136,7 +136,7 @@ export function connectGateway(host: GatewayHost) {
       void refreshActiveTab(host as unknown as Parameters<typeof refreshActiveTab>[0]);
     },
     onClose: ({ code, reason }) => {
-      host.connected = false;
+      // host.connected = false;
       // Code 1012 = Service Restart (expected during config saves, don't show as error)
       if (code !== 1012) {
         host.lastError = `disconnected (${code}): ${reason || "no reason"}`;

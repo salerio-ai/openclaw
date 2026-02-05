@@ -1,7 +1,7 @@
 import { html, nothing } from "lit";
 import type { SignalStatus } from "../types";
 import type { ChannelsProps } from "./channels.types";
-import { formatAgo } from "../format";
+import { renderChannelCard } from "./channels.card";
 import { renderChannelConfigSection } from "./channels.config";
 
 export function renderSignalCard(params: {
@@ -11,59 +11,42 @@ export function renderSignalCard(params: {
 }) {
   const { props, signal, accountCountLabel } = params;
 
-  return html`
-    <div class="card">
-      <div class="card-title">Signal</div>
-      <div class="card-sub">signal-cli status and channel configuration.</div>
+  return renderChannelCard({
+    title: "Signal",
+    description: "Connect via signal-cli.",
+    icon: html`
+      <img src="https://cdn.brandfetch.io/signal.org/w/100/h/100" class="channel-logo" alt="Signal" />
+    `,
+    connected: !!signal?.running,
+    configured: !!signal?.configured,
+    error: signal?.lastError,
+    children: html`
       ${accountCountLabel}
-
-      <div class="status-list" style="margin-top: 16px;">
-        <div>
-          <span class="label">Configured</span>
-          <span>${signal?.configured ? "Yes" : "No"}</span>
-        </div>
-        <div>
-          <span class="label">Running</span>
-          <span>${signal?.running ? "Yes" : "No"}</span>
-        </div>
-        <div>
-          <span class="label">Base URL</span>
-          <span>${signal?.baseUrl ?? "n/a"}</span>
-        </div>
-        <div>
-          <span class="label">Last start</span>
-          <span>${signal?.lastStartAt ? formatAgo(signal.lastStartAt) : "n/a"}</span>
-        </div>
-        <div>
-          <span class="label">Last probe</span>
-          <span>${signal?.lastProbeAt ? formatAgo(signal.lastProbeAt) : "n/a"}</span>
-        </div>
-      </div>
-
-      ${
-        signal?.lastError
-          ? html`<div class="callout danger" style="margin-top: 12px;">
-            ${signal.lastError}
-          </div>`
-          : nothing
-      }
-
-      ${
-        signal?.probe
-          ? html`<div class="callout" style="margin-top: 12px;">
-            Probe ${signal.probe.ok ? "ok" : "failed"} ·
-            ${signal.probe.status ?? ""} ${signal.probe.error ?? ""}
-          </div>`
-          : nothing
-      }
-
       ${renderChannelConfigSection({ channelId: "signal", props })}
 
-      <div class="row" style="margin-top: 12px;">
-        <button class="btn" @click=${() => props.onRefresh(true)}>
-          Probe
-        </button>
+      <div class="row" style="margin-top: 12px; justify-content: space-between; align-items: flex-start;">
+        <details class="advanced-config">
+          <summary style="font-size: 12px; color: var(--muted); cursor: pointer;">Advanced</summary>
+          <div style="margin-top: 8px;">
+            <button class="btn" @click=${() => props.onRefresh(true)}>
+              Probe Connection
+            </button>
+          </div>
+        </details>
+
+        ${
+          signal?.running
+            ? html`
+                <button
+                  class="btn"
+                  @click=${() => alert("To disconnect, please clear the configuration above and save.")}
+                >
+                  Disconnect
+                </button>
+              `
+            : nothing
+        }
       </div>
-    </div>
-  `;
+    `,
+  });
 }

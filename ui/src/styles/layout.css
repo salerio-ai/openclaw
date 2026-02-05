@@ -6,7 +6,7 @@
   --shell-pad: 16px;
   --shell-gap: 16px;
   --shell-nav-width: 220px;
-  --shell-topbar-height: 56px;
+  --shell-topbar-height: 64px;
   --shell-focus-duration: 200ms;
   --shell-focus-ease: var(--ease-out);
   height: 100vh;
@@ -14,9 +14,10 @@
   grid-template-columns: var(--shell-nav-width) minmax(0, 1fr);
   grid-template-rows: var(--shell-topbar-height) 1fr;
   grid-template-areas:
-    "topbar topbar"
+    "nav topbar"
     "nav content";
   gap: 0;
+  background: var(--bg); /* Ensure shell has base background */
   animation: dashboard-enter 0.4s var(--ease-out);
   transition: grid-template-columns var(--shell-focus-duration) var(--shell-focus-ease);
   overflow: hidden;
@@ -41,7 +42,7 @@
 }
 
 .shell--nav-collapsed {
-  grid-template-columns: 0px minmax(0, 1fr);
+  /* Moved to nav section */
 }
 
 .shell--chat-focus {
@@ -58,6 +59,18 @@
 
 .shell--onboarding .content {
   padding-top: 0;
+}
+
+.shell--no-topbar {
+  grid-template-rows: 0 1fr;
+}
+
+.shell--no-topbar .topbar {
+  display: none;
+}
+
+.shell--no-topbar .content {
+  padding-top: 24px;
 }
 
 .shell--chat-focus .content {
@@ -81,7 +94,9 @@
   padding: 0 20px;
   height: var(--shell-topbar-height);
   border-bottom: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--bg-elevated);
+  backdrop-filter: var(--backdrop-blur);
+  -webkit-backdrop-filter: var(--backdrop-blur);
 }
 
 .topbar-left {
@@ -114,8 +129,8 @@
 }
 
 .brand-logo {
-  width: 28px;
-  height: 28px;
+  width: 88px;
+  height: 32px;
   flex-shrink: 0;
 }
 
@@ -155,6 +170,12 @@
   gap: 8px;
 }
 
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .topbar-status .pill {
   padding: 6px 10px;
   gap: 6px;
@@ -176,13 +197,13 @@
   height: 6px;
 }
 
-.topbar-status .theme-toggle {
+.topbar .theme-toggle {
   --theme-item: 24px;
   --theme-gap: 2px;
   --theme-pad: 3px;
 }
 
-.topbar-status .theme-icon {
+.topbar .theme-icon {
   width: 12px;
   height: 12px;
 }
@@ -193,16 +214,41 @@
 
 .nav {
   grid-area: nav;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 16px 12px;
-  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 24px 20px;
+  background: var(--bg-elevated);
+  backdrop-filter: var(--backdrop-blur);
+  -webkit-backdrop-filter: var(--backdrop-blur);
   scrollbar-width: none; /* Firefox */
   transition:
     width var(--shell-focus-duration) var(--shell-focus-ease),
     padding var(--shell-focus-duration) var(--shell-focus-ease),
     opacity var(--shell-focus-duration) var(--shell-focus-ease);
   min-height: 0;
+  z-index: 50; /* Ensure it stays on top */
+}
+
+.nav-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 16px;
+}
+
+.nav-footer {
+  margin-top: auto;
+  flex-shrink: 0;
+}
+
+.nav-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+  flex-shrink: 0;
 }
 
 .nav::-webkit-scrollbar {
@@ -218,20 +264,276 @@
   opacity: 0;
 }
 
+.shell--nav-collapsed {
+  grid-template-columns: 72px minmax(0, 1fr);
+}
+
 .nav--collapsed {
-  width: 0;
+  width: auto;
   min-width: 0;
-  padding: 0;
-  overflow: hidden;
+  padding: 20px 10px 32px 10px; /* More bottom padding */
+  overflow: visible; /* Allow tooltips to show */
   border: none;
-  opacity: 0;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.nav--collapsed .nav-scroll {
+  overflow: visible;
+}
+
+.nav--collapsed .nav-header {
+  width: auto;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 10px;
+  margin-bottom: 24px;
+  align-items: center;
+}
+
+.nav--collapsed .brand-logo {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav--collapsed .brand-logo img {
+  object-fit: contain;
+  object-position: center;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+}
+
+/* Make the expand/collapse button easier to hit in collapsed mode */
+.nav--collapsed .nav-collapse-toggle {
+  width: 40px;
+  height: 40px;
+  margin-bottom: 0;
+}
+
+.nav--collapsed .nav-collapse-toggle__icon {
+  width: 24px;
+  height: 24px;
+}
+
+.nav--collapsed .nav-collapse-toggle__icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* Ensure theme toggle remains horizontal and full width in the popover/menu */
+.user-menu__theme .theme-toggle {
+  width: 100%;
+  --theme-item: 28px; /* Reset or keep consistent */
+}
+
+.user-menu__theme .theme-toggle__track {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  width: 100%;
+  border: none; /* Remove double border inside card */
+  background: var(--bg-hover); /* Make track subtle */
+}
+
+.user-menu__theme .theme-toggle__button {
+  width: 100%;
+}
+
+.user-menu__theme .theme-toggle__indicator {
+  width: calc(33.33% - 2 * var(--theme-pad));
+  left: calc(var(--theme-pad) + var(--theme-index, 0) * (33.33%));
+  transform: translateY(-50%); /* Restore vertical centering */
+  box-shadow: none;
+  border: 1px solid transparent;
+}
+
+:root[data-theme="light"] .user-menu__theme .theme-toggle__indicator {
+  background: #1a162f;
+  border-color: #1a162f;
+}
+
+:root[data-theme="light"] .user-menu__theme .theme-toggle__button.active {
+  color: #ffffff;
+}
+
+:root[data-theme="light"] .user-menu__theme .theme-toggle__button.active .theme-icon {
+  stroke: #ffffff;
+}
+
+:root[data-theme="dark"] .user-menu__theme .theme-toggle__indicator {
+  background: #ffffff;
+  border-color: #ffffff;
+}
+
+:root[data-theme="dark"] .user-menu__theme .theme-toggle__button.active {
+  color: #1a162f;
+}
+
+:root[data-theme="dark"] .user-menu__theme .theme-toggle__button.active .theme-icon {
+  stroke: #1a162f;
+}
+
+/* User Menu in Collapsed Sidebar */
+.nav--collapsed .user-menu {
+  position: static; /* allow panel to position relative to nav or viewport if needed, but relative is better for anchoring */
+  position: relative;
+}
+
+.nav--collapsed .user-menu__summary {
+  grid-template-columns: 1fr;
+  padding: 0;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  margin-bottom: 16px; /* Add bottom spacing */
+}
+
+.nav--collapsed .user-menu__summary:hover {
+  background: var(--bg-hover);
+}
+
+.nav--collapsed .user-menu[open] .user-menu__summary {
+  background: var(--bg-hover);
+}
+
+.nav--collapsed .user-menu__meta,
+.nav--collapsed .user-menu__chevron {
+  display: none;
+}
+
+.nav--collapsed .user-menu__avatar {
+  margin: 0 auto;
+}
+
+/* Popover Menu Styling for Collapsed State */
+.nav--collapsed .user-menu__panel {
+  position: fixed;
+  left: 72px; /* Sidebar width (72px) */
+  bottom: 24px;
+  width: 240px;
+  background: var(--bg-elevated); /* Ensure this is opaque enough */
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  border-radius: var(--radius-lg);
+  padding: 8px;
+  z-index: 1000;
+  animation: slide-in-left 0.2s var(--ease-out);
+  /* Override any previous backdrop filters that might cause transparency issues */
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:root[data-theme="dark"] .nav--collapsed .user-menu__panel {
+  background: #1a162f; /* Force solid dark background in dark mode */
+}
+
+:root[data-theme="light"] .nav--collapsed .user-menu__panel {
+  background: #ffffff; /* Force solid white background in light mode */
+}
+
+@keyframes slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Ensure theme toggle remains horizontal in the popover */
+.nav--collapsed .theme-toggle {
+  --theme-item: 24px;
+}
+
+.nav--collapsed .theme-toggle__track {
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: auto;
+  width: 100%;
+}
+
+.nav--collapsed .theme-toggle__button {
+  width: 100%;
+}
+
+.nav--collapsed .theme-toggle__indicator {
+  top: var(--theme-pad);
+  left: calc(var(--theme-pad) + var(--theme-index, 0) * (33.33%));
+  transform: none;
+  width: calc(33.33% - 2 * var(--theme-pad));
+}
+
+.nav--collapsed .nav-item__text,
+.nav--collapsed .nav-label {
+  display: none;
+}
+
+.nav--collapsed .nav-group__items {
+  display: grid;
+  justify-content: center;
+}
+
+.nav--collapsed .nav-item {
+  justify-content: center;
+  padding: 12px;
+  width: 44px; /* Icon size + padding */
+  height: 44px;
+}
+
+/* Tooltips */
+.nav--collapsed .nav-item[data-label]:hover::after {
+  content: attr(data-label);
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 16px;
+  padding: 6px 12px;
+  background: rgba(26, 22, 47, 0.9); /* Dark bg matches brand */
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  z-index: 1000;
+  box-shadow: var(--shadow-md);
   pointer-events: none;
+  backdrop-filter: blur(8px);
+}
+
+.nav--collapsed .user-menu__summary[data-label]:hover::after {
+  content: attr(data-label);
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 16px;
+  padding: 6px 12px;
+  background: rgba(26, 22, 47, 0.9);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  z-index: 1000;
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+  backdrop-filter: blur(8px);
 }
 
 /* Nav collapse toggle */
 .nav-collapse-toggle {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -242,6 +544,9 @@
   transition:
     background var(--duration-fast) ease,
     border-color var(--duration-fast) ease;
+}
+
+.nav--collapsed .nav-collapse-toggle {
   margin-bottom: 16px;
 }
 
@@ -254,15 +559,15 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   color: var(--muted);
   transition: color var(--duration-fast) ease;
 }
 
 .nav-collapse-toggle__icon svg {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   stroke: currentColor;
   fill: none;
   stroke-width: 1.5px;
@@ -351,7 +656,7 @@
   align-items: center;
   justify-content: flex-start;
   gap: 10px;
-  padding: 8px 10px;
+  padding: 10px 12px;
   border-radius: var(--radius-md);
   border: 1px solid transparent;
   background: transparent;
@@ -365,19 +670,22 @@
 }
 
 .nav-item__icon {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   opacity: 0.7;
   transition: opacity var(--duration-fast) ease;
+  font-size: 20px; /* Ensure font icons scale */
 }
 
-.nav-item__icon svg {
-  width: 16px;
-  height: 16px;
+.nav-item__icon svg,
+.nav-item__icon i {
+  width: 20px;
+  height: 20px;
+  font-size: 20px;
   stroke: currentColor;
   fill: none;
   stroke-width: 1.5px;
@@ -386,8 +694,8 @@
 }
 
 .nav-item__text {
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -402,8 +710,9 @@
 }
 
 .nav-item.active {
-  color: var(--text-strong);
-  background: var(--accent-subtle);
+  color: var(--text);
+  background: var(--bg-hover);
+  border-color: var(--border);
 }
 
 .nav-item.active .nav-item__icon {
@@ -411,28 +720,220 @@
   color: var(--accent);
 }
 
+.user-menu {
+  position: relative;
+}
+
+.user-menu > summary {
+  list-style: none;
+}
+
+.user-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.user-menu__summary {
+  position: relative;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--radius-lg);
+  border: 1px solid transparent; /* Remove default border visibility unless hovered/active if desired, or keep it subtle */
+  background: transparent; /* Remove default background to match tabs */
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) ease,
+    border-color var(--duration-fast) ease;
+}
+
+:root[data-theme="dark"] .user-menu__summary {
+  background: transparent;
+}
+
+.user-menu__summary:hover {
+  background: var(--bg-hover);
+  border-color: transparent; /* Or keep border if desired, but user asked for "like tabs" which usually just use bg */
+}
+
+:root[data-theme="dark"] .user-menu__summary:hover {
+  background: var(--bg-hover);
+}
+
+.user-menu[open] .user-menu__summary {
+  background: var(--bg-hover); /* Gray background when open/selected */
+  border-color: transparent;
+}
+
+.user-menu__avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.6);
+  display: grid;
+  place-items: center;
+}
+
+:root[data-theme="dark"] .user-menu__avatar {
+  background: rgba(26, 22, 47, 0.24);
+}
+
+.user-menu__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.user-menu__fallback {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.user-menu__meta {
+  display: grid;
+  min-width: 0;
+}
+
+.user-menu__name {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text);
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-menu__email {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 2px;
+}
+
+.user-menu__chevron {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  transition: transform var(--duration-fast) ease;
+}
+
+.user-menu[open] .user-menu__chevron {
+  transform: rotate(180deg);
+}
+
+.user-menu__panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 10px);
+  padding: 10px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  backdrop-filter: var(--backdrop-blur);
+  -webkit-backdrop-filter: var(--backdrop-blur);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+  display: grid;
+  gap: 8px;
+  z-index: 60;
+}
+
+.user-menu__item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.user-menu__item:hover {
+  background: var(--bg-hover);
+  border-color: transparent;
+}
+
+.user-menu__item-icon {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+
+.user-menu__item--danger {
+  color: var(--danger);
+}
+
+.user-menu__item--danger .user-menu__item-icon {
+  color: var(--danger);
+}
+
+.user-menu__theme {
+  padding: 6px 6px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.55);
+}
+
+:root[data-theme="dark"] .user-menu__theme {
+  background: rgba(26, 22, 47, 0.22);
+}
+
+.user-menu__theme .theme-toggle {
+  --theme-item: 26px;
+  --theme-gap: 2px;
+  --theme-pad: 3px;
+}
+
+.nav--collapsed .user-menu__meta,
+.nav--collapsed .user-menu__chevron {
+  display: none;
+}
+
+/* Removed duplicate collapsed user menu panel override */
+
 /* ===========================================
    Content Area
    =========================================== */
 
 .content {
   grid-area: content;
-  padding: 12px 16px 32px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
   gap: 24px;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  background: var(--bg-surface);
+  border-top-left-radius: 32px;
+  box-shadow: var(--shadow-lg);
 }
 
 :root[data-theme="light"] .content {
-  background: var(--bg-content);
+  background: var(--bg-surface);
 }
 
 .content--chat {
   overflow: hidden;
-  padding-bottom: 0;
+  padding: 0;
 }
 
 /* Content header */

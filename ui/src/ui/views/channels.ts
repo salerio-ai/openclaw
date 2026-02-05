@@ -1,4 +1,5 @@
 import { html, nothing } from "lit";
+import { repeat } from "lit/directives/repeat.js";
 import type {
   ChannelAccountSnapshot,
   ChannelUiMetaEntry,
@@ -15,6 +16,7 @@ import type {
 } from "../types";
 import type { ChannelKey, ChannelsChannelData, ChannelsProps } from "./channels.types";
 import { formatAgo } from "../format";
+import { renderChannelCard } from "./channels.card";
 import { renderChannelConfigSection } from "./channels.config";
 import { renderDiscordCard } from "./channels.discord";
 import { renderGoogleChatCard } from "./channels.googlechat";
@@ -49,19 +51,27 @@ export function renderChannels(props: ChannelsProps) {
     });
 
   return html`
-    <section class="grid grid-cols-2">
-      ${orderedChannels.map((channel) =>
-        renderChannel(channel.key, props, {
-          whatsapp,
-          telegram,
-          discord,
-          googlechat,
-          slack,
-          signal,
-          imessage,
-          nostr,
-          channelAccounts: props.snapshot?.channelAccounts ?? null,
-        }),
+    <div style="padding: 0 0 24px 0;">
+      <div style="font-size: 34px; font-weight: 700; color: #1d1d1f; letter-spacing: -0.02em; margin-bottom: 6px;">Channels</div>
+      <div style="font-size: 17px; color: #86868b;">Manage channels and settings.</div>
+    </div>
+
+    <section class="grid grid-cols-2 gap-4">
+      ${repeat(
+        orderedChannels,
+        (channel) => channel.key,
+        (channel) =>
+          renderChannel(channel.key, props, {
+            whatsapp,
+            telegram,
+            discord,
+            googlechat,
+            slack,
+            signal,
+            imessage,
+            nostr,
+            channelAccounts: props.snapshot?.channelAccounts ?? null,
+          }),
       )}
     </section>
 
@@ -122,7 +132,7 @@ function renderChannel(key: ChannelKey, props: ChannelsProps, data: ChannelsChan
     case "googlechat":
       return renderGoogleChatCard({
         props,
-        googlechat: data.googlechat,
+        googleChat: data.googlechat,
         accountCountLabel,
       });
     case "slack":
@@ -188,11 +198,19 @@ function renderGenericChannelCard(
   const lastError = typeof status?.lastError === "string" ? status.lastError : undefined;
   const accounts = channelAccounts[key] ?? [];
   const accountCountLabel = renderChannelAccountCount(key, channelAccounts);
+  const summaryConnected = Boolean(running || connected);
+  const summaryConfigured = Boolean(configured);
 
-  return html`
-    <div class="card">
-      <div class="card-title">${label}</div>
-      <div class="card-sub">Channel status and configuration.</div>
+  return renderChannelCard({
+    title: label,
+    description: "Channel status and configuration.",
+    icon: html`
+      <i class="ph-bold ph-plugs-connected"></i>
+    `,
+    connected: summaryConnected,
+    configured: summaryConfigured,
+    error: lastError,
+    children: html`
       ${accountCountLabel}
 
       ${
@@ -202,35 +220,36 @@ function renderGenericChannelCard(
               ${accounts.map((account) => renderGenericAccount(account))}
             </div>
           `
-          : html`
-            <div class="status-list" style="margin-top: 16px;">
-              <div>
-                <span class="label">Configured</span>
-                <span>${configured == null ? "n/a" : configured ? "Yes" : "No"}</span>
-              </div>
-              <div>
-                <span class="label">Running</span>
-                <span>${running == null ? "n/a" : running ? "Yes" : "No"}</span>
-              </div>
-              <div>
-                <span class="label">Connected</span>
-                <span>${connected == null ? "n/a" : connected ? "Yes" : "No"}</span>
-              </div>
-            </div>
-          `
-      }
-
-      ${
-        lastError
-          ? html`<div class="callout danger" style="margin-top: 12px;">
-            ${lastError}
-          </div>`
           : nothing
       }
 
       ${renderChannelConfigSection({ channelId: key, props })}
-    </div>
-  `;
+
+      <div class="row" style="margin-top: 12px; justify-content: space-between; align-items: flex-start;">
+        <details class="advanced-config">
+          <summary style="font-size: 12px; color: var(--muted); cursor: pointer;">Advanced</summary>
+          <div style="margin-top: 8px;">
+            <button class="btn" @click=${() => props.onRefresh(true)}>
+              Probe
+            </button>
+          </div>
+        </details>
+
+        ${
+          summaryConnected
+            ? html`
+                <button
+                  class="btn"
+                  @click=${() => alert("To disconnect, please clear the configuration above and save.")}
+                >
+                  Disconnect
+                </button>
+              `
+            : nothing
+        }
+      </div>
+    `,
+  });
 }
 
 function resolveChannelMetaMap(

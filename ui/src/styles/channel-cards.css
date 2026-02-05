@@ -1,0 +1,236 @@
+/* Channel Cards - App Store Style */
+
+.channel-card {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+  border-radius: 20px;
+  margin-bottom: 16px;
+}
+
+.channel-card[open] {
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06);
+  transform: scale(1.005);
+  border-color: rgba(255, 255, 255, 0.9);
+}
+
+.channel-summary {
+  display: flex;
+  align-items: center;
+  padding: 20px 24px;
+  cursor: pointer;
+  list-style: none;
+  position: relative;
+  gap: 20px;
+}
+
+.channel-summary::-webkit-details-marker {
+  display: none;
+}
+
+.channel-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  color: var(--text);
+  flex-shrink: 0;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+}
+
+.channel-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.channel-card:hover .channel-logo {
+  transform: scale(1.05);
+}
+
+.channel-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.channel-name {
+  font-size: 17px;
+  font-weight: 600;
+  color: #1d1d1f; /* Apple-like dark text */
+  margin-bottom: 4px;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.channel-desc {
+  font-size: 13px;
+  color: #86868b; /* Apple-like subtext */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 90%;
+}
+
+.channel-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.04);
+  color: #6e6e73;
+  backdrop-filter: blur(4px);
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.channel-status-badge.connected {
+  background: rgba(52, 199, 89, 0.1); /* Green subtle */
+  color: #008000;
+}
+
+.channel-status-badge.warn {
+  background: rgba(255, 149, 0, 0.1); /* Orange subtle */
+  color: #cc7700;
+}
+
+.channel-status-badge.error {
+  background: rgba(255, 59, 48, 0.1); /* Red subtle */
+  color: #d70015;
+}
+
+.channel-action-btn {
+  padding: 8px 20px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+  letter-spacing: -0.01em;
+  min-width: 80px;
+  text-align: center;
+}
+
+.channel-action-btn.primary {
+  background: var(--primary);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(26, 22, 47, 0.2);
+}
+
+.channel-action-btn.primary:hover:not([disabled]) {
+  background: #2a244f;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(26, 22, 47, 0.3);
+}
+
+.channel-action-btn.primary:active:not([disabled]) {
+  transform: translateY(0);
+  background: var(--primary);
+}
+
+.channel-action-btn.secondary {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--accent);
+}
+
+.channel-action-btn.secondary:hover:not([disabled]) {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.channel-action-btn[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.channel-expand-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #86868b;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.channel-card[open] .channel-expand-icon {
+  transform: rotate(180deg);
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text);
+}
+
+.channel-summary:hover .channel-expand-icon {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text);
+}
+
+.channel-content {
+  padding: 0 24px 24px 24px;
+  border-top: 1px solid rgba(0, 0, 0, 0.04);
+  margin-top: 0;
+  animation: slideDown 0.3s ease forwards;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Advanced Config Detail Styles */
+details.advanced-config > summary {
+  list-style: none;
+  transition: color 0.2s;
+}
+details.advanced-config > summary:hover {
+  color: var(--primary);
+}
+details.advanced-config[open] > summary {
+  margin-bottom: 8px;
+}
+
+/* Hide technical status list in the simplified view */
+.channel-card .status-list {
+  display: none;
+}
+
+/* When expanded, show relevant details */
+.channel-card[open] .status-list {
+  display: grid;
+  margin-bottom: 16px;
+  padding-top: 16px;
+}
+
+.channel-card[open] .channel-content {
+  padding-top: 20px;
+}

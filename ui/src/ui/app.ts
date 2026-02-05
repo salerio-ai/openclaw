@@ -72,6 +72,8 @@ import {
 } from "./app-tool-stream";
 import { resolveInjectedAssistantIdentity } from "./assistant-identity";
 import { loadAssistantIdentity as loadAssistantIdentityInternal } from "./controllers/assistant-identity";
+import { updateSkillEnabled, type SkillMessage } from "./controllers/skills";
+import { icons } from "./icons";
 import { loadSettings, type UiSettings } from "./storage";
 import { type ChatAttachment, type ChatQueueItem, type CronFormState } from "./ui-types";
 
@@ -98,7 +100,7 @@ export class OpenClawApp extends LitElement {
   @state() password = "";
   @state() tab: Tab = "chat";
   @state() onboarding = resolveOnboardingMode();
-  @state() connected = false;
+  @state() connected = true;
   @state() theme: ThemeMode = this.settings.theme ?? "system";
   @state() themeResolved: ResolvedTheme = "dark";
   @state() hello: GatewayHelloOk | null = null;
@@ -123,6 +125,7 @@ export class OpenClawApp extends LitElement {
   @state() chatRunId: string | null = null;
   @state() compactionStatus: import("./app-tool-stream").CompactionStatus | null = null;
   @state() chatAvatarUrl: string | null = null;
+  @state() showChatHistory = false;
   @state() chatThinkingLevel: string | null = null;
   @state() chatQueue: ChatQueueItem[] = [];
   @state() chatAttachments: ChatAttachment[] = [];
@@ -158,6 +161,7 @@ export class OpenClawApp extends LitElement {
   @state() configSaving = false;
   @state() configApplying = false;
   @state() updateRunning = false;
+  @state() chatShowHistory = false;
   @state() applySessionKey = this.settings.lastActiveSessionKey;
   @state() configSnapshot: ConfigSnapshot | null = null;
   @state() configSchema: unknown | null = null;
@@ -242,8 +246,19 @@ export class OpenClawApp extends LitElement {
   @state() logsLimit = 500;
   @state() logsMaxBytes = 250_000;
   @state() logsAtBottom = true;
+  @state() placeholderText = "How can I help you?";
 
   client: GatewayBrowserClient | null = null;
+  private placeholderTimer: number | null = null;
+  private placeholderIndex = 0;
+  private readonly placeholders = [
+    "How can I help you?",
+    "Ask me to explain code...",
+    "Generate a report...",
+    "Analyze performance...",
+    "Write some tests...",
+  ];
+
   private chatScrollFrame: number | null = null;
   private chatScrollTimeout: number | null = null;
   private chatHasAutoScrolled = false;
@@ -269,6 +284,7 @@ export class OpenClawApp extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     handleConnected(this as unknown as Parameters<typeof handleConnected>[0]);
+    this.startPlaceholderRotation();
   }
 
   protected firstUpdated() {
@@ -276,8 +292,16 @@ export class OpenClawApp extends LitElement {
   }
 
   disconnectedCallback() {
+    if (this.placeholderTimer) clearInterval(this.placeholderTimer);
     handleDisconnected(this as unknown as Parameters<typeof handleDisconnected>[0]);
     super.disconnectedCallback();
+  }
+
+  startPlaceholderRotation() {
+    this.placeholderTimer = window.setInterval(() => {
+      this.placeholderIndex = (this.placeholderIndex + 1) % this.placeholders.length;
+      this.placeholderText = this.placeholders[this.placeholderIndex];
+    }, 3000);
   }
 
   protected updated(changed: Map<PropertyKey, unknown>) {
