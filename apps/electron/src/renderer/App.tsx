@@ -235,16 +235,6 @@ export default function App() {
   }
 
   return (
-    <DevPanel
-      appInfo={appInfo}
-      gatewayStatus={gatewayStatus}
-      logs={logs}
-      error={error}
-      onStartGateway={handleStartGateway}
-      onStopGateway={handleStopGateway}
-      onReOnboard={handleReOnboard}
-      onOpenControlUI={handleOpenControlUI}
-      onClearLogs={handleClearLogs}
-    />
+    <></>
   );
 }

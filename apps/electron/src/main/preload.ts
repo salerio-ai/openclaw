@@ -42,6 +42,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onboardAuthToken: (provider: string, token: string) =>
     ipcRenderer.invoke("onboard-auth-token", provider, token),
   onboardAuthOAuth: (provider: string) => ipcRenderer.invoke("onboard-auth-oauth", provider),
+  onboardAuthOAuthCancel: () => ipcRenderer.invoke("onboard-auth-oauth-cancel"),
   onboardOAuthSubmitCode: (code: string) => ipcRenderer.invoke("onboard-oauth-submit-code", code),
   onboardListModels: (provider: string) => ipcRenderer.invoke("onboard-list-models", provider),
   onboardComplete: (authResult: any, options?: { model?: string; openControlUi?: boolean }) =>

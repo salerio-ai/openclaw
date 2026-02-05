@@ -148,6 +148,7 @@ interface ElectronAPI {
   onboardAuthApiKey: (provider: string, apiKey: string) => Promise<AuthResult>;
   onboardAuthToken: (provider: string, token: string) => Promise<AuthResult>;
   onboardAuthOAuth: (provider: string) => Promise<AuthResult>;
+  onboardAuthOAuthCancel: () => Promise<{ success: boolean }>;
   onboardOAuthSubmitCode: (code: string) => Promise<{ success: boolean }>;
   onboardListModels: (provider: string) => Promise<ModelCatalogEntry[]>;
   onboardComplete: (

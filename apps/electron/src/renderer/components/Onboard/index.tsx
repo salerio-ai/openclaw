@@ -1,16 +1,14 @@
-import { useState, useEffect, useCallback } from "react";
-import WelcomeStep from "./WelcomeStep";
+import { useState, useEffect, useCallback, useRef } from "react";
 import ProviderStep from "./ProviderStep";
-import AuthStep from "./AuthStep";
-import ModelStep from "./ModelStep";
 import WhatsAppStep from "./WhatsAppStep";
+import bustlyLogo from "../../../../assets/imgs/collapsed_logo_v2.svg";
 
 interface OnboardProps {
   onComplete: () => void;
   onCancel: () => void;
 }
 
-type Step = "bustly-login" | "welcome" | "select-provider" | "authenticate" | "select-model"  | "connect-whatsapp";
+type Step = "bustly-login" | "select-provider" | "connect-whatsapp";
 
 export default function Onboard({ onComplete, onCancel }: OnboardProps) {
   const [step, setStep] = useState<Step>("bustly-login");
@@ -25,7 +23,7 @@ export default function Onboard({ onComplete, onCancel }: OnboardProps) {
   const [modelLoading, setModelLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [manualOAuthPrompt, setManualOAuthPrompt] = useState<string | null>(null);
+  const authRequestIdRef = useRef(0);
   // Bustly login state
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userInfo, setUserInfo] = useState<BustlyUserInfo | null>(null);
@@ -89,6 +87,12 @@ export default function Onboard({ onComplete, onCancel }: OnboardProps) {
     }
   }, [step]);
 
+  useEffect(() => {
+    if (step === "bustly-login" && isLoggedIn && !checkingLogin) {
+      setStep("select-provider");
+    }
+  }, [step, isLoggedIn, checkingLogin]);
+
   // Load providers on mount
   useEffect(() => {
     const loadProviders = async () => {
@@ -102,36 +106,7 @@ export default function Onboard({ onComplete, onCancel }: OnboardProps) {
     };
     loadProviders();
 
-    // Listen for manual OAuth code requests
-    if (window.electronAPI?.onOAuthRequestCode) {
-      const removeListener = window.electronAPI.onOAuthRequestCode((message) => {
-        setManualOAuthPrompt(message);
-        // Ensure credential input is cleared for fresh input
-        setCredential("");
-      });
-      return () => {
-        removeListener();
-      };
-    }
-  }, []);
-
-  const handleProviderSelect = useCallback((provider: ProviderConfig) => {
-    setSelectedProvider(provider);
-    setSelectedMethod(null);
-    setCredential("");
-    setAuthResult(null);
-    setModelOptions([]);
-    setSelectedModel("");
-    setManualModel("");
-    setError(null);
-    setManualOAuthPrompt(null);
-    setStep("authenticate");
-  }, []);
-
-  const handleMethodSelect = useCallback((methodId: string) => {
-    setSelectedMethod(methodId);
-    setError(null);
-    setManualOAuthPrompt(null);
+    return undefined;
   }, []);
 
   const handleBustlyLogin = useCallback(async () => {
@@ -149,7 +124,7 @@ export default function Onboard({ onComplete, onCancel }: OnboardProps) {
           const info = await window.electronAPI.bustlyGetUserInfo();
           setUserInfo(info);
         }
-        setStep("welcome");
+        setStep("select-provider");
       } else {
         setError(result.error || "Login failed");
       }
@@ -181,17 +156,6 @@ export default function Onboard({ onComplete, onCancel }: OnboardProps) {
     }
   }, []);
 
-  const handleManualOAuthSubmit = useCallback(async () => {
-    if (!window.electronAPI || !credential.trim()) return;
-    try {
-      await window.electronAPI.onboardOAuthSubmitCode(credential.trim());
-      // Don't clear loading state here, we're still waiting for authResult in handleAuthenticate
-      setManualOAuthPrompt(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }, [credential]);
-
   const resolveModelProvider = useCallback((providerId: string, method: string) => {
     if (providerId === "openai" && method === "oauth") {
       return "openai-codex";
@@ -202,68 +166,132 @@ export default function Onboard({ onComplete, onCancel }: OnboardProps) {
     return providerId;
   }, []);
 
+  const resolveAuthMethod = useCallback((provider: ProviderConfig) => {
+    const oauth = provider.authMethods.find((method) => method.id === "oauth");
+    if (oauth) {
+      return oauth.id;
+    }
+    return provider.authMethods[0]?.id ?? null;
+  }, []);
+
+  const startAuthenticate = useCallback(
+    async (provider: ProviderConfig, methodId: string, nextCredential: string) => {
+      if (!window.electronAPI) return;
+      if (methodId === "oauth" && window.electronAPI.onboardAuthOAuthCancel) {
+        void window.electronAPI.onboardAuthOAuthCancel();
+      }
+      const requestId = authRequestIdRef.current + 1;
+      authRequestIdRef.current = requestId;
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        let nextAuthResult: AuthResult;
+
+        if (methodId === "api_key") {
+          nextAuthResult = await window.electronAPI.onboardAuthApiKey(
+            provider.id,
+            nextCredential,
+          );
+        } else if (methodId === "token") {
+          nextAuthResult = await window.electronAPI.onboardAuthToken(
+            provider.id,
+            nextCredential,
+          );
+        } else if (methodId === "oauth") {
+          nextAuthResult = await window.electronAPI.onboardAuthOAuth(provider.id);
+        } else {
+          setError("Authentication method not yet supported");
+          setLoading(false);
+          return;
+        }
+
+        if (requestId !== authRequestIdRef.current) {
+          return;
+        }
+        if (!nextAuthResult.success) {
+          setError(nextAuthResult.error || "Authentication failed");
+          setLoading(false);
+          return;
+        }
+
+        setAuthResult(nextAuthResult);
+
+        const modelProvider = resolveModelProvider(provider.id, methodId);
+        setModelLoading(true);
+        let models: ModelCatalogEntry[] = [];
+        if (window.electronAPI.onboardListModels) {
+          models = await window.electronAPI.onboardListModels(modelProvider);
+        }
+        if (requestId !== authRequestIdRef.current) {
+          return;
+        }
+        setModelOptions(models);
+        const defaultModel = nextAuthResult.defaultModel || provider.defaultModel;
+        const defaultInOptions = models.some(
+          (model) => `${model.provider}/${model.id}` === defaultModel,
+        );
+        const initialModel =
+          defaultInOptions || models.length === 0
+            ? defaultModel
+            : `${models[0].provider}/${models[0].id}`;
+        setSelectedModel(initialModel);
+        setManualModel("");
+        setStep("select-provider");
+        setLoading(false);
+        setModelLoading(false);
+      } catch (err) {
+        if (requestId !== authRequestIdRef.current) {
+          return;
+        }
+        setError(err instanceof Error ? err.message : String(err));
+        setLoading(false);
+        setModelLoading(false);
+      }
+    },
+    [resolveModelProvider],
+  );
+
   const handleAuthenticate = useCallback(async () => {
     if (!window.electronAPI || !selectedProvider || !selectedMethod) return;
+    await startAuthenticate(selectedProvider, selectedMethod, credential);
+  }, [credential, selectedProvider, selectedMethod, startAuthenticate]);
 
-    setLoading(true);
-    setError(null);
-    setManualOAuthPrompt(null);
-
-    try {
-      let nextAuthResult: AuthResult;
-
-      if (selectedMethod === "api_key") {
-        nextAuthResult = await window.electronAPI.onboardAuthApiKey(
-          selectedProvider.id,
-          credential,
-        );
-      } else if (selectedMethod === "token") {
-        nextAuthResult = await window.electronAPI.onboardAuthToken(
-          selectedProvider.id,
-          credential,
-        );
-      } else if (selectedMethod === "oauth") {
-        nextAuthResult = await window.electronAPI.onboardAuthOAuth(selectedProvider.id);
-      } else {
-        setError("Authentication method not yet supported");
-        setLoading(false);
-        return;
-      }
-
-      if (!nextAuthResult.success) {
-        setError(nextAuthResult.error || "Authentication failed");
-        setLoading(false);
-        return;
-      }
-
-      setAuthResult(nextAuthResult);
-
-      const modelProvider = resolveModelProvider(selectedProvider.id, selectedMethod);
-      setModelLoading(true);
-      let models: ModelCatalogEntry[] = [];
-      if (window.electronAPI.onboardListModels) {
-        models = await window.electronAPI.onboardListModels(modelProvider);
-      }
-      setModelOptions(models);
-      const defaultModel = nextAuthResult.defaultModel || selectedProvider.defaultModel;
-      const defaultInOptions = models.some(
-        (model) => `${model.provider}/${model.id}` === defaultModel,
-      );
-      const initialModel =
-        defaultInOptions || models.length === 0
-          ? defaultModel
-          : `${models[0].provider}/${models[0].id}`;
-      setSelectedModel(initialModel);
+  const handleProviderSelect = useCallback(
+    (provider: ProviderConfig) => {
+      setSelectedProvider(provider);
+      const methodId = resolveAuthMethod(provider);
+      setSelectedMethod(methodId);
+      setCredential("");
+      setAuthResult(null);
+      setModelOptions([]);
+      setSelectedModel("");
       setManualModel("");
-      setStep("select-model");
-      setLoading(false);
-      setModelLoading(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setLoading(false);
-      setModelLoading(false);
+      setError(null);
+      if (methodId === "oauth") {
+        void startAuthenticate(provider, methodId, "");
+      }
+    },
+    [resolveAuthMethod, startAuthenticate],
+  );
+
+  const handleCancelAuth = useCallback(() => {
+    authRequestIdRef.current += 1;
+    if (window.electronAPI?.onboardAuthOAuthCancel) {
+      void window.electronAPI.onboardAuthOAuthCancel();
     }
-  }, [selectedProvider, selectedMethod, credential, resolveModelProvider]);
+    setLoading(false);
+    setModelLoading(false);
+    setError(null);
+    setSelectedProvider(null);
+    setSelectedMethod(null);
+    setCredential("");
+    setAuthResult(null);
+    setModelOptions([]);
+    setSelectedModel("");
+    setManualModel("");
+  }, []);
 
   const handleModelContinue = useCallback(async () => {
     if (!window.electronAPI || !authResult) return;
@@ -297,135 +325,53 @@ export default function Onboard({ onComplete, onCancel }: OnboardProps) {
       // Can't go back from login page
       return;
     }
-    if (step === "welcome") {
-      setStep("bustly-login");
-      setError(null);
-      return;
-    }
-    if (step === "authenticate") {
-      setStep("select-provider");
-      setSelectedProvider(null);
-      setSelectedMethod(null);
-      setCredential("");
-      setAuthResult(null);
-      setModelOptions([]);
-      setSelectedModel("");
-      setManualModel("");
-      setError(null);
-      return;
-    }
-    if (step === "select-model") {
-      setStep("authenticate");
-      setSelectedModel("");
-      setManualModel("");
-    }
     if (step === "connect-whatsapp") {
-      setStep("select-model");
+      setStep("select-provider");
     }
   }, [step]);
 
   if (step === "bustly-login") {
     return (
-      <div className="onboard">
-        <div className="onboard-card">
-          <h1>Sign in to Bustly</h1>
-          <p className="onboard-subtitle">
-            Sign in to sync your OpenClaw workspace and unlock provider setup.
-          </p>
+      <div className="onboard !bg-[#F7F7F8]">
+        <div className="w-full max-w-md mx-auto px-6 text-center pt-10">
+          <div className="mb-10">
+            <img src={bustlyLogo} alt="Bustly AI" className="h-20 mx-auto mb-2" />
+            <h1 className="text-4xl font-bold text-[#1A162F] mb-2">Bustly AI</h1>
+          </div>
 
           {error && (
-            <div className="error-message">
+            <div className="mb-6 rounded-xl border border-red-500/30 bg-red-50 px-4 py-3 text-sm text-red-600 text-left">
               <strong>Error:</strong> {error}
             </div>
           )}
 
-          <div className="onboard-info">
-            {checkingLogin ? (
-              <p>Checking your sign-in status...</p>
-            ) : isLoggedIn ? (
-              <>
-                <h3>Signed in</h3>
-                <p>
-                  {userInfo?.userName ?? "Bustly user"}{" "}
-                  {userInfo?.userEmail ? `(${userInfo.userEmail})` : ""}
-                </p>
-                {userInfo?.workspaceId && (
-                  <p>Workspace: {userInfo.workspaceId}</p>
-                )}
-              </>
-            ) : (
-              <>
-                <h3>What happens next</h3>
-                <p>We will open your browser to complete a secure OAuth login.</p>
-              </>
-            )}
-          </div>
+          <div className="space-y-4">
+            <button
+              onClick={isLoggedIn ? () => setStep("select-provider") : handleBustlyLogin}
+              disabled={loading || checkingLogin}
+              className="w-full py-4 bg-[#1A162F] text-white font-bold rounded-xl hover:bg-[#1A162F]/90 disabled:opacity-80 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 flex items-center justify-center gap-2 text-lg"
+            >
+              {loading ? (
+                <>
+                  <span className="inline-flex h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                  <span>{isLoggedIn ? "Loading..." : "Logging in..."}</span>
+                </>
+              ) : isLoggedIn ? (
+                "Continue"
+              ) : (
+                "Log In"
+              )}
+            </button>
 
-          <div className="onboard-actions">
-            {isLoggedIn ? (
-              <>
-                <button
-                  className="btn btn-primary"
-                  onClick={() => setStep("welcome")}
-                  disabled={checkingLogin || loading}
-                >
-                  Continue
-                </button>
-                <button
-                  className="btn btn-secondary"
-                  onClick={handleBustlyLogout}
-                  disabled={checkingLogin || loading}
-                >
-                  {loading ? "Signing out..." : "Sign out"}
-                </button>
-              </>
-            ) : (
+            {isLoggedIn && (
               <button
-                className="btn btn-primary"
-                onClick={handleBustlyLogin}
-                disabled={checkingLogin || loading}
+                onClick={handleBustlyLogout}
+                disabled={loading || checkingLogin}
+                className="w-full py-4 bg-white border border-gray-200 text-[#1A162F] font-bold rounded-xl hover:bg-gray-50 disabled:opacity-50 transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 flex items-center justify-center gap-2 text-lg"
               >
-                {loading ? "Opening browser..." : "Sign in with Bustly"}
+                Sign out
               </button>
             )}
-            <button className="btn btn-secondary" onClick={onCancel} disabled={loading}>
-              Cancel
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Welcome step
-  if (step === "welcome") {
-    return (
-      <div className="onboard">
-        <div className="onboard-card">
-          <h1>Welcome to OpenClaw Desktop</h1>
-          <p className="onboard-subtitle">
-            Let's get you set up with a model provider to start using AI.
-          </p>
-
-          <div className="onboard-info">
-            <h3>Supported Providers</h3>
-            <ul>
-              <li><strong>OpenAI</strong> - GPT-5.2 (Codex) and more</li>
-              <li><strong>Google</strong> - Gemini 3 and more</li>
-              <li><strong>OpenRouter</strong> - Access to multiple models</li>
-            </ul>
-          </div>
-
-          <div className="onboard-actions">
-            <button className="btn btn-secondary" onClick={handleBack}>
-              Back
-            </button>
-            <button className="btn btn-primary" onClick={() => setStep("select-provider")}>
-              Get Started
-            </button>
-            <button className="btn btn-secondary" onClick={onCancel}>
-              Cancel
-            </button>
           </div>
         </div>
       </div>
@@ -438,47 +384,32 @@ export default function Onboard({ onComplete, onCancel }: OnboardProps) {
         providers={providers}
         selectedProvider={selectedProvider}
         error={error}
-        onSelect={handleProviderSelect}
-        onBack={handleBack}
-        onCancel={onCancel}
-      />
-    );
-  }
-
-  if (step === "authenticate" && selectedProvider) {
-    return (
-      <AuthStep
-        provider={selectedProvider}
         selectedMethod={selectedMethod}
-        manualOAuthPrompt={manualOAuthPrompt}
         credential={credential}
         loading={loading}
-        error={error}
-        onMethodSelect={handleMethodSelect}
         onCredentialChange={setCredential}
         onAuthenticate={handleAuthenticate}
-        onManualOAuthSubmit={handleManualOAuthSubmit}
-        onResetMethod={() => setSelectedMethod(null)}
-        onBack={handleBack}
-      />
-    );
-  }
-
-  if (step === "select-model" && selectedProvider && authResult) {
-    return (
-      <ModelStep
-        provider={selectedProvider}
+        onCancelAuth={handleCancelAuth}
+        onResetProvider={() => {
+          setSelectedProvider(null);
+          setSelectedMethod(null);
+          setCredential("");
+          setAuthResult(null);
+          setModelOptions([]);
+          setSelectedModel("");
+          setManualModel("");
+          setError(null);
+        }}
         authResult={authResult}
         modelLoading={modelLoading}
         modelOptions={modelOptions}
         selectedModel={selectedModel}
         manualModel={manualModel}
-        loading={loading}
-        error={error}
         onSelectedModelChange={setSelectedModel}
         onManualModelChange={setManualModel}
+        onModelContinue={handleModelContinue}
+        onSelect={handleProviderSelect}
         onBack={handleBack}
-        onContinue={handleModelContinue}
       />
     );
   }

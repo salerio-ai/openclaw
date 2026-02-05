@@ -247,6 +247,14 @@ export function stopOAuthCallbackServer(): void {
   }
 }
 
+export function cancelOAuthFlow(): void {
+  if (oauthPromptResolver) {
+    oauthPromptResolver("");
+    oauthPromptResolver = null;
+  }
+  stopOAuthCallbackServer();
+}
+
 /**
  * Token exchange API response format
  */

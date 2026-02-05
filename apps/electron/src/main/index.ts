@@ -30,6 +30,7 @@ import {
   generateLoginUrl,
   startOAuthCallbackServer,
   stopOAuthCallbackServer,
+  cancelOAuthFlow,
   type AuthResult,
 } from "./oauth-handler.js";
 import * as BustlyOAuth from "./bustly-oauth.js";
@@ -1138,6 +1139,11 @@ function setupIpcHandlers(): void {
   // Handle manual OAuth code submission
   ipcMain.handle("onboard-oauth-submit-code", (_event, code: string) => {
     handleOAuthPromptResponse(code);
+    return { success: true };
+  });
+
+  ipcMain.handle("onboard-auth-oauth-cancel", () => {
+    cancelOAuthFlow();
     return { success: true };
   });
 

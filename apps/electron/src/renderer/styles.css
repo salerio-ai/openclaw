@@ -382,16 +382,16 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #0d1117;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #30363d;
+  background: #d1d5db;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #484f58;
+  background: #9ca3af;
 }
 
 /* Responsive */
@@ -413,6 +413,11 @@
   height: 100vh;
   background: #0d1117;
   padding: 40px;
+  overflow-y: auto;
+}
+
+.onboard--whatsapp {
+  align-items: flex-start;
 }
 
 .onboard-card {
@@ -510,13 +515,13 @@
   justify-content: center;
   width: 100%;
   height: 100vh;
-  background: #0d1117;
+  background: #f7f7f8;
   padding: 40px;
 }
 
 .onboard-loading-card {
-  background: #161b22;
-  border: 1px solid #30363d;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
   border-radius: 12px;
   padding: 36px 40px;
   max-width: 520px;
@@ -526,27 +531,28 @@
   align-items: center;
   gap: 16px;
   text-align: center;
+  box-shadow: 0 10px 30px rgba(17, 24, 39, 0.08);
 }
 
 .onboard-loading-spinner {
   width: 46px;
   height: 46px;
   border-radius: 50%;
-  border: 4px solid #30363d;
-  border-top-color: #58a6ff;
+  border: 4px solid #e5e7eb;
+  border-top-color: #1a162f;
   animation: onboard-spin 1s linear infinite;
 }
 
 .onboard-loading-title {
   font-size: 18px;
   font-weight: 600;
-  color: #f0f6fc;
+  color: #1a162f;
   margin: 0;
 }
 
 .onboard-loading-subtitle {
   font-size: 13px;
-  color: #8b949e;
+  color: #6b6f86;
   margin: 0;
 }
 
