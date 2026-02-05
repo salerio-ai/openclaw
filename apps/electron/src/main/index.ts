@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, globalShortcut } from "electron";
+import { app, BrowserWindow, ipcMain, shell, globalShortcut, powerSaveBlocker } from "electron";
 import { resolve, dirname } from "node:path";
 import { spawn, spawnSync, ChildProcess } from "node:child_process";
 import {
@@ -107,6 +107,11 @@ function writeMainLog(message: string) {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("main-log", { message });
   }
+}
+
+function logStartupPaths(): void {
+  writeMainLog(`cwd=${process.cwd()}`);
+  writeMainLog(`__dirname=${__dirname}`);
 }
 
 function ensureBundledExtensionsDir(params: {
@@ -284,6 +289,12 @@ async function startGateway(): Promise<boolean> {
     const homeDir = app.getPath("home");
     const stateDir = resolve(homeDir, ".openclaw");
     const shellPath = process.env.SHELL?.trim() || "/bin/zsh";
+    const fixedPath =
+      process.env.PATH?.trim() ||
+      "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+    const bunInstall =
+      process.env.BUN_INSTALL?.trim() || resolve(app.getPath("home"), ".bun");
+    const homebrewPrefix = process.env.HOMEBREW_PREFIX?.trim() || "/opt/homebrew";
     const appNodeModules = resolve(appPath, "node_modules");
     const resourcesNodeModules = resolve(resourcesPath, "node_modules");
     const openclawNodeModules = resolve(resourcesPath, "openclaw", "node_modules");
@@ -310,8 +321,15 @@ async function startGateway(): Promise<boolean> {
       OPENCLAW_CONFIG: resolve(stateDir, "openclaw.json"),
       HOME: homeDir,
       USERPROFILE: homeDir,
-      OPENCLAW_LOAD_SHELL_ENV: "1",
+      OPENCLAW_LOAD_SHELL_ENV: "0",
+      OPENCLAW_DEFER_SHELL_ENV_FALLBACK: "1",
       SHELL: shellPath,
+      PATH: fixedPath,
+      BUN_INSTALL: bunInstall,
+      HOMEBREW_PREFIX: homebrewPrefix,
+      TERM: process.env.TERM?.trim() || "xterm-256color",
+      COLORTERM: process.env.COLORTERM?.trim() || "truecolor",
+      TERM_PROGRAM: process.env.TERM_PROGRAM?.trim() || "OpenClaw",
       NODE_PATH: effectiveNodePath,
       ...(bundledVersion ? { OPENCLAW_BUNDLED_VERSION: bundledVersion } : {}),
     };
@@ -1159,10 +1177,12 @@ function setupIpcHandlers(): void {
 
 // App lifecycle
 app.whenReady().then(async () => {
+  powerSaveBlocker.start("prevent-app-suspension");
   setupIpcHandlers();
 
   console.log("=== OpenClaw Desktop starting ===");
   writeMainLog("OpenClaw Desktop starting");
+  logStartupPaths();
   writeMainLog(`mainLogPath=${ensureMainLogPath()}`);
   writeMainLog(`resourcesPath=${process.resourcesPath}`);
   writeMainLog(`appVersion=${app.getVersion()} electron=${process.versions.electron}`);

@@ -19,7 +19,7 @@
     "check:main-deps": "node scripts/check-main-deps.js",
     "prepare:openclaw-deps": "node scripts/prepare-openclaw-deps.js",
     "prepare:node": "node scripts/prepare-node.js",
-    "pack:app": "pnpm run prepare:openclaw-deps && pnpm run prepare:node && pnpm run build && pnpm run check:main-deps && pnpm exec electron-builder --mac dir",
+    "pack:app": "pnpm run prepare:openclaw-deps && pnpm run prepare:node && pnpm run build && pnpm run check:main-deps && CSC_IDENTITY_AUTO_DISCOVERY=false pnpm exec electron-builder --mac dir -c.mac.identity=null",
     "pack:dmg": "pnpm run prepare:openclaw-deps && pnpm run prepare:node && pnpm run build && pnpm run check:main-deps && pnpm exec electron-builder --mac dmg",
     "preview": "vite preview",
     "lint": "oxlint",
@@ -72,7 +72,11 @@
       "category": "public.app-category.developer-tools",
       "target": [
         "dmg"
-      ]
+      ],
+      "identity": "RETENTIA HOLDINGS LIMITED (ZZGX67T9NU)",
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist"
     },
     "extraResources": [
       {
