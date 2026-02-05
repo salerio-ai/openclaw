@@ -69,20 +69,15 @@ description: E-commerce data query skill for Shopify, Google Ads, BigCommerce, a
 ## Auto-Loading Configuration
 
 ### Current Configuration (✅ Verified)
+Configuration is now loaded from `~/.openclaw/bustlyOauth.json` (Bustly OAuth login state):
+
 ```json
 {
-  "skills": {
-    "entries": {
-      "search-data": {
-        "enabled": true,
-        "env": {
-          "SEARCH_DATA_SUPABASE_URL": "https://ttsjmrnfptxckmizffzt.supabase.co",
-          "SEARCH_DATA_SUPABASE_ANON_KEY": "...",
-          "SEARCH_DATA_TOKEN": "...",
-          "SEARCH_DATA_WORKSPACE_ID": "4a3da6da-0f03-4559-9127-749d831537b3"
-        }
-      }
-    }
+  "bustlySearchData": {
+    "SEARCH_DATA_SUPABASE_URL": "https://xxx.supabase.co",
+    "SEARCH_DATA_SUPABASE_ANON_KEY": "eyJhbG...",
+    "SEARCH_DATA_SUPABASE_ACCESS_TOKEN": "eyJhbG...",
+    "SEARCH_DATA_WORKSPACE_ID": "xxx-xxx-xxx"
   }
 }
 ```
@@ -91,13 +86,13 @@ description: E-commerce data query skill for Shopify, Google Ads, BigCommerce, a
 
 1. **Discovery**: OpenClaw scans `skills/` directory for `SKILL.md` files
 2. **Metadata**: Reads frontmatter for skill name, description, and required env vars
-3. **Injection**: Injects environment variables from `skills.entries.search-data.env`
+3. **Configuration Loading**: Skill's `lib/config.ts` reads from `bustlyOauth.json`
 4. **Loading**: Makes the skill's NPM scripts available to agents
 
 ### Environment Variable Priority
 
 ```
-OpenClaw-injected (SEARCH_DATA_*) > Fallback (SUPABASE_*) > Manual (process.env)
+bustlyOauth.json (bustlySearchData) > OpenClaw-injected (SEARCH_DATA_*) > Fallback (SUPABASE_*) > Manual (process.env)
 ```
 
 ## Skill Structure
@@ -184,8 +179,8 @@ npm run orders:recent
 
 ### Skill Not Detected
 ```bash
-# Check skill configuration
-cat ~/.openclaw/openclaw.json | jq '.skills.entries.search-data'
+# Check Bustly OAuth login state
+cat ~/.openclaw/bustlyOauth.json | jq '.bustlySearchData'
 
 # Restart gateway to reload skills
 pkill -f openclaw-gateway
@@ -193,8 +188,8 @@ pkill -f openclaw-gateway
 
 ### Configuration Errors
 ```bash
-# Verify environment variables
-cat ~/.openclaw/openclaw.json | jq '.skills.entries.search-data.env'
+# Verify Bustly OAuth configuration
+cat ~/.openclaw/bustlyOauth.json | jq '.bustlySearchData'
 
 # Check skill metadata
 head -10 skills/bustly-search-data/SKILL.md

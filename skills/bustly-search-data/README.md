@@ -8,45 +8,31 @@ This skill is bundled with OpenClaw and located in the `skills/bustly-search-dat
 
 ## Auto-Loading Configuration
 
-The skill is automatically loaded by OpenClaw when configured in `~/.openclaw/openclaw.json`:
-
-```json
-{
-  "skills": {
-    "entries": {
-      "bustly-search-data": {
-        "enabled": true,
-        "env": {
-          "SEARCH_DATA_SUPABASE_URL": "https://your-project.supabase.co",
-          "SEARCH_DATA_SUPABASE_ANON_KEY": "your-anon-key",
-          "SEARCH_DATA_TOKEN": "your-auth-token",
-          "SEARCH_DATA_WORKSPACE_ID": "your-workspace-id"
-        }
-      }
-    }
-  }
-}
-```
+The skill reads configuration from `~/.openclaw/bustlyOauth.json` (automatically configured via Bustly OAuth login in the desktop app).
 
 ### How Auto-Loading Works
 
 1. **Entry Point**: OpenClaw scans the `skills/` directory for directories containing a `SKILL.md` file
 2. **Frontmatter Metadata**: The `SKILL.md` file contains frontmatter with:
-   - `name`: Skill identifier (must match the key in `skills.entries`)
+   - `name`: Skill identifier
    - `description`: What the skill does
    - `metadata.openclaw.requires.env`: Required environment variables
-3. **Environment Injection**: OpenClaw injects the environment variables from `skills.entries.bustly-search-data.env` into the skill's execution context
+3. **Configuration Loading**: The skill's `lib/config.ts` automatically reads from `bustlyOauth.json`:
+   - `SEARCH_DATA_SUPABASE_URL` - Supabase API URL
+   - `SEARCH_DATA_SUPABASE_ANON_KEY` - Supabase anonymous key
+   - `SEARCH_DATA_SUPABASE_ACCESS_TOKEN` - Supabase session access token
+   - `SEARCH_DATA_WORKSPACE_ID` - Workspace identifier
 4. **Tool Discovery**: The skill's NPM scripts (e.g., `get_tables`, `get_schema`, `query`) are automatically discovered and made available to agents
 
 ## Environment Variables
 
-Required environment variables (configured in `~/.openclaw/openclaw.json`):
+Required environment variables (automatically loaded from `~/.openclaw/bustlyOauth.json` after Bustly OAuth login):
 
 | Variable | Description |
 |----------|-------------|
 | `SEARCH_DATA_SUPABASE_URL` | Supabase project URL |
 | `SEARCH_DATA_SUPABASE_ANON_KEY` | Supabase anonymous/public key |
-| `SEARCH_DATA_TOKEN` | User authentication token (Bearer token) |
+| `SEARCH_DATA_SUPABASE_ACCESS_TOKEN` | Supabase session access token |
 | `SEARCH_DATA_WORKSPACE_ID` | Multi-tenant workspace ID (optional for some endpoints) |
 
 ## Usage
@@ -67,10 +53,10 @@ You can test the skill directly from the command line:
 ```bash
 cd skills/bustly-search-data
 
-# Set environment variables manually (for testing)
+# Set environment variables manually (for testing without OAuth)
 export SEARCH_DATA_SUPABASE_URL="https://your-project.supabase.co"
 export SEARCH_DATA_SUPABASE_ANON_KEY="your-key"
-export SEARCH_DATA_TOKEN="your-token"
+export SEARCH_DATA_SUPABASE_ACCESS_TOKEN="your-token"
 export SEARCH_DATA_WORKSPACE_ID="your-workspace-id"
 
 # Test commands
@@ -150,14 +136,14 @@ export async function getCustomReport() {
 
 ### Skill Not Loading
 
-1. Check that the skill is enabled in `~/.openclaw/openclaw.json`:
+1. Check that you're logged in via Bustly OAuth:
    ```bash
-   cat ~/.openclaw/openclaw.json | jq '.skills.entries["bustly-search-data"].enabled'
+   cat ~/.openclaw/bustlyOauth.json | jq '.bustlySearchData'
    ```
 
-2. Verify environment variables are set:
+2. Verify the configuration exists:
    ```bash
-   cat ~/.openclaw/openclaw.json | jq '.skills.entries["bustly-search-data"].env'
+   cat ~/.openclaw/bustlyOauth.json | jq '.bustlySearchData.SEARCH_DATA_SUPABASE_URL'
    ```
 
 3. Restart the gateway:
@@ -169,8 +155,9 @@ export async function getCustomReport() {
 ### Configuration Errors
 
 If you see "Missing required Supabase configuration":
-- Verify all four environment variables are set in `~/.openclaw/openclaw.json`
-- Check that the `bustly-search-data` entry key matches the skill name in `SKILL.md`
+- Verify you're logged in via Bustly OAuth in the desktop app
+- Check that `~/.openclaw/bustlyOauth.json` exists and contains `bustlySearchData`
+- For manual testing, set the environment variables directly
 
 ## License
 

@@ -1,7 +1,7 @@
 ---
 name: bustly-search-data
 description: E-commerce data query skill for Shopify, Google Ads, BigCommerce, and other platforms. Supports common query templates, automatic retry, and multiple output formats.
-metadata: {"openclaw":{"always":true,"requires":{"env":["SEARCH_DATA_SUPABASE_URL","SEARCH_DATA_SUPABASE_ANON_KEY","SEARCH_DATA_TOKEN","SEARCH_DATA_WORKSPACE_ID"]}}}
+metadata: {"openclaw":{"always":true,"requires":{"env":["SEARCH_DATA_SUPABASE_URL","SEARCH_DATA_SUPABASE_ANON_KEY","SEARCH_DATA_SUPABASE_ACCESS_TOKEN","SEARCH_DATA_WORKSPACE_ID"]}}}
 ---
 
 This skill provides e-commerce SaaS data query capabilities, reading business data from platforms like Shopify, Google Ads, and BigCommerce via a Supabase data warehouse.
@@ -62,33 +62,14 @@ npm run catalog
 
 ## Configuration
 
-### Method 1: Read from OpenClaw Global Config (Recommended)
-Configure in `~/.openclaw/openclaw.json`:
-```json
-{
-  "skills": {
-    "entries": {
-      "bustly-search-data": {
-        "enabled": true,
-        "env": {
-          "SEARCH_DATA_SUPABASE_URL": "https://xxx.supabase.co",
-          "SEARCH_DATA_SUPABASE_ANON_KEY": "eyJhbG...",
-          "SEARCH_DATA_TOKEN": "eyJhbG...",
-          "SEARCH_DATA_WORKSPACE_ID": "xxx-xxx-xxx"
-        }
-      }
-    }
-  }
-}
-```
+This skill reads configuration from `~/.openclaw/bustlyOauth.json` (automatically configured via Bustly OAuth login).
 
-### Method 2: Read from Environment Variables (Fallback)
-```bash
-export SEARCH_DATA_SUPABASE_URL="https://xxx.supabase.co"
-export SEARCH_DATA_SUPABASE_ANON_KEY="eyJhbG..."
-export SEARCH_DATA_TOKEN="eyJhbG..."
-export SEARCH_DATA_WORKSPACE_ID="xxx-xxx-xxx"
-```
+No manual configuration is required. After logging in via Bustly OAuth in the desktop app, the skill will have access to:
+
+- `SEARCH_DATA_SUPABASE_URL` - Supabase API URL
+- `SEARCH_DATA_SUPABASE_ANON_KEY` - Supabase anonymous key
+- `SEARCH_DATA_SUPABASE_ACCESS_TOKEN` - Supabase session access token
+- `SEARCH_DATA_WORKSPACE_ID` - Workspace identifier
 
 ## Available Data Tables
 
