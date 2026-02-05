@@ -204,10 +204,10 @@ export type BustlyOAuthState = {
     /** Assigned skills. */
     skills: string[];
   };
-  /** Supabase session access token (for login state and API calls). */
-  supabaseAccessToken?: string;
   /** Login timestamp (milliseconds since epoch). */
   loggedInAt?: number;
+  /** Bustly search data configuration (populated after successful login). */
+  bustlySearchData?: BustlySearchDataConfig;
 };
 
 /** Bustly search data configuration from API extras. */
@@ -218,6 +218,8 @@ export type BustlySearchDataConfig = {
   SEARCH_DATA_SUPABASE_URL: string;
   /** Supabase anonymous key. */
   SEARCH_DATA_SUPABASE_ANON_KEY: string;
+  /** Supabase session access token (for login state and API calls). */
+  SEARCH_DATA_SUPABASE_ACCESS_TOKEN: string;
   /** Workspace ID. */
   SEARCH_DATA_WORKSPACE_ID: string;
 };

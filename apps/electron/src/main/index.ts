@@ -969,13 +969,17 @@ function setupIpcHandlers(): void {
           console.log("[Bustly Login] Got authorization code, exchanging token...");
           const apiResponse = await exchangeToken(code);
 
-          // Extract Supabase access token from extras (for login state)
+          // Extract Supabase access token from extras
           const supabaseAccessToken = apiResponse.data.extras?.supabase_session?.access_token ?? "";
           if (!supabaseAccessToken) {
             throw new Error("Missing Supabase access token in API response");
           }
 
-          // Complete login - store user info and Supabase access token (for login state)
+          // Build search data config from API extras
+          const searchDataConfig = apiResponse.data.extras?.["bustly-search-data"];
+
+          // Complete login - store user info and search data config in bustlyOauth.json
+          // Supabase access token is stored within bustlySearchData.SEARCH_DATA_SUPABASE_ACCESS_TOKEN
           BustlyOAuth.completeBustlyLogin({
             user: {
               userId: apiResponse.data.userId,
@@ -986,42 +990,19 @@ function setupIpcHandlers(): void {
                 ? ["search-data"]
                 : apiResponse.data.skills ?? [],
             },
-            supabaseAccessToken,
+            bustlySearchData: searchDataConfig ? {
+              SEARCH_DATA_SUPABASE_URL: searchDataConfig.search_DATA_SUPABASE_URL ?? "",
+              SEARCH_DATA_SUPABASE_ANON_KEY: searchDataConfig.search_DATA_SUPABASE_ANON_KEY ?? "",
+              SEARCH_DATA_SUPABASE_ACCESS_TOKEN: supabaseAccessToken,
+              SEARCH_DATA_TOKEN: searchDataConfig.search_DATA_TOKEN ?? apiResponse.data.accessToken,
+              SEARCH_DATA_WORKSPACE_ID: searchDataConfig.search_DATA_WORKSPACE_ID ?? apiResponse.data.workspaceId,
+            } : undefined,
           });
-
-          // Write config with skills configuration from API extras
-          console.log("[Bustly Login] Writing token config...");
-          const { writeConfigFile } = await import("../../../../src/config/io.js");
-          const currentConfig = loadConfig();
-
-          // Build search data config from API extras
-          const searchDataConfig = apiResponse.data.extras?.["bustly-search-data"];
-
-          const updatedConfig = {
-            ...currentConfig,
-            skills: {
-              ...currentConfig.skills,
-              entries: {
-                ...currentConfig.skills?.entries,
-                "bustly-search-data": {
-                  enabled: true,
-                  env: {
-                    SEARCH_DATA_SUPABASE_URL: searchDataConfig?.search_DATA_SUPABASE_URL ?? "",
-                    SEARCH_DATA_SUPABASE_ANON_KEY: searchDataConfig?.search_DATA_SUPABASE_ANON_KEY ?? "",
-                    SEARCH_DATA_TOKEN: searchDataConfig?.search_DATA_TOKEN ?? apiResponse.data.accessToken,
-                    SEARCH_DATA_WORKSPACE_ID: searchDataConfig?.search_DATA_WORKSPACE_ID ?? apiResponse.data.workspaceId,
-                  },
-                },
-              },
-            },
-          };
-
-          await writeConfigFile(updatedConfig);
 
           // Stop OAuth callback server
           stopOAuthCallbackServer();
 
-          console.log("[Bustly Login] Login successful!");
+          console.log("[Bustly Login] Login successful! Config stored in bustlyOauth.json");
           return { success: true };
         }
 
@@ -1047,23 +1028,7 @@ function setupIpcHandlers(): void {
     try {
       console.log("[Bustly Logout] Logging out...");
       BustlyOAuth.logoutBustly();
-
-      // Remove Bustly skill configuration from config
-      const { writeConfigFile } = await import("../../../../src/config/io.js");
-      const currentConfig = loadConfig();
-
-      if (currentConfig.skills?.entries?.["bustly-search-data"]) {
-        const { ["bustly-search-data"]: _removed, ...remainingEntries } = currentConfig.skills.entries;
-        const updatedConfig = {
-          ...currentConfig,
-          skills: {
-            ...currentConfig.skills,
-            entries: remainingEntries,
-          },
-        };
-        await writeConfigFile(updatedConfig);
-        console.log("[Bustly Logout] Removed Bustly skill configuration");
-      }
+      console.log("[Bustly Logout] Logged out successfully");
 
       return { success: true };
     } catch (error) {
