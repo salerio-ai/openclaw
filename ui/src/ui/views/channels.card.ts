@@ -14,17 +14,8 @@ export type ChannelCardProps = {
 };
 
 export function renderChannelCard(props: ChannelCardProps) {
-  const {
-    title,
-    description,
-    icon,
-    connected,
-    configured,
-    loading,
-    error,
-    children,
-    isOpen,
-  } = props;
+  const { title, description, icon, connected, configured, loading, error, children, isOpen } =
+    props;
 
   const showLoadingBadge = Boolean(loading);
 

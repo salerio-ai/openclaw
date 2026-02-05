@@ -244,7 +244,7 @@ export function renderApp(state: AppViewState) {
       </header>
       <main class="content ${isChat ? "content--chat" : ""}">
         ${
-          !isChat && state.tab !== "overview" && state.tab !== "channels"
+          !isChat && state.tab !== "channels"
             ? html`
                 <section class="content-header">
                   <div>

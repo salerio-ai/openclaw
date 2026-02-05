@@ -23,7 +23,7 @@ export function loadSettings(): UiSettings {
 
   const defaults: UiSettings = {
     gatewayUrl: defaultUrl,
-    token: "",
+    token: "test",
     sessionKey: "main",
     lastActiveSessionKey: "main",
     theme: "system",

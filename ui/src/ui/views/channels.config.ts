@@ -65,7 +65,7 @@ export function renderChannelConfigForm(props: ChannelConfigFormProps) {
   if (!normalized) {
     // Schema unavailable: likely gateway offline or token mismatch
     return html`
-      <div class="callout warn" style="margin-bottom: 16px;">
+      <div class="callout warn" style="margin-bottom: 16px">
         Configuration unavailable (Gateway offline).
       </div>
     `;
@@ -73,7 +73,7 @@ export function renderChannelConfigForm(props: ChannelConfigFormProps) {
   const node = resolveSchemaNode(normalized, ["channels", props.channelId]);
   if (!node) {
     return html`
-      <div class="muted" style="padding: 12px; font-size: 13px;">
+      <div class="muted" style="padding: 12px; font-size: 13px">
         No configuration options available for this channel.
       </div>
     `;

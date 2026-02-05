@@ -55,7 +55,9 @@ export function renderWhatsAppCard(params: {
                   isConnected
                     ? html`<button class="btn" @click=${() => props.onWhatsAppLogout()}>Disconnect</button>`
                     : isBusy
-                      ? html`<button class="btn" disabled>Connecting...</button>`
+                      ? html`
+                          <button class="btn" disabled>Connecting...</button>
+                        `
                       : html`<button class="btn primary" @click=${() => props.onWhatsAppStart(false)}>Connect WhatsApp</button>`
                 }
              </div>

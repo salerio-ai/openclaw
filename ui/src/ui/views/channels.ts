@@ -1,5 +1,4 @@
 import { html, nothing } from "lit";
-import { repeat } from "lit/directives/repeat.js";
 import type {
   ChannelAccountSnapshot,
   ChannelUiMetaEntry,
@@ -57,21 +56,18 @@ export function renderChannels(props: ChannelsProps) {
     </div>
 
     <section class="grid grid-cols-2 gap-4">
-      ${repeat(
-        orderedChannels,
-        (channel) => channel.key,
-        (channel) =>
-          renderChannel(channel.key, props, {
-            whatsapp,
-            telegram,
-            discord,
-            googlechat,
-            slack,
-            signal,
-            imessage,
-            nostr,
-            channelAccounts: props.snapshot?.channelAccounts ?? null,
-          }),
+      ${orderedChannels.map((channel) =>
+        renderChannel(channel.key, props, {
+          whatsapp,
+          telegram,
+          discord,
+          googlechat,
+          slack,
+          signal,
+          imessage,
+          nostr,
+          channelAccounts: props.snapshot?.channelAccounts ?? null,
+        }),
       )}
     </section>
 
