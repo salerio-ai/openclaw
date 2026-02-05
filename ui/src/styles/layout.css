@@ -82,12 +82,17 @@
   height: var(--shell-topbar-height);
   border-bottom: 1px solid var(--border);
   background: var(--bg);
+  -webkit-app-region: drag;
 }
 
 .topbar-left {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+:root.platform-electron .topbar-left {
+  padding-left: 72px;
 }
 
 .topbar .nav-collapse-toggle {
@@ -104,6 +109,14 @@
 .topbar .nav-collapse-toggle__icon svg {
   width: 20px;
   height: 20px;
+}
+
+.topbar button,
+.topbar a,
+.topbar input,
+.topbar select,
+.topbar textarea {
+  -webkit-app-region: no-drag;
 }
 
 /* Brand */

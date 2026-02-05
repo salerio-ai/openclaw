@@ -290,6 +290,9 @@ export class OpenClawApp extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
+    if (navigator.userAgent.includes("Electron")) {
+      document.documentElement.classList.add("platform-electron");
+    }
     handleConnected(this as unknown as Parameters<typeof handleConnected>[0]);
     document.addEventListener('click', this.handleBustlyUserMenuClose.bind(this));
   }

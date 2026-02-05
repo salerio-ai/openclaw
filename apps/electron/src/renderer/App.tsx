@@ -225,9 +225,9 @@ export default function App() {
       <div className="onboard-loading">
         <div className="onboard-loading-card">
           <div className="onboard-loading-spinner" />
-          <p className="onboard-loading-title">Starting OpenClaw Gateway</p>
+          <p className="onboard-loading-title">Welcome to Bustly</p>
           <p className="onboard-loading-subtitle">
-            Setting up the control UI. This should only take a moment...
+            Setting up the AI. This should only take a moment...
           </p>
         </div>
       </div>

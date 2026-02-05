@@ -772,6 +772,7 @@ function createWindow(): void {
     height: 800,
     minWidth: 800,
     minHeight: 600,
+    titleBarStyle: "hiddenInset",
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -780,7 +781,7 @@ function createWindow(): void {
       // In prod: __dirname = "dist/main/", so "preload.js" = "dist/main/preload.js"
       preload: PRELOAD_PATH,
     },
-    title: "OpenClaw",
+    title: "",
   });
 
   // Load the app
