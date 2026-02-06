@@ -30,63 +30,51 @@ export default function Onboard({ onComplete, onCancel }: OnboardProps) {
   const [userInfo, setUserInfo] = useState<BustlyUserInfo | null>(null);
   const [checkingLogin, setCheckingLogin] = useState(true);
 
-  // Check Bustly login status on mount and when returning to bustly-login step
-  useEffect(() => {
-    const checkLoginStatus = async () => {
-      if (!window.electronAPI?.bustlyIsLoggedIn) return;
+  const checkLoginStatus = useCallback(async () => {
+    if (!window.electronAPI?.bustlyIsLoggedIn) return;
 
-      try {
-        setCheckingLogin(true);
-        const loggedIn = await window.electronAPI.bustlyIsLoggedIn();
-        setIsLoggedIn(loggedIn);
+    try {
+      setCheckingLogin(true);
+      const loggedIn = await window.electronAPI.bustlyIsLoggedIn();
+      setIsLoggedIn(loggedIn);
 
-        if (loggedIn && window.electronAPI.bustlyGetUserInfo) {
-          const info = await window.electronAPI.bustlyGetUserInfo();
-          setUserInfo(info);
-        } else {
-          setUserInfo(null);
-        }
-      } catch (err) {
-        console.error("Failed to check login status:", err);
-        setIsLoggedIn(false);
+      if (loggedIn && window.electronAPI.bustlyGetUserInfo) {
+        const info = await window.electronAPI.bustlyGetUserInfo();
+        setUserInfo(info);
+      } else {
         setUserInfo(null);
-      } finally {
-        setCheckingLogin(false);
       }
-    };
+    } catch (err) {
+      console.error("Failed to check login status:", err);
+      setIsLoggedIn(false);
+      setUserInfo(null);
+    } finally {
+      setCheckingLogin(false);
+    }
+  }, []);
 
+  // Check Bustly login status on mount
+  useEffect(() => {
     checkLoginStatus();
-  }, []); // Run on mount to check initial login status
+  }, [checkLoginStatus]);
 
   // Check login status again when returning to bustly-login step
   useEffect(() => {
     if (step === "bustly-login") {
-      const checkLoginStatus = async () => {
-        if (!window.electronAPI?.bustlyIsLoggedIn) return;
-
-        try {
-          setCheckingLogin(true);
-          const loggedIn = await window.electronAPI.bustlyIsLoggedIn();
-          setIsLoggedIn(loggedIn);
-
-          if (loggedIn && window.electronAPI.bustlyGetUserInfo) {
-            const info = await window.electronAPI.bustlyGetUserInfo();
-            setUserInfo(info);
-          } else {
-            setUserInfo(null);
-          }
-        } catch (err) {
-          console.error("Failed to check login status:", err);
-          setIsLoggedIn(false);
-          setUserInfo(null);
-        } finally {
-          setCheckingLogin(false);
-        }
-      };
-
       checkLoginStatus();
     }
-  }, [step]);
+  }, [step, checkLoginStatus]);
+
+  // Refresh login status when main window regains focus
+  useEffect(() => {
+    if (!window.electronAPI?.onBustlyLoginRefresh) return;
+    const unsubscribe = window.electronAPI.onBustlyLoginRefresh(() => {
+      void checkLoginStatus();
+    });
+    return () => {
+      unsubscribe?.();
+    };
+  }, [checkLoginStatus]);
 
   useEffect(() => {
     if (step === "bustly-login" && isLoggedIn && !checkingLogin) {

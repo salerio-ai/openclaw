@@ -32,7 +32,7 @@ function resolveConfigPathSafe(): string {
       );
       return join(resolved, "openclaw.json");
     }
-    return join(homeDir, ".bustly", "openclaw.json");
+    return join(homeDir, ".openclaw", "openclaw.json");
   }
 }
 
@@ -135,7 +135,7 @@ export async function initializeOpenClaw(
       config.agents?.defaults?.workspace ||
       (process.env.OPENCLAW_STATE_DIR?.trim()
         ? `${process.env.OPENCLAW_STATE_DIR.trim()}/workspace`
-        : "~/.bustly/workspace");
+        : "~/.openclaw/workspace");
     const resolvedWorkspace = workspaceDir.startsWith("~")
       ? join(homedir(), workspaceDir.slice(1))
       : workspaceDir;

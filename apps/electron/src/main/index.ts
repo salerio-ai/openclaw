@@ -111,7 +111,7 @@ function resolveElectronStateDir(): string {
   if (override) {
     return resolveUserPath(override, homeDir);
   }
-  return resolve(homeDir, ".bustly");
+  return resolve(homeDir, ".openclaw");
 }
 
 function resolveElectronConfigPath(): string {
@@ -796,6 +796,19 @@ function createWindow(): void {
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
+
+  mainWindow.on("focus", () => {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return;
+    }
+    void (async () => {
+      await BustlyOAuth.verifyBustlyLoginStatus();
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        return;
+      }
+      mainWindow.webContents.send("bustly-login-refresh");
+    })();
+  });
 }
 
 function ensureWindow(): void {
@@ -836,6 +849,7 @@ function setupIpcHandlers(): void {
   // Whether this launch needs onboarding (computed on app start)
   ipcMain.handle("openclaw-needs-onboard", () => {
     const initialized = isFullyInitialized();
+    writeMainLog(`[Init] needsOnboardAtLaunch=${needsOnboardAtLaunch} initialized=${initialized}`);
     if (initialized && needsOnboardAtLaunch) {
       needsOnboardAtLaunch = false;
     }
@@ -931,13 +945,13 @@ function setupIpcHandlers(): void {
   // === Bustly OAuth handlers ===
 
   // Check if user is logged in to Bustly
-  ipcMain.handle("bustly-is-logged-in", () => {
-    return BustlyOAuth.isBustlyLoggedIn();
+  ipcMain.handle("bustly-is-logged-in", async () => {
+    return await BustlyOAuth.isBustlyLoggedIn();
   });
 
   // Get current Bustly user info
-  ipcMain.handle("bustly-get-user-info", () => {
-    return BustlyOAuth.getBustlyUserInfo();
+  ipcMain.handle("bustly-get-user-info", async () => {
+    return await BustlyOAuth.getBustlyUserInfo();
   });
 
   // Bustly OAuth login
@@ -1435,7 +1449,12 @@ app.whenReady().then(async () => {
               }
             }
           }
-          console.log(`[Env] Loaded environment variables from ${envPath}:`, Object.keys(process.env).filter(k => k.startsWith("OPENCLAW_")));
+          console.log(
+            `[Env] Loaded environment variables from ${envPath}:`,
+            Object.keys(process.env).filter(
+              (k) => k.startsWith("OPENCLAW_") || k.startsWith("BUSTLY_"),
+            ),
+          );
           break;
         }
       } catch (error) {
@@ -1444,6 +1463,16 @@ app.whenReady().then(async () => {
     }
   };
   loadDotEnv();
+
+  // If no Bustly OAuth state exists, remove the config/state directory.
+  const stateDir = resolveElectronStateDir();
+  const bustlyOauthPath = resolve(stateDir, "bustlyOauth.json");
+  if (!existsSync(bustlyOauthPath)) {
+    writeMainLog(`[Init] bustlyOauth.json missing; clearing stateDir=${stateDir}`);
+    rmSync(stateDir, { recursive: true, force: true });
+  } else {
+    writeMainLog(`[Init] bustlyOauth.json found at ${bustlyOauthPath}`);
+  }
 
   setupIpcHandlers();
 

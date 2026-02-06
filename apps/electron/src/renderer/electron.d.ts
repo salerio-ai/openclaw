@@ -167,6 +167,7 @@ interface ElectronAPI {
   onGatewayLog: (callback: (data: GatewayLogData) => void) => () => void;
   onGatewayExit: (callback: (data: GatewayExitData) => void) => () => void;
   onMainLog: (callback: (data: MainLogData) => void) => () => void;
+  onBustlyLoginRefresh: (callback: () => void) => () => void;
 }
 
 interface Window {

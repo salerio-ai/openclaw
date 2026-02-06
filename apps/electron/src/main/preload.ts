@@ -80,4 +80,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("main-log", listener);
     return () => ipcRenderer.removeListener("main-log", listener);
   },
+  onBustlyLoginRefresh: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on("bustly-login-refresh", listener);
+    return () => ipcRenderer.removeListener("bustly-login-refresh", listener);
+  },
 });
