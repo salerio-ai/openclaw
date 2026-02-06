@@ -83,7 +83,7 @@ To extend this client:
 
 3. **Add Channel Management**: UI to configure and manage messaging channels
 
-4. **Add Config Editor**: UI to edit `~/.openclaw/config.json`
+4. **Add Config Editor**: UI to edit `$OPENCLAW_CONFIG_PATH` (default: `$OPENCLAW_STATE_DIR/openclaw.json`)
 
 5. **Add System Tray**: Minimize to system tray with menu options
 

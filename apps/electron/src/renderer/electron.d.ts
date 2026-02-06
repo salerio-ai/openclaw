@@ -7,7 +7,7 @@ interface PresetConfigOptions {
   gatewayPort?: number;
   /** Gateway bind address (default: "loopback") */
   gatewayBind?: "loopback" | "lan" | "auto";
-  /** Workspace directory (default: "~/.openclaw/workspace") */
+  /** Workspace directory (default: "$OPENCLAW_STATE_DIR/workspace", fallback "~/.bustly/workspace") */
   workspace?: string;
   /** Node manager for skills (default: "pnpm") */
   nodeManager?: "npm" | "pnpm" | "bun";

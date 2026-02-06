@@ -94,11 +94,40 @@ const PRELOAD_PATH = process.env.NODE_ENV === "development"
   ? resolve(__dirname, "main/preload.js")
   : resolve(__dirname, "preload.js");
 
+function resolveUserPath(input: string, homeDir: string): string {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+  if (trimmed.startsWith("~")) {
+    return resolve(trimmed.replace(/^~(?=$|[\\/])/, homeDir));
+  }
+  return resolve(trimmed);
+}
+
+function resolveElectronStateDir(): string {
+  const homeDir = app.getPath("home");
+  const override = process.env.OPENCLAW_STATE_DIR?.trim();
+  if (override) {
+    return resolveUserPath(override, homeDir);
+  }
+  return resolve(homeDir, ".bustly");
+}
+
+function resolveElectronConfigPath(): string {
+  const homeDir = app.getPath("home");
+  const override = process.env.OPENCLAW_CONFIG_PATH?.trim();
+  if (override) {
+    return resolveUserPath(override, homeDir);
+  }
+  return resolve(resolveElectronStateDir(), "openclaw.json");
+}
+
 function ensureMainLogPath(): string {
   if (mainLogPath) {
     return mainLogPath;
   }
-  const logDir = resolve(app.getPath("home"), ".openclaw/electron/logs");
+  const logDir = resolve(resolveElectronStateDir(), "electron", "logs");
   mkdirSync(logDir, { recursive: true, mode: 0o700 });
   mainLogPath = resolve(logDir, "main.log");
   return mainLogPath;
@@ -205,7 +234,7 @@ function resolveBundledOpenClawVersion(): string | null {
  */
 function loadGatewayConfig(): { port: number; bind: string; token?: string } | null {
   try {
-    const configPath = resolve(app.getPath("home"), ".openclaw/openclaw.json");
+    const configPath = resolveElectronConfigPath();
     if (!existsSync(configPath)) {
       return null;
     }
@@ -323,7 +352,7 @@ async function startGateway(): Promise<boolean> {
       writeMainLog(`Bundled OpenClaw version: ${bundledVersion}`);
     }
     const homeDir = app.getPath("home");
-    const stateDir = resolve(homeDir, ".openclaw");
+    const stateDir = resolveElectronStateDir();
     const shellPath = process.env.SHELL?.trim() || "/bin/zsh";
     const fixedPath =
       process.env.PATH?.trim() ||
@@ -400,7 +429,7 @@ async function startGateway(): Promise<boolean> {
       NODE_ENV: "production",
       OPENCLAW_BUNDLED_PLUGINS_DIR: bundledPluginsDir,
       OPENCLAW_STATE_DIR: stateDir,
-      OPENCLAW_CONFIG: resolve(stateDir, "openclaw.json"),
+      OPENCLAW_CONFIG_PATH: resolveElectronConfigPath(),
       HOME: homeDir,
       USERPROFILE: homeDir,
       OPENCLAW_LOAD_SHELL_ENV: "0",
@@ -413,7 +442,7 @@ async function startGateway(): Promise<boolean> {
       COLORTERM: process.env.COLORTERM?.trim() || "truecolor",
       TERM_PROGRAM: process.env.TERM_PROGRAM?.trim() || "OpenClaw",
       NODE_PATH: effectiveNodePath,
-      BUSTLY_OAUTH_CALLBACK_PORT: String(oauthCallbackPort),
+      OPENCLAW_OAUTH_CALLBACK_PORT: String(oauthCallbackPort),
       ...(bundledVersion ? { OPENCLAW_BUNDLED_VERSION: bundledVersion } : {}),
     };
     if (existsSync(bundledPluginsDir)) {
@@ -622,7 +651,7 @@ function openControlUiInMainWindow(): void {
 }
 
 function resolveOpenClawConfigPath(): string {
-  return getConfigPath() ?? resolve(app.getPath("home"), ".openclaw/openclaw.json");
+  return getConfigPath() ?? resolveElectronConfigPath();
 }
 
 function readOpenClawConfigFile(): OpenClawConfig {
@@ -813,12 +842,12 @@ function setupIpcHandlers(): void {
     return needsOnboardAtLaunch && !initialized;
   });
 
-  // Reset onboarding (delete ~/.openclaw and stop gateway)
+  // Reset onboarding (delete state dir and stop gateway)
   ipcMain.handle("openclaw-reset", async () => {
     try {
       await stopGateway();
-      const openclawDir = resolve(app.getPath("home"), ".openclaw");
-      rmSync(openclawDir, { recursive: true, force: true });
+      const stateDir = resolveElectronStateDir();
+      rmSync(stateDir, { recursive: true, force: true });
       initResult = null;
       gatewayToken = null;
       gatewayProcess = null;
@@ -1012,9 +1041,9 @@ function setupIpcHandlers(): void {
 
   ipcMain.handle("bustly-open-settings", async () => {
     try {
-      const baseUrl = process.env.BUSTLY_WEB_BASE_URL;
+      const baseUrl = process.env.OPENCLAW_WEB_BASE_URL;
       if (!baseUrl) {
-        throw new Error("Missing BUSTLY_WEB_BASE_URL");
+        throw new Error("Missing OPENCLAW_WEB_BASE_URL");
       }
       const url = `${baseUrl.replace(/\/+$/, "")}/admin?setting_modal=profile`;
       await shell.openExternal(url);
@@ -1165,7 +1194,7 @@ function setupIpcHandlers(): void {
       }
 
       // Update config with the credential
-      const configPath = resolve(app.getPath("home"), ".openclaw/openclaw.json");
+      const configPath = resolveElectronConfigPath();
       const config = JSON.parse(readFileSync(configPath, "utf-8"));
 
       let nextConfig = config;
@@ -1406,7 +1435,7 @@ app.whenReady().then(async () => {
               }
             }
           }
-          console.log(`[Env] Loaded environment variables from ${envPath}:`, Object.keys(process.env).filter(k => k.startsWith("BUSTLY_")));
+          console.log(`[Env] Loaded environment variables from ${envPath}:`, Object.keys(process.env).filter(k => k.startsWith("OPENCLAW_")));
           break;
         }
       } catch (error) {
