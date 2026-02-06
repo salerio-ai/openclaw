@@ -20,6 +20,7 @@ export default function App() {
   const [showOnboardLoading, setShowOnboardLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const logIdRef = useRef(0);
+  const controlUiRequestedRef = useRef(false);
   const isDevPanelWindow = typeof window !== "undefined" && window.location.hash === "#devpanel";
 
   // Load initial data
@@ -42,8 +43,8 @@ export default function App() {
         setAppInfo(info);
         setIsInitialized(initialized);
 
-        // Show onboarding if needed for this launch
-        if (needsOnboard || !initialized) {
+        // Show onboarding only when needed and not already initialized
+        if (needsOnboard && !initialized) {
           setShowOnboard(true);
         } else if (!isDevPanelWindow) {
           setShowOnboardLoading(true);
@@ -56,6 +57,34 @@ export default function App() {
 
     loadInitialData();
   }, []);
+
+  // When onboarding is complete, ensure the Control UI is loaded into the main window.
+  useEffect(() => {
+    if (!showOnboardLoading || isDevPanelWindow) {
+      return;
+    }
+    if (controlUiRequestedRef.current) {
+      return;
+    }
+    controlUiRequestedRef.current = true;
+    void window.electronAPI?.onboardOpenControlUi?.();
+  }, [showOnboardLoading, isDevPanelWindow]);
+
+  // If gateway becomes ready after reopening, trigger Control UI load.
+  useEffect(() => {
+    if (!showOnboardLoading || isDevPanelWindow) {
+      return;
+    }
+    if (!gatewayStatus?.running) {
+      controlUiRequestedRef.current = false;
+      return;
+    }
+    if (controlUiRequestedRef.current) {
+      return;
+    }
+    controlUiRequestedRef.current = true;
+    void window.electronAPI?.onboardOpenControlUi?.();
+  }, [gatewayStatus?.running, showOnboardLoading, isDevPanelWindow]);
 
   // Refresh gateway status periodically (handles auto-start and external changes)
   useEffect(() => {

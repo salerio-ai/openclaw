@@ -52,6 +52,7 @@ import {
   writeOAuthCredentials,
 } from "../../../../src/commands/onboard-auth";
 import { applyPrimaryModel } from "../../../../src/commands/model-picker";
+import { enablePluginInConfig } from "../../../../src/plugins/enable";
 import { normalizeE164 } from "../../../../src/utils";
 import {
   resolveDefaultWhatsAppAccountId,
@@ -88,6 +89,7 @@ type WhatsAppConfigRequest =
 const GATEWAY_HOST = "127.0.0.1";
 const DEV_PANEL_HASH = "devpanel";
 const DEV_PANEL_SHORTCUT = "CommandOrControl+Shift+Alt+D";
+const DASHBOARD_CHANNEL_PLUGIN_IDS = ["whatsapp"] as const;
 const PRELOAD_PATH = process.env.NODE_ENV === "development"
   ? resolve(__dirname, "main/preload.js")
   : resolve(__dirname, "preload.js");
@@ -580,73 +582,7 @@ function openControlUiInMainWindow(): void {
   writeMainLog(
     `Opening Control UI: url=${controlUrl} token=${gatewayToken ? "present" : "missing"}`,
   );
-  const loadingHtml = `
-    <!doctype html>
-    <html>
-      <head>
-        <meta charset="utf-8" />
-        <title>Loading OpenClaw Control</title>
-        <style>
-          :root {
-            color-scheme: light;
-          }
-          html, body {
-            height: 100%;
-            margin: 0;
-            font-family: "SF Pro Text", "Inter", system-ui, -apple-system, sans-serif;
-            background: radial-gradient(circle at top, #f7f3ff, #eef2ff 55%, #fef7ed 100%);
-            color: #1f2937;
-          }
-          .wrap {
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-          .card {
-            background: #ffffffcc;
-            border: 1px solid #e5e7eb;
-            border-radius: 20px;
-            padding: 32px 40px;
-            box-shadow: 0 18px 60px rgba(15, 23, 42, 0.12);
-            min-width: 320px;
-            text-align: center;
-          }
-          .title {
-            font-size: 18px;
-            font-weight: 600;
-            margin: 0 0 8px;
-          }
-          .subtitle {
-            font-size: 14px;
-            color: #6b7280;
-            margin: 0 0 20px;
-          }
-          .spinner {
-            width: 44px;
-            height: 44px;
-            margin: 0 auto;
-            border-radius: 50%;
-            border: 4px solid #e5e7eb;
-            border-top-color: #6366f1;
-            animation: spin 1s linear infinite;
-          }
-          @keyframes spin {
-            to { transform: rotate(360deg); }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="wrap">
-          <div class="card">
-            <div class="spinner"></div>
-            <p class="title">Loading Control UI</p>
-            <p class="subtitle">Starting gateway and preparing dashboard…</p>
-          </div>
-        </div>
-      </body>
-    </html>
-  `.trim();
+  
   if (!mainWindow || mainWindow.isDestroyed()) {
     return;
   }
@@ -674,10 +610,6 @@ function openControlUiInMainWindow(): void {
     writeMainLog(`Control UI navigated: url=${url}`);
   });
 
-  mainWindow.loadURL(`data:text/html,${encodeURIComponent(loadingHtml)}`).catch((error) => {
-    writeMainLog(`Loading screen failed: ${error instanceof Error ? error.message : String(error)}`);
-  });
-
   waitForGatewayPort(gatewayPort).then((ready) => {
     writeMainLog(`Gateway port ${gatewayPort} ready=${ready}`);
     if (!ready || !mainWindow || mainWindow.isDestroyed()) {
@@ -701,6 +633,46 @@ function readOpenClawConfigFile(): OpenClawConfig {
 function writeOpenClawConfigFile(config: OpenClawConfig): void {
   const configPath = resolveOpenClawConfigPath();
   writeFileSync(configPath, JSON.stringify(config, null, 2));
+}
+
+function ensureDashboardChannelPluginsEnabled(cfg: OpenClawConfig): {
+  config: OpenClawConfig;
+  changed: boolean;
+  blocked: string[];
+} {
+  let next = cfg;
+  let changed = false;
+  const blocked: string[] = [];
+
+  for (const pluginId of DASHBOARD_CHANNEL_PLUGIN_IDS) {
+    if (next.plugins?.enabled === false) {
+      blocked.push(pluginId);
+      continue;
+    }
+    if (next.plugins?.deny?.includes(pluginId)) {
+      blocked.push(pluginId);
+      continue;
+    }
+
+    const entry = next.plugins?.entries?.[pluginId] as Record<string, unknown> | undefined;
+    const allow = next.plugins?.allow;
+    const allowlistActive = Array.isArray(allow) && allow.length > 0;
+    const allowlisted = !allowlistActive || allow.includes(pluginId);
+    const alreadyEnabled = entry?.enabled === true && allowlisted;
+    if (alreadyEnabled) {
+      continue;
+    }
+
+    const result = enablePluginInConfig(next, pluginId);
+    if (!result.enabled) {
+      blocked.push(pluginId);
+      continue;
+    }
+    next = result.config;
+    changed = true;
+  }
+
+  return { config: next, changed, blocked };
 }
 
 function parseAllowFromList(raw: string): string[] {
@@ -834,7 +806,11 @@ function setupIpcHandlers(): void {
 
   // Whether this launch needs onboarding (computed on app start)
   ipcMain.handle("openclaw-needs-onboard", () => {
-    return needsOnboardAtLaunch;
+    const initialized = isFullyInitialized();
+    if (initialized && needsOnboardAtLaunch) {
+      needsOnboardAtLaunch = false;
+    }
+    return needsOnboardAtLaunch && !initialized;
   });
 
   // Reset onboarding (delete ~/.openclaw and stop gateway)
@@ -958,10 +934,7 @@ function setupIpcHandlers(): void {
       await shell.openExternal(loginUrl);
 
       // Poll for completion
-      const maxPollAttempts = 60; // 2 minutes (60 * 2s)
-      let pollAttempts = 0;
-
-      while (pollAttempts < maxPollAttempts) {
+      while (true) {
         await delay(2000);
 
         const code = BustlyOAuth.getBustlyAuthCode();
@@ -1008,12 +981,7 @@ function setupIpcHandlers(): void {
           return { success: true };
         }
 
-        pollAttempts++;
       }
-
-      // Stop OAuth callback server on timeout
-      stopOAuthCallbackServer();
-      throw new Error("Login timed out. Please try again.");
     } catch (error) {
       console.error("[Bustly Login] Error:", error);
       // Stop OAuth callback server on error
@@ -1372,6 +1340,16 @@ function setupIpcHandlers(): void {
 
   ipcMain.handle("onboard-open-control-ui", () => {
     try {
+      const cfg = readOpenClawConfigFile();
+      const ensured = ensureDashboardChannelPluginsEnabled(cfg);
+      if (ensured.changed) {
+        writeOpenClawConfigFile(ensured.config);
+      }
+      if (ensured.blocked.length > 0) {
+        writeMainLog(
+          `[Onboard] Channel plugins not enabled due to config: ${ensured.blocked.join(", ")}`,
+        );
+      }
       openControlUiInMainWindow();
       return { success: true };
     } catch (error) {
@@ -1513,15 +1491,6 @@ app.whenReady().then(async () => {
 
 app.on("window-all-closed", async () => {
   console.log("[Lifecycle] All windows closed");
-
-  // Stop gateway when all windows are closed
-  console.log("[Gateway] Stopping gateway (windows closed)...");
-  try {
-    await stopGateway();
-    console.log("[Gateway] ✓ Gateway stopped");
-  } catch (error) {
-    console.error("[Gateway] ✗ Failed to stop gateway:", error);
-  }
 
   // On non-macOS platforms, quit the app when all windows are closed
   if (process.platform !== "darwin") {

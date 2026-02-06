@@ -91,4 +91,28 @@ describe("handleChatEvent", () => {
     expect(state.chatStream).toBe(null);
     expect(state.chatStreamStartedAt).toBe(null);
   });
+
+  it("appends an error message when a run errors", () => {
+    const state = createState({
+      sessionKey: "main",
+      chatRunId: "run-1",
+      chatStream: "Reply",
+      chatStreamStartedAt: 100,
+      chatMessages: [{ role: "user", content: [{ type: "text", text: "Hi" }] }],
+    });
+    const payload: ChatEventPayload = {
+      runId: "run-1",
+      sessionKey: "main",
+      state: "error",
+      errorMessage: "Tool crashed",
+    };
+    expect(handleChatEvent(state, payload)).toBe("error");
+    expect(state.chatRunId).toBe(null);
+    expect(state.chatStream).toBe(null);
+    expect(state.chatStreamStartedAt).toBe(null);
+    expect(state.lastError).toBe("Tool crashed");
+    expect(state.chatMessages).toHaveLength(2);
+    const last = state.chatMessages[1] as { content?: Array<{ text?: string }> };
+    expect(last.content?.[0]?.text).toBe("Error: Tool crashed");
+  });
 });

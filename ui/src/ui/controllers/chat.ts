@@ -202,7 +202,20 @@ export function handleChatEvent(state: ChatState, payload?: ChatEventPayload) {
     state.chatStream = null;
     state.chatRunId = null;
     state.chatStreamStartedAt = null;
-    state.lastError = payload.errorMessage ?? "chat error";
+    const errorMessage = payload.errorMessage ?? "chat error";
+    state.lastError = errorMessage;
+    const trimmed = errorMessage.trim();
+    if (trimmed) {
+      const text = /^(error:|err:)/i.test(trimmed) ? trimmed : `Error: ${trimmed}`;
+      state.chatMessages = [
+        ...state.chatMessages,
+        {
+          role: "assistant",
+          content: [{ type: "text", text }],
+          timestamp: Date.now(),
+        },
+      ];
+    }
   }
   return payload.state;
 }
