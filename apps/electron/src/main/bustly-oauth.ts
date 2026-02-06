@@ -267,7 +267,7 @@ export function completeBustlyLogin(params: {
  * Logout / clear OAuth state
  */
 export function logoutBustly(): void {
-  clearBustlyOAuthState();
+  clearBustlyAuthData();
   console.log("[BustlyOAuth] Logged out");
 }
 

@@ -719,6 +719,7 @@ export class OpenClawApp extends LitElement {
     try {
       const electronAPI = (window as unknown as { electronAPI?: {
         bustlyLogout?: () => Promise<{ success: boolean; error?: string }>;
+        bustlyOpenLogin?: () => Promise<{ success: boolean; error?: string }>;
       } }).electronAPI;
       if (electronAPI?.bustlyLogout) {
         const result = await electronAPI.bustlyLogout();
@@ -732,6 +733,13 @@ export class OpenClawApp extends LitElement {
       this.bustlyUserInfo = null;
       this.bustlyUserMenuOpen = false;
       this.oauthLoginSuccess = false;
+
+      if (electronAPI?.bustlyOpenLogin) {
+        const openResult = await electronAPI.bustlyOpenLogin();
+        if (openResult?.success) {
+          return;
+        }
+      }
 
       // Reload overview to reflect logout
       await loadOverviewInternal(this as unknown as Parameters<typeof loadOverviewInternal>[0]);

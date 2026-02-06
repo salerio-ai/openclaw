@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import OnboardContainer from "./OnboardContainer";
+import BustlyLoginPage from "./BustlyLoginPage";
 import ProviderStep from "./ProviderStep";
 import WhatsAppStep from "./WhatsAppStep";
-import bustlyLogo from "../../../../assets/imgs/collapsed_logo_v2.svg";
 
 interface OnboardProps {
   onComplete: () => void;
@@ -25,62 +24,6 @@ export default function Onboard({ onComplete, onCancel }: OnboardProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const authRequestIdRef = useRef(0);
-  // Bustly login state
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userInfo, setUserInfo] = useState<BustlyUserInfo | null>(null);
-  const [checkingLogin, setCheckingLogin] = useState(true);
-
-  const checkLoginStatus = useCallback(async () => {
-    if (!window.electronAPI?.bustlyIsLoggedIn) return;
-
-    try {
-      setCheckingLogin(true);
-      const loggedIn = await window.electronAPI.bustlyIsLoggedIn();
-      setIsLoggedIn(loggedIn);
-
-      if (loggedIn && window.electronAPI.bustlyGetUserInfo) {
-        const info = await window.electronAPI.bustlyGetUserInfo();
-        setUserInfo(info);
-      } else {
-        setUserInfo(null);
-      }
-    } catch (err) {
-      console.error("Failed to check login status:", err);
-      setIsLoggedIn(false);
-      setUserInfo(null);
-    } finally {
-      setCheckingLogin(false);
-    }
-  }, []);
-
-  // Check Bustly login status on mount
-  useEffect(() => {
-    checkLoginStatus();
-  }, [checkLoginStatus]);
-
-  // Check login status again when returning to bustly-login step
-  useEffect(() => {
-    if (step === "bustly-login") {
-      checkLoginStatus();
-    }
-  }, [step, checkLoginStatus]);
-
-  // Refresh login status when main window regains focus
-  useEffect(() => {
-    if (!window.electronAPI?.onBustlyLoginRefresh) return;
-    const unsubscribe = window.electronAPI.onBustlyLoginRefresh(() => {
-      void checkLoginStatus();
-    });
-    return () => {
-      unsubscribe?.();
-    };
-  }, [checkLoginStatus]);
-
-  useEffect(() => {
-    if (step === "bustly-login" && isLoggedIn && !checkingLogin) {
-      setStep("select-provider");
-    }
-  }, [step, isLoggedIn, checkingLogin]);
 
   // Load providers on mount
   useEffect(() => {
@@ -98,52 +41,6 @@ export default function Onboard({ onComplete, onCancel }: OnboardProps) {
     return undefined;
   }, []);
 
-  const handleBustlyLogin = useCallback(async () => {
-    if (!window.electronAPI) return;
-    setLoading(true);
-    setError(null);
-
-    try {
-      const result = await window.electronAPI.bustlyLogin();
-      // Only proceed to welcome step if login was successful
-      if (result.success) {
-        // Update login state
-        setIsLoggedIn(true);
-        if (window.electronAPI.bustlyGetUserInfo) {
-          const info = await window.electronAPI.bustlyGetUserInfo();
-          setUserInfo(info);
-        }
-        setStep("select-provider");
-      } else {
-        setError(result.error || "Login failed");
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const handleBustlyLogout = useCallback(async () => {
-    if (!window.electronAPI) return;
-    setLoading(true);
-    setError(null);
-
-    try {
-      const result = await window.electronAPI.bustlyLogout();
-      if (result.success) {
-        // Clear login state
-        setIsLoggedIn(false);
-        setUserInfo(null);
-      } else {
-        setError(result.error || "Logout failed");
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   const resolveModelProvider = useCallback((providerId: string, method: string) => {
     if (providerId === "openai" && method === "oauth") {
@@ -321,48 +218,11 @@ export default function Onboard({ onComplete, onCancel }: OnboardProps) {
 
   if (step === "bustly-login") {
     return (
-      <OnboardContainer className="w-full max-w-md mx-auto px-6 text-center pt-10">
-        <div className="mb-10">
-          <img src={bustlyLogo} alt="Bustly AI" className="h-20 mx-auto mb-2" />
-          <h1 className="text-4xl font-bold text-[#1A162F] mb-2">Bustly AI</h1>
-          <p className="text-lg text-[#6C6F86]">Your data speaks for your business</p>
-        </div>
-
-        {error && (
-          <div className="mb-6 rounded-xl border border-red-500/30 bg-red-50 px-4 py-3 text-sm text-red-600 text-left">
-            <strong>Error:</strong> {error}
-          </div>
-        )}
-
-        <div className="space-y-4">
-          <button
-            onClick={isLoggedIn ? () => setStep("select-provider") : handleBustlyLogin}
-            disabled={loading || checkingLogin}
-            className="w-full py-4 bg-[#1A162F] text-white font-bold rounded-xl hover:bg-[#1A162F]/90 disabled:opacity-80 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 flex items-center justify-center gap-2 text-lg"
-          >
-            {loading ? (
-              <>
-                <span className="inline-flex h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                <span>{isLoggedIn ? "Loading..." : "Logging in..."}</span>
-              </>
-            ) : isLoggedIn ? (
-              "Continue"
-            ) : (
-              "Log In"
-            )}
-          </button>
-
-          {isLoggedIn && (
-            <button
-              onClick={handleBustlyLogout}
-              disabled={loading || checkingLogin}
-              className="w-full py-4 bg-white border border-gray-200 text-[#1A162F] font-bold rounded-xl hover:bg-gray-50 disabled:opacity-50 transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 flex items-center justify-center gap-2 text-lg"
-            >
-              Sign out
-            </button>
-          )}
-        </div>
-      </OnboardContainer>
+      <BustlyLoginPage
+        onContinue={() => setStep("select-provider")}
+        autoContinue
+        showContinueWhenLoggedIn={false}
+      />
     );
   }
 

@@ -88,6 +88,7 @@ type WhatsAppConfigRequest =
 // Gateway configuration
 const GATEWAY_HOST = "127.0.0.1";
 const DEV_PANEL_HASH = "devpanel";
+const BUSTLY_LOGIN_HASH = "bustly-login";
 const DEV_PANEL_SHORTCUT = "CommandOrControl+Shift+Alt+D";
 const DASHBOARD_CHANNEL_PLUGIN_IDS = ["whatsapp"] as const;
 const PRELOAD_PATH = process.env.NODE_ENV === "development"
@@ -650,6 +651,14 @@ function openControlUiInMainWindow(): void {
   });
 }
 
+function openBustlyLoginInMainWindow(): void {
+  writeMainLog("[Bustly Login] Opening login page in main window");
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  loadRendererWindow(mainWindow, { hash: BUSTLY_LOGIN_HASH });
+}
+
 function resolveOpenClawConfigPath(): string {
   return getConfigPath() ?? resolveElectronConfigPath();
 }
@@ -952,6 +961,16 @@ function setupIpcHandlers(): void {
   // Get current Bustly user info
   ipcMain.handle("bustly-get-user-info", async () => {
     return await BustlyOAuth.getBustlyUserInfo();
+  });
+
+  // Open Bustly login page (standalone)
+  ipcMain.handle("bustly-open-login", () => {
+    try {
+      openBustlyLoginInMainWindow();
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
   });
 
   // Bustly OAuth login

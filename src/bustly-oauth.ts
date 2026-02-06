@@ -138,7 +138,7 @@ export function getBustlyUserInfo(): BustlyOAuthState["user"] | null {
  * Logout / clear OAuth state
  */
 export function logoutBustly(): void {
-  clearBustlyOAuthState();
+  clearBustlyAuthData();
   console.log("[BustlyOAuth] Logged out");
 }
 
@@ -193,4 +193,25 @@ function clearBustlyOAuthState(): void {
   } catch (error) {
     console.error("[BustlyOAuth] Failed to clear state:", error);
   }
+}
+
+/**
+ * Clear user + token info from OAuth state (preserves other fields).
+ */
+function clearBustlyAuthData(): void {
+  const state = readBustlyOAuthState();
+  if (!state) {
+    return;
+  }
+
+  delete state.user;
+  delete state.loggedInAt;
+
+  if (state.bustlySearchData) {
+    state.bustlySearchData.SEARCH_DATA_SUPABASE_ACCESS_TOKEN = "";
+    state.bustlySearchData.SEARCH_DATA_TOKEN = "";
+  }
+
+  writeBustlyOAuthState(state);
+  console.log("[BustlyOAuth] Cleared token and user data");
 }
