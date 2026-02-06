@@ -19,8 +19,9 @@
     "check:main-deps": "node scripts/check-main-deps.js",
     "prepare:openclaw-deps": "node scripts/prepare-openclaw-deps.js",
     "prepare:node": "node scripts/prepare-node.js",
-    "pack:app": "pnpm run prepare:openclaw-deps && pnpm run prepare:node && pnpm run build && pnpm run check:main-deps && CSC_IDENTITY_AUTO_DISCOVERY=false pnpm exec electron-builder --mac dir -c.mac.identity=null",
-    "pack:dmg": "pnpm run prepare:openclaw-deps && pnpm run prepare:node && pnpm run build && pnpm run check:main-deps && pnpm exec electron-builder --mac dmg",
+    "pack:app": "pnpm run prepare:openclaw-deps && pnpm run prepare:node && pnpm run build && CSC_IDENTITY_AUTO_DISCOVERY=false pnpm dlx electron-builder --mac dir -c.mac.identity=null",
+    "pack:dmg": "pnpm run prepare:openclaw-deps && pnpm run prepare:node && pnpm run build && CSC_IDENTITY_AUTO_DISCOVERY=false pnpm dlx electron-builder --mac dmg -c.mac.identity=null",
+    "pack:dmg:prod": "pnpm run prepare:openclaw-deps && pnpm run prepare:node && pnpm run build && pnpm dlx electron-builder --mac dmg",
     "preview": "vite preview",
     "lint": "oxlint",
     "format": "oxfmt"
@@ -58,12 +59,13 @@
     "vite": "^6.4.1"
   },
   "build": {
-    "appId": "ai.openclaw.electron",
-    "productName": "OpenClaw",
+    "appId": "bustly",
+    "productName": "Bustly",
     "files": [
       "dist/**",
-      "node_modules/**",
-      "package.json"
+      "!dist/electron/**",
+      "package.json",
+      ".env"
     ],
     "directories": {
       "output": "dist/electron"
@@ -78,18 +80,13 @@
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.inherit.plist"
     },
+    "dmg": {
+      "size": "4g"
+    },
     "extraResources": [
       {
         "from": "resources/node",
         "to": "node"
-      },
-      {
-        "from": "resources/openclaw",
-        "to": "openclaw",
-        "filter": [
-          "**/*",
-          "!node_modules/**"
-        ]
       },
       {
         "from": "resources/openclaw/node_modules",
@@ -99,24 +96,28 @@
         ]
       },
       {
-        "from": "../../openclaw.mjs",
+        "from": "resources/openclaw/openclaw.mjs",
         "to": "openclaw.mjs"
       },
       {
-        "from": "../../package.json",
+        "from": "resources/openclaw/package.json",
         "to": "openclaw.package.json"
       },
       {
-        "from": "../../dist",
+        "from": "resources/openclaw/dist",
         "to": "dist"
       },
       {
-        "from": "../../docs/reference/templates",
+        "from": "resources/openclaw/docs/reference/templates",
         "to": "docs/reference/templates"
       },
       {
-        "from": "../../extensions/memory-core",
-        "to": "extensions/memory-core"
+        "from": "resources/openclaw/extensions",
+        "to": "extensions"
+      },
+      {
+        "from": "resources/openclaw/skills",
+        "to": "skills"
       }
     ]
   }

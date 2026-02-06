@@ -414,10 +414,15 @@
   background: #0d1117;
   padding: 40px;
   overflow-y: auto;
+  -webkit-app-region: drag;
 }
 
 .onboard--whatsapp {
   align-items: flex-start;
+}
+
+.onboard-container {
+  -webkit-app-region: no-drag;
 }
 
 .onboard-card {

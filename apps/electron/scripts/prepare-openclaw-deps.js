@@ -1,5 +1,12 @@
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdtempSync, rmSync, readdirSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  readdirSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
@@ -51,6 +58,25 @@ const removeBinDirs = (dir) => {
 };
 
 removeBinDirs(resolve(stagingDir, "node_modules"));
+
+const pruneDevDependencies = () => {
+  const packageJsonPath = resolve(stagingDir, "package.json");
+  const raw = readFileSync(packageJsonPath, "utf-8");
+  const pkg = JSON.parse(raw);
+  const devDeps = Object.keys(pkg.devDependencies || {});
+  if (devDeps.length === 0) {
+    return;
+  }
+
+  for (const name of devDeps) {
+    const devPath = resolve(stagingDir, "node_modules", name);
+    if (existsSync(devPath)) {
+      rmSync(devPath, { recursive: true, force: true });
+    }
+  }
+};
+
+pruneDevDependencies();
 
 // Ensure any symlinks are copied as real files.
 // Otherwise they can point at the temp staging dir after it is removed.

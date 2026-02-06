@@ -4,7 +4,6 @@ packages:
   - apps/*
   - packages/*
   - extensions/*
-  - apps/*
 
 onlyBuiltDependencies:
   - "@whiskeysockets/baileys"
