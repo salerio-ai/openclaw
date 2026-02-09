@@ -15,7 +15,7 @@ Last updated: 2026-01-22
   Baileys, Telegram via grammY, Slack, Discord, Signal, iMessage, WebChat).
 - Control-plane clients (macOS app, CLI, web UI, automations) connect to the
   Gateway over **WebSocket** on the configured bind host (default
-  `127.0.0.1:18789`).
+  `127.0.0.1:17999`).
 - **Nodes** (macOS/iOS/Android/headless) also connect over **WebSocket**, but
   declare `role: node` with explicit caps/commands.
 - One Gateway per host; it is the only place that opens a WhatsApp session.
@@ -111,7 +111,7 @@ Details: [Gateway protocol](/gateway/protocol), [Pairing](/start/pairing),
 - Preferred: Tailscale or VPN.
 - Alternative: SSH tunnel
   ```bash
-  ssh -N -L 18789:127.0.0.1:18789 user@host
+  ssh -N -L 17999:127.0.0.1:17999 user@host
   ```
 - The same handshake + auth token apply over the tunnel.
 - TLS + optional pinning can be enabled for WS in remote setups.

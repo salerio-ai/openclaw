@@ -18,9 +18,9 @@ Last updated: 2025-12-09
 ## How to run (local)
 
 ```bash
-openclaw gateway --port 18789
+openclaw gateway --port 17999
 # for full debug/trace logs in stdio:
-openclaw gateway --port 18789 --verbose
+openclaw gateway --port 17999 --verbose
 # if the port is busy, terminate listeners then start:
 openclaw gateway --force
 # dev loop (auto-reload on TS changes):
@@ -31,7 +31,7 @@ pnpm gateway:watch
   - Default mode: `gateway.reload.mode="hybrid"` (hot-apply safe changes, restart on critical).
   - Hot reload uses in-process restart via **SIGUSR1** when needed.
   - Disable with `gateway.reload.mode="off"`.
-- Binds WebSocket control plane to `127.0.0.1:<port>` (default 18789).
+- Binds WebSocket control plane to `127.0.0.1:<port>` (default 17999).
 - The same port also serves HTTP (control UI, hooks, A2UI). Single-port multiplex.
   - OpenAI Chat Completions (HTTP): [`/v1/chat/completions`](/gateway/openai-http-api).
   - OpenResponses (HTTP): [`/v1/responses`](/gateway/openresponses-http-api).
@@ -44,15 +44,15 @@ pnpm gateway:watch
 - **SIGUSR1** triggers an in-process restart when authorized (gateway tool/config apply/update, or enable `commands.restart` for manual restarts).
 - Gateway auth is required by default: set `gateway.auth.token` (or `OPENCLAW_GATEWAY_TOKEN`) or `gateway.auth.password`. Clients must send `connect.params.auth.token/password` unless using Tailscale Serve identity.
 - The wizard now generates a token by default, even on loopback.
-- Port precedence: `--port` > `OPENCLAW_GATEWAY_PORT` > `gateway.port` > default `18789`.
+- Port precedence: `--port` > `OPENCLAW_GATEWAY_PORT` > `gateway.port` > default `17999`.
 
 ## Remote access
 
 - Tailscale/VPN preferred; otherwise SSH tunnel:
   ```bash
-  ssh -N -L 18789:127.0.0.1:18789 user@host
+  ssh -N -L 17999:127.0.0.1:17999 user@host
   ```
-- Clients then connect to `ws://127.0.0.1:18789` through the tunnel.
+- Clients then connect to `ws://127.0.0.1:17999` through the tunnel.
 - If a token is configured, clients must include it in `connect.params.auth.token` even over the tunnel.
 
 ## Multiple gateways (same host)
@@ -263,7 +263,7 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStart=/usr/local/bin/openclaw gateway --port 18789
+ExecStart=/usr/local/bin/openclaw gateway --port 17999
 Restart=always
 RestartSec=5
 Environment=OPENCLAW_GATEWAY_TOKEN=

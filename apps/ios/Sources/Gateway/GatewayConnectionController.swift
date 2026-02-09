@@ -53,7 +53,7 @@ final class GatewayConnectionController {
         let token = GatewaySettingsStore.loadGatewayToken(instanceId: instanceId)
         let password = GatewaySettingsStore.loadGatewayPassword(instanceId: instanceId)
         guard let host = self.resolveGatewayHost(gateway) else { return }
-        let port = gateway.gatewayPort ?? 18789
+        let port = gateway.gatewayPort ?? 17999
         let tlsParams = self.resolveDiscoveredTLSParams(gateway: gateway)
         guard let url = self.buildGatewayURL(
             host: host,
@@ -134,7 +134,7 @@ final class GatewayConnectionController {
             guard !manualHost.isEmpty else { return }
 
             let manualPort = defaults.integer(forKey: "gateway.manual.port")
-            let resolvedPort = manualPort > 0 ? manualPort : 18789
+            let resolvedPort = manualPort > 0 ? manualPort : 17999
             let manualTLS = defaults.bool(forKey: "gateway.manual.tls")
 
             let stableID = self.manualStableID(host: manualHost, port: resolvedPort)
@@ -168,7 +168,7 @@ final class GatewayConnectionController {
 
         guard let target = self.gateways.first(where: { $0.stableID == targetStableID }) else { return }
         guard let host = self.resolveGatewayHost(target) else { return }
-        let port = target.gatewayPort ?? 18789
+        let port = target.gatewayPort ?? 17999
         let tlsParams = self.resolveDiscoveredTLSParams(gateway: target)
         guard let url = self.buildGatewayURL(host: host, port: port, useTLS: tlsParams?.required == true)
         else { return }

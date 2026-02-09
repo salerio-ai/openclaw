@@ -502,7 +502,7 @@ final class AppState {
                             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                         let parsedExisting = existingUrl.isEmpty ? nil : URL(string: existingUrl)
                         let scheme = parsedExisting?.scheme?.isEmpty == false ? parsedExisting?.scheme : "ws"
-                        let port = parsedExisting?.port ?? 18789
+                        let port = parsedExisting?.port ?? 17999
                         let desiredUrl = "\(scheme ?? "ws")://\(host):\(port)"
                         if existingUrl != desiredUrl {
                             remote["url"] = desiredUrl

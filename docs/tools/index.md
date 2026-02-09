@@ -460,7 +460,7 @@ Notes:
 
 Gateway-backed tools (`canvas`, `nodes`, `cron`):
 
-- `gatewayUrl` (default `ws://127.0.0.1:18789`)
+- `gatewayUrl` (default `ws://127.0.0.1:17999`)
 - `gatewayToken` (if auth enabled)
 - `timeoutMs`
 

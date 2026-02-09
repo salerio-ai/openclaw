@@ -78,14 +78,14 @@ More detail: [Anthropic](/providers/anthropic) and [OAuth](/concepts/oauth).
 
 ### Control UI fails on HTTP ("device identity required" / "connect failed")
 
-If you open the dashboard over plain HTTP (e.g. `http://<lan-ip>:18789/` or
-`http://<tailscale-ip>:18789/`), the browser runs in a **non-secure context** and
+If you open the dashboard over plain HTTP (e.g. `http://<lan-ip>:17999/` or
+`http://<tailscale-ip>:17999/`), the browser runs in a **non-secure context** and
 blocks WebCrypto, so device identity can’t be generated.
 
 **Fix:**
 
 - Prefer HTTPS via [Tailscale Serve](/gateway/tailscale).
-- Or open locally on the gateway host: `http://127.0.0.1:18789/`.
+- Or open locally on the gateway host: `http://127.0.0.1:17999/`.
 - If you must stay on HTTP, enable `gateway.controlUi.allowInsecureAuth: true` and
   use a gateway token (token-only; no device identity/pairing). See
   [Control UI](/web/control-ui#insecure-http).
@@ -239,7 +239,7 @@ the Gateway likely refused to bind.
 - That’s expected for `bind=lan`: the gateway listens on `0.0.0.0` (all interfaces), and loopback should still connect locally.
 - For remote clients, use a real LAN IP (not `0.0.0.0`) plus the port, and ensure auth is configured.
 
-### Address Already in Use (Port 18789)
+### Address Already in Use (Port 17999)
 
 This means something is already listening on the gateway port.
 
@@ -631,7 +631,7 @@ If resetting doesn't work, change the `BUNDLE_ID` in [`scripts/package-mac-app.s
 
 ### Gateway stuck on "Starting..."
 
-The app connects to a local gateway on port `18789`. If it stays stuck:
+The app connects to a local gateway on port `17999`. If it stays stuck:
 
 **Fix 1: Stop the supervisor (preferred)**
 If the gateway is supervised by launchd, killing the PID will just respawn it. Stop the supervisor first:
@@ -645,7 +645,7 @@ openclaw gateway stop
 **Fix 2: Port is busy (find the listener)**
 
 ```bash
-lsof -nP -iTCP:18789 -sTCP:LISTEN
+lsof -nP -iTCP:17999 -sTCP:LISTEN
 ```
 
 If it’s an unsupervised process, try a graceful stop first, then escalate:
@@ -701,7 +701,7 @@ openclaw health --json
 openclaw health --verbose
 
 # Is something listening on the default port?
-lsof -nP -iTCP:18789 -sTCP:LISTEN
+lsof -nP -iTCP:17999 -sTCP:LISTEN
 
 # Recent activity (RPC log tail)
 openclaw logs --follow

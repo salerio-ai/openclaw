@@ -42,7 +42,7 @@ Notes:
 
 ### Options
 
-- `--port <port>`: WebSocket port (default comes from config/env; usually `18789`).
+- `--port <port>`: WebSocket port (default comes from config/env; usually `17999`).
 - `--bind <loopback|lan|tailnet|auto|custom>`: listener bind mode.
 - `--auth <token|password>`: auth mode override.
 - `--token <token>`: token override (also sets `OPENCLAW_GATEWAY_TOKEN` for the process).
@@ -81,7 +81,7 @@ Shared options (where supported):
 ### `gateway health`
 
 ```bash
-openclaw gateway health --url ws://127.0.0.1:18789
+openclaw gateway health --url ws://127.0.0.1:17999
 ```
 
 ### `gateway status`
@@ -174,7 +174,7 @@ Wide-Area discovery records include (TXT):
 
 - `role` (gateway role hint)
 - `transport` (transport hint, e.g. `gateway`)
-- `gatewayPort` (WebSocket port, usually `18789`)
+- `gatewayPort` (WebSocket port, usually `17999`)
 - `sshPort` (SSH port; defaults to `22` if not present)
 - `tailnetDns` (MagicDNS hostname, when available)
 - `gatewayTls` / `gatewayTlsSha256` (TLS enabled + cert fingerprint)

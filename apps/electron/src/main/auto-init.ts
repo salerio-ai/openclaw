@@ -143,7 +143,7 @@ export async function initializeOpenClaw(
     return {
       success: true,
       configPath,
-      gatewayPort: config.gateway?.port || 18789,
+      gatewayPort: config.gateway?.port || 17999,
       gatewayBind: config.gateway?.bind || "loopback",
       gatewayToken: config.gateway?.auth?.token,
       workspace: resolvedWorkspace,
@@ -153,7 +153,7 @@ export async function initializeOpenClaw(
     return {
       success: false,
       configPath: "",
-      gatewayPort: 18789,
+      gatewayPort: 17999,
       gatewayBind: "loopback",
       workspace: "",
       error: error instanceof Error ? error.message : String(error),

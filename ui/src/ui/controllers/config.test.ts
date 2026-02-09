@@ -38,7 +38,7 @@ describe("applyConfigSnapshot", () => {
     const state = createState();
     state.configFormMode = "form";
     state.configFormDirty = true;
-    state.configForm = { gateway: { mode: "local", port: 18789 } };
+    state.configForm = { gateway: { mode: "local", port: 17999 } };
     state.configRaw = "{\n}\n";
 
     applyConfigSnapshot(state, {
@@ -49,7 +49,7 @@ describe("applyConfigSnapshot", () => {
     });
 
     expect(state.configRaw).toBe(
-      '{\n  "gateway": {\n    "mode": "local",\n    "port": 18789\n  }\n}\n',
+      '{\n  "gateway": {\n    "mode": "local",\n    "port": 17999\n  }\n}\n',
     );
   });
 
@@ -107,12 +107,12 @@ describe("updateConfigFormValue", () => {
       raw: "{}",
     };
 
-    updateConfigFormValue(state, ["gateway", "port"], 18789);
+    updateConfigFormValue(state, ["gateway", "port"], 17999);
 
     expect(state.configFormDirty).toBe(true);
     expect(state.configForm).toEqual({
       channels: { telegram: { botToken: "t" } },
-      gateway: { mode: "local", port: 18789 },
+      gateway: { mode: "local", port: 17999 },
     });
   });
 
@@ -125,10 +125,10 @@ describe("updateConfigFormValue", () => {
       raw: "{\n}\n",
     };
 
-    updateConfigFormValue(state, ["gateway", "port"], 18789);
+    updateConfigFormValue(state, ["gateway", "port"], 17999);
 
     expect(state.configRaw).toBe(
-      '{\n  "gateway": {\n    "mode": "local",\n    "port": 18789\n  }\n}\n',
+      '{\n  "gateway": {\n    "mode": "local",\n    "port": 17999\n  }\n}\n',
     );
   });
 });

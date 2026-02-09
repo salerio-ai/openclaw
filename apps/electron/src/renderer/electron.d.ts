@@ -3,7 +3,7 @@
  */
 
 interface PresetConfigOptions {
-  /** Gateway port (default: 18789) */
+  /** Gateway port (default: 17999) */
   gatewayPort?: number;
   /** Gateway bind address (default: "loopback") */
   gatewayBind?: "loopback" | "lan" | "auto";

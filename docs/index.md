@@ -44,7 +44,7 @@ OpenClaw also powers the OpenClaw assistant.
 
 - **New install from zero:** [Getting Started](/start/getting-started)
 - **Guided setup (recommended):** [Wizard](/start/wizard) (`openclaw onboard`)
-- **Open the dashboard (local Gateway):** http://127.0.0.1:18789/ (or http://localhost:18789/)
+- **Open the dashboard (local Gateway):** http://127.0.0.1:17999/ (or http://localhost:17999/)
 
 If the Gateway is running on the same computer, that link opens the browser Control UI
 immediately. If it fails, start the Gateway first: `openclaw gateway`.
@@ -52,7 +52,7 @@ immediately. If it fails, start the Gateway first: `openclaw gateway`.
 ## Dashboard (browser Control UI)
 
 The dashboard is the browser Control UI for chat, config, nodes, sessions, and more.
-Local default: http://127.0.0.1:18789/
+Local default: http://127.0.0.1:17999/
 Remote access: [Web surfaces](/web) and [Tailscale](/gateway/tailscale)
 
 <p align="center">
@@ -66,7 +66,7 @@ WhatsApp / Telegram / Discord / iMessage (+ plugins)
         │
         ▼
   ┌───────────────────────────┐
-  │          Gateway          │  ws://127.0.0.1:18789 (loopback-only)
+  │          Gateway          │  ws://127.0.0.1:17999 (loopback-only)
   │     (single source)       │
   │                           │  http://<gateway-host>:18793
   │                           │    /__openclaw__/canvas/ (Canvas host)
@@ -85,7 +85,7 @@ Most operations flow through the **Gateway** (`openclaw gateway`), a single long
 ## Network model
 
 - **One Gateway per host (recommended)**: it is the only process allowed to own the WhatsApp Web session. If you need a rescue bot or strict isolation, run multiple gateways with isolated profiles and ports; see [Multiple gateways](/gateway/multiple-gateways).
-- **Loopback-first**: Gateway WS defaults to `ws://127.0.0.1:18789`.
+- **Loopback-first**: Gateway WS defaults to `ws://127.0.0.1:17999`.
   - The wizard now generates a gateway token by default (even for loopback).
   - For Tailnet access, run `openclaw gateway --bind tailnet --token ...` (token is required for non-loopback binds).
 - **Nodes**: connect to the Gateway WebSocket (LAN/tailnet/SSH as needed); legacy TCP bridge is deprecated/removed.
@@ -129,7 +129,7 @@ openclaw onboard --install-daemon
 openclaw channels login
 
 # Gateway runs via the service after onboarding; manual run is still possible:
-openclaw gateway --port 18789
+openclaw gateway --port 17999
 ```
 
 Switching between npm and git installs later is easy: install the other flavor and run `openclaw doctor` to update the gateway service entrypoint.

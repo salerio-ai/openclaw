@@ -54,7 +54,7 @@ Optional env vars:
 
 After it finishes:
 
-- Open `http://127.0.0.1:18789/` in your browser.
+- Open `http://127.0.0.1:17999/` in your browser.
 - Paste the token into the Control UI (Settings → token).
 
 It writes config/workspace on the host:

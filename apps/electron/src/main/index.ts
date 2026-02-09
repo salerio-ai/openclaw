@@ -67,7 +67,7 @@ let gatewayProcess: ChildProcess | null = null;
 let mainWindow: BrowserWindow | null = null;
 let devPanelWindow: BrowserWindow | null = null;
 let needsOnboardAtLaunch = false;
-let gatewayPort: number = 18789;
+let gatewayPort: number = 17999;
 let gatewayBind: string = "loopback";
 let gatewayToken: string | null = null;
 let initResult: InitializationResult | null = null;
@@ -241,7 +241,7 @@ function loadGatewayConfig(): { port: number; bind: string; token?: string } | n
     }
 
     const config = JSON.parse(readFileSync(configPath, "utf-8"));
-    const port = config.gateway?.port ?? 18789;
+    const port = config.gateway?.port ?? 17999;
     const bind = config.gateway?.bind ?? "loopback";
     const token = config.gateway?.auth?.token;
 
@@ -1300,7 +1300,7 @@ function setupIpcHandlers(): void {
       writeFileSync(configPath, JSON.stringify(nextConfig, null, 2));
 
       // Update gateway settings
-      gatewayPort = nextConfig.gateway?.port || 18789;
+      gatewayPort = nextConfig.gateway?.port || 17999;
       gatewayBind = nextConfig.gateway?.bind || "loopback";
       if (nextConfig.gateway?.auth?.token) {
         gatewayToken = nextConfig.gateway.auth.token;

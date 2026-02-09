@@ -91,6 +91,6 @@ To extend this client:
 
 The client communicates with the gateway using:
 - **IPC** (Inter-Process Communication) between Electron main and renderer
-- **WebSocket** between Electron and gateway (`ws://127.0.0.1:18789`)
+- **WebSocket** between Electron and gateway (`ws://127.0.0.1:17999`)
 
 See the gateway protocol documentation for details on WebSocket messages.

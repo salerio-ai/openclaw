@@ -157,7 +157,7 @@ Split your config into multiple files using the `$include` directive. This is us
 ```json5
 // ~/.openclaw/openclaw.json
 {
-  gateway: { port: 18789 },
+  gateway: { port: 17999 },
 
   // Include a single file (replaces the key's value)
   agents: { $include: "./agents.json5" },
@@ -227,7 +227,7 @@ Included files can themselves contain `$include` directives (up to 10 levels dee
 ```json5
 // ~/.openclaw/openclaw.json
 {
-  gateway: { port: 18789, auth: { token: "secret" } },
+  gateway: { port: 17999, auth: { token: "secret" } },
 
   // Common agent defaults
   agents: {
@@ -2932,13 +2932,13 @@ Defaults:
 
 - mode: **unset** (treated as “do not auto-start”)
 - bind: `loopback`
-- port: `18789` (single port for WS + HTTP)
+- port: `17999` (single port for WS + HTTP)
 
 ```json5
 {
   gateway: {
     mode: "local", // or "remote"
-    port: 18789, // WS + HTTP multiplex
+    port: 17999, // WS + HTTP multiplex
     bind: "loopback",
     // controlUi: { enabled: true, basePath: "/openclaw" }
     // auth: { mode: "token", token: "your-token" } // token gates WS + Control UI access
@@ -2976,7 +2976,7 @@ Notes:
 - `openclaw gateway` refuses to start unless `gateway.mode` is set to `local` (or you pass the override flag).
 - `gateway.port` controls the single multiplexed port used for WebSocket + HTTP (control UI, hooks, A2UI).
 - OpenAI Chat Completions endpoint: **disabled by default**; enable with `gateway.http.endpoints.chatCompletions.enabled: true`.
-- Precedence: `--port` > `OPENCLAW_GATEWAY_PORT` > `gateway.port` > default `18789`.
+- Precedence: `--port` > `OPENCLAW_GATEWAY_PORT` > `gateway.port` > default `17999`.
 - Gateway auth is required by default (token/password or Tailscale Serve identity). Non-loopback binds require a shared token/password.
 - The onboarding wizard generates a gateway token by default (even on loopback).
 - `gateway.remote.token` is **only** for remote CLI calls; it does not enable local gateway auth. `gateway.token` is ignored.
@@ -3001,7 +3001,7 @@ Auth and Tailscale:
 Remote client defaults (CLI):
 
 - `gateway.remote.url` sets the default Gateway WebSocket URL for CLI calls when `gateway.mode = "remote"`.
-- `gateway.remote.transport` selects the macOS remote transport (`ssh` default, `direct` for ws/wss). When `direct`, `gateway.remote.url` must be `ws://` or `wss://`. `ws://host` defaults to port `18789`.
+- `gateway.remote.transport` selects the macOS remote transport (`ssh` default, `direct` for ws/wss). When `direct`, `gateway.remote.url` must be `ws://` or `wss://`. `ws://host` defaults to port `17999`.
 - `gateway.remote.token` supplies the token for remote calls (leave unset for no auth).
 - `gateway.remote.password` supplies the password for remote calls (leave unset for no auth).
 
@@ -3016,7 +3016,7 @@ macOS app behavior:
   gateway: {
     mode: "remote",
     remote: {
-      url: "ws://gateway.tailnet:18789",
+      url: "ws://gateway.tailnet:17999",
       token: "your-token",
       password: "your-password",
     },
@@ -3180,7 +3180,7 @@ Gmail helper config (used by `openclaw webhooks gmail setup` / `run`):
       topic: "projects/<project-id>/topics/gog-gmail-watch",
       subscription: "gog-gmail-watch-push",
       pushToken: "shared-push-token",
-      hookUrl: "http://127.0.0.1:18789/hooks/gmail",
+      hookUrl: "http://127.0.0.1:17999/hooks/gmail",
       includeBody: true,
       maxBytes: 20000,
       renewEveryMinutes: 720,

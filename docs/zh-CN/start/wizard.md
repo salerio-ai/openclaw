@@ -44,7 +44,7 @@ openclaw configure
 
 - 本地 Gateway（回环地址）
 - 默认工作区（或现有工作区）
-- Gateway 端口 **18789**
+- Gateway 端口 **17999**
 - Gateway 认证 **令牌** （自动生成，即使在回环地址上也是如此）
 - Tailscale 暴露 **关闭**
 - Telegram + WhatsApp 私信默认为 **允许名单** （系统会提示您输入手机号码）
@@ -197,7 +197,7 @@ openclaw onboard --non-interactive \
   --mode local \
   --auth-choice apiKey \
   --anthropic-api-key "$ANTHROPIC_API_KEY" \
-  --gateway-port 18789 \
+  --gateway-port 17999 \
   --gateway-bind loopback \
   --install-daemon \
   --daemon-runtime node \
@@ -213,7 +213,7 @@ openclaw onboard --non-interactive \
   --mode local \
   --auth-choice gemini-api-key \
   --gemini-api-key "$GEMINI_API_KEY" \
-  --gateway-port 18789 \
+  --gateway-port 17999 \
   --gateway-bind loopback
 ```
 
@@ -224,7 +224,7 @@ openclaw onboard --non-interactive \
   --mode local \
   --auth-choice zai-api-key \
   --zai-api-key "$ZAI_API_KEY" \
-  --gateway-port 18789 \
+  --gateway-port 17999 \
   --gateway-bind loopback
 ```
 
@@ -235,7 +235,7 @@ openclaw onboard --non-interactive \
   --mode local \
   --auth-choice ai-gateway-api-key \
   --ai-gateway-api-key "$AI_GATEWAY_API_KEY" \
-  --gateway-port 18789 \
+  --gateway-port 17999 \
   --gateway-bind loopback
 ```
 
@@ -246,7 +246,7 @@ openclaw onboard --non-interactive \
   --mode local \
   --auth-choice moonshot-api-key \
   --moonshot-api-key "$MOONSHOT_API_KEY" \
-  --gateway-port 18789 \
+  --gateway-port 17999 \
   --gateway-bind loopback
 ```
 
@@ -257,7 +257,7 @@ openclaw onboard --non-interactive \
   --mode local \
   --auth-choice synthetic-api-key \
   --synthetic-api-key "$SYNTHETIC_API_KEY" \
-  --gateway-port 18789 \
+  --gateway-port 17999 \
   --gateway-bind loopback
 ```
 
@@ -268,7 +268,7 @@ openclaw onboard --non-interactive \
   --mode local \
   --auth-choice opencode-zen \
   --opencode-zen-api-key "$OPENCODE_API_KEY" \
-  --gateway-port 18789 \
+  --gateway-port 17999 \
   --gateway-bind loopback
 ```
 

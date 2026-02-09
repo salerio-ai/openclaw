@@ -72,7 +72,7 @@ Use Tailscale Serve for the private dashboard and Funnel for the public webhook 
 1. **Check what address your gateway is bound to:**
 
    ```bash
-   ss -tlnp | grep 18789
+   ss -tlnp | grep 17999
    ```
 
    Note the IP address (e.g., `127.0.0.1`, `0.0.0.0`, or your Tailscale IP like `100.x.x.x`).
@@ -81,20 +81,20 @@ Use Tailscale Serve for the private dashboard and Funnel for the public webhook 
 
    ```bash
    # If bound to localhost (127.0.0.1 or 0.0.0.0):
-   tailscale serve --bg --https 8443 http://127.0.0.1:18789
+   tailscale serve --bg --https 8443 http://127.0.0.1:17999
 
    # If bound to Tailscale IP only (e.g., 100.106.161.80):
-   tailscale serve --bg --https 8443 http://100.106.161.80:18789
+   tailscale serve --bg --https 8443 http://100.106.161.80:17999
    ```
 
 3. **Expose only the webhook path publicly:**
 
    ```bash
    # If bound to localhost (127.0.0.1 or 0.0.0.0):
-   tailscale funnel --bg --set-path /googlechat http://127.0.0.1:18789/googlechat
+   tailscale funnel --bg --set-path /googlechat http://127.0.0.1:17999/googlechat
 
    # If bound to Tailscale IP only (e.g., 100.106.161.80):
-   tailscale funnel --bg --set-path /googlechat http://100.106.161.80:18789/googlechat
+   tailscale funnel --bg --set-path /googlechat http://100.106.161.80:17999/googlechat
    ```
 
 4. **Authorize the node for Funnel access:**
@@ -122,7 +122,7 @@ If you use a reverse proxy like Caddy, only proxy the specific path:
 
 ```caddy
 your-domain.com {
-    reverse_proxy /googlechat* localhost:18789
+    reverse_proxy /googlechat* localhost:17999
 }
 ```
 
@@ -132,7 +132,7 @@ With this config, any request to `your-domain.com/` will be ignored or returned 
 
 Configure your tunnel's ingress rules to only route the webhook path:
 
-- **Path**: `/googlechat` -> `http://localhost:18789/googlechat`
+- **Path**: `/googlechat` -> `http://localhost:17999/googlechat`
 - **Default Rule**: HTTP 404 (Not Found)
 
 ## How it works
