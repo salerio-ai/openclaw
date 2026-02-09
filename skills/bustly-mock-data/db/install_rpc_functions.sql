@@ -24,15 +24,15 @@ BEGIN
       WHEN udt_name IN ('int2', 'int4', 'int8') THEN 'int8'
       WHEN udt_name = 'numeric' THEN 'numeric'
       WHEN udt_name = 'bool' THEN 'bool'
+      WHEN udt_name = 'uuid' THEN 'uuid'
       ELSE 'text'
     END,
-    ', '
+    ', ' ORDER BY ordinal_position
   )
   INTO v_cols
   FROM information_schema.columns
   WHERE table_schema = 'data'
-    AND table_name = p_table_name
-  ORDER BY ordinal_position;
+    AND table_name = p_table_name;
 
   RETURN v_cols;
 END;

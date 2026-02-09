@@ -7,6 +7,7 @@ import { analyzePlatform, determineStrategy } from '../lib/analyzer/index.js'
 import { generatePlatformData } from '../lib/generator/index.js'
 import { getPlatformSchema, getDependencyOrder } from '../lib/rules/registry.js'
 import { insertBatch } from '../lib/supabase/inserter.js'
+import { config } from '../lib/config.js'
 
 // Parse arguments
 const args = process.argv.slice(2)
@@ -38,8 +39,8 @@ async function main() {
   console.log(`Strategy: ${strategy} (${mode})`)
   console.log(`Target: ${targetCount} orders\n`)
 
-  // Get tenant_id (use workspace_id as proxy for now)
-  const tenantId = process.env.SEARCH_DATA_WORKSPACE_ID || 'default'
+  // Get tenant_id from config (workspace_id)
+  const tenantId = config.workspaceId
   console.log(`Tenant ID: ${tenantId}\n`)
 
   // Generate data

@@ -51,6 +51,9 @@ async function insertViaRPC(
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
     const batch = rows.slice(i, i + BATCH_SIZE)
 
+    // Extract just table name without schema prefix
+    const tableNameOnly = tableName.includes('.') ? tableName.split('.')[1] : tableName
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -59,9 +62,8 @@ async function insertViaRPC(
         'Authorization': `Bearer ${config.serviceRoleKey}`,
       },
       body: JSON.stringify({
-        p_table_name: tableName,
-        p_records: JSON.stringify(batch),
-        p_workspace_id: config.workspaceId
+        p_table_name: tableNameOnly,  // Pass table name without schema prefix
+        p_records: batch  // Direct JSON object, not stringified
       })
     })
 
@@ -71,6 +73,7 @@ async function insertViaRPC(
     }
 
     const data = await response.json()
+    console.log(`      RPC Response:`, JSON.stringify(data))
     totalInserted += data.inserted || 0
     totalFailed += data.failed || 0
   }
