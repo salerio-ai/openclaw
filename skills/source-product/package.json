@@ -1,0 +1,19 @@
+{
+  "name": "source-product",
+  "version": "1.0.0",
+  "description": "Bustly AliExpress product sourcing skill for OpenClaw - image search, text search, and product discovery",
+  "type": "module",
+  "scripts": {
+    "search:image": "tsx scripts/search_image.ts",
+    "search:text": "tsx scripts/search_text.ts",
+    "get:accounts": "tsx -e 'import { getAliExpressAccounts } from \"./lib/aliexpress_api.ts\"; getAliExpressAccounts().then(r => console.log(JSON.stringify(r, null, 2))).catch(e => console.error(e))'",
+    "test:token": "tsx -e 'import { testAccessToken } from \"./lib/aliexpress_api.ts\"; testAccessToken().then(r => console.log(JSON.stringify(r, null, 2))).catch(e => console.error(e))'"
+  },
+  "dependencies": {
+    "cross-fetch": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.8",
+    "tsx": "^4.21.0"
+  }
+}
