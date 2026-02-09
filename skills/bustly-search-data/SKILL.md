@@ -1,10 +1,10 @@
 ---
 name: bustly-search-data
-description: E-commerce data query skill for Shopify, Google Ads, BigCommerce, and other platforms. Supports common query templates, automatic retry, and multiple output formats.
+description: E-commerce data query skill for Shopify, Google Ads, BigCommerce, WooCommerce, Magento, and other platforms. Supports common query templates, automatic retry, and multiple output formats.
 metadata: {"openclaw":{"always":true,"requires":{"env":["SEARCH_DATA_SUPABASE_URL","SEARCH_DATA_SUPABASE_ANON_KEY","SEARCH_DATA_SUPABASE_ACCESS_TOKEN","SEARCH_DATA_WORKSPACE_ID"]}}}
 ---
 
-This skill provides e-commerce SaaS data query capabilities, reading business data from platforms like Shopify, Google Ads, and BigCommerce via a Supabase data warehouse.
+This skill provides e-commerce SaaS data query capabilities, reading business data from platforms like Shopify, Google Ads, BigCommerce, WooCommerce, and Magento via a Supabase data warehouse.
 
 ## Quick Start
 
@@ -96,6 +96,22 @@ No manual configuration is required. After logging in via Bustly OAuth in the de
 - `semantic.dm_customers_bigcommerce` - Customer information
 - `semantic.dm_orders_bigcommerce` - Order data
 - `semantic.dm_order_items_bigcommerce` - Order line items
+
+### WooCommerce
+- `semantic.dm_shop_info_woocommerce` - Shop information
+- `semantic.dm_products_woocommerce` - Product information
+- `semantic.dm_variants_woocommerce` - Product variants
+- `semantic.dm_customers_woocommerce` - Customer information
+- `semantic.dm_orders_woocommerce` - Order data
+- `semantic.dm_order_items_woocommerce` - Order line items
+
+### Magento
+- `semantic.dm_shop_info_magento` - Shop information
+- `semantic.dm_products_magento` - Product information
+- `semantic.dm_variants_magento` - Product variants
+- `semantic.dm_customers_magento` - Customer information
+- `semantic.dm_orders_magento` - Order data
+- `semantic.dm_order_items_magento` - Order line items
 
 ## Output Formats
 
