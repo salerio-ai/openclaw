@@ -1,7 +1,14 @@
 ---
 name: gamma
 description: Generate AI-powered presentations, documents, and social posts using Gamma.app API. Use when user asks to create a presentation, pitch deck, slide deck, document, or social media carousel. Triggers on requests like "create a presentation about X", "make a pitch deck", "generate slides", or "create a Gamma about X".
-metadata: {"clawdbot":{"requires":{"env":["GAMMA_API_KEY"]}}}
+metadata:
+  {
+    "openclaw":
+      {
+        "requires": { "env": ["GAMMA_API_KEY"] },
+        "primaryEnv": "GAMMA_API_KEY",
+      },
+  }
 ---
 
 # Gamma.app API

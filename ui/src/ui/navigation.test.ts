@@ -26,23 +26,23 @@ describe("iconForTab", () => {
   });
 
   it("returns stable icons for known tabs", () => {
-    expect(iconForTab("chat")).toBe("💬");
-    expect(iconForTab("overview")).toBe("📊");
-    expect(iconForTab("channels")).toBe("🔗");
-    expect(iconForTab("instances")).toBe("📡");
-    expect(iconForTab("sessions")).toBe("📄");
-    expect(iconForTab("cron")).toBe("⏰");
-    expect(iconForTab("skills")).toBe("⚡️");
-    expect(iconForTab("nodes")).toBe("🖥️");
-    expect(iconForTab("config")).toBe("⚙️");
-    expect(iconForTab("debug")).toBe("🐞");
-    expect(iconForTab("logs")).toBe("🧾");
+    expect(iconForTab("chat")).toBe("messageSquare");
+    expect(iconForTab("overview")).toBe("barChart");
+    expect(iconForTab("channels")).toBe("link");
+    expect(iconForTab("instances")).toBe("radio");
+    expect(iconForTab("sessions")).toBe("fileText");
+    expect(iconForTab("cron")).toBe("loader");
+    expect(iconForTab("skills")).toBe("zap");
+    expect(iconForTab("nodes")).toBe("monitor");
+    expect(iconForTab("config")).toBe("settings");
+    expect(iconForTab("debug")).toBe("bug");
+    expect(iconForTab("logs")).toBe("scrollText");
   });
 
   it("returns a fallback icon for unknown tab", () => {
     // TypeScript won't allow this normally, but runtime could receive unexpected values
     const unknownTab = "unknown" as Tab;
-    expect(iconForTab(unknownTab)).toBe("📁");
+    expect(iconForTab(unknownTab)).toBe("folder");
   });
 });
 
@@ -177,8 +177,6 @@ describe("TAB_GROUPS", () => {
     const labels = TAB_GROUPS.map((g) => g.label);
     expect(labels).toContain("Chat");
     expect(labels).toContain("Control");
-    expect(labels).toContain("Agent");
-    expect(labels).toContain("Settings");
   });
 
   it("all tabs are unique", () => {
