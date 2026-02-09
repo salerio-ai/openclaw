@@ -3,18 +3,20 @@
  */
 
 import { shopifySchema } from './shopify.js'
+import { bigcommerceSchema } from './bigcommerce.js'
+import { woocommerceSchema } from './woocommerce.js'
+import { magentoSchema } from './magento.js'
+import { googleAdsSchema } from './google_ads.js'
 import type { PlatformSchema } from './types.js'
 
 const registry = new Map<string, PlatformSchema>()
 
-// Register platforms
+// Register all platforms
 registry.set('shopify', shopifySchema)
-
-// TODO: Add other platforms
-// registry.set('bigcommerce', bigcommerceSchema)
-// registry.set('woocommerce', woocommerceSchema)
-// registry.set('magento', magentoSchema)
-// registry.set('google_ads', googleAdsSchema)
+registry.set('bigcommerce', bigcommerceSchema)
+registry.set('woocommerce', woocommerceSchema)
+registry.set('magento', magentoSchema)
+registry.set('google_ads', googleAdsSchema)
 
 /**
  * Get platform schema

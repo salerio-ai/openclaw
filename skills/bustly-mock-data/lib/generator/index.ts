@@ -5,6 +5,10 @@
 import type { AnalysisReport } from '../analyzer/types.js'
 import { getPlatformSchema, getDependencyOrder } from '../rules/registry.js'
 import * as ShopifyGenerator from './shopify.js'
+import * as BigCommerceGenerator from './bigcommerce.js'
+import * as WooCommerceGenerator from './woocommerce.js'
+import * as MagentoGenerator from './magento.js'
+import * as GoogleAdsGenerator from './google_ads.js'
 
 /**
  * Generate mock data for a platform
@@ -29,45 +33,203 @@ export async function generatePlatformData(
   // TODO: Query existing products, customers
 
   if (platform === 'shopify') {
-    // Generate in dependency order
-    const depOrder = getDependencyOrder(platform)
-
-    // 1. Products
-    const productCount = Math.ceil(targetCount * 0.5)  // Fewer products than orders
-    const products = ShopifyGenerator.generateShopifyProducts(productCount, tenantId, analysis)
-    results.push({ table: 'semantic.dm_products_shopify', count: products.length })
-    totalRecords += products.length
-
-    // 2. Variants
-    const variants = ShopifyGenerator.generateShopifyVariants(products, tenantId)
-    results.push({ table: 'semantic.dm_variants_shopify', count: variants.length })
-    totalRecords += variants.length
-
-    // 3. Customers
-    const customerCount = Math.ceil(targetCount * 0.4)
-    const customers = ShopifyGenerator.generateShopifyCustomers(customerCount, tenantId)
-    results.push({ table: 'semantic.dm_customers_shopify', count: customers.length })
-    totalRecords += customers.length
-
-    // 4. Orders
-    const orders = ShopifyGenerator.generateShopifyOrders(targetCount, tenantId, customers, analysis)
-    results.push({ table: 'semantic.dm_orders_shopify', count: orders.length })
-    totalRecords += orders.length
-
-    // 5. Order items
-    const orderItems = ShopifyGenerator.generateShopifyOrderItems(orders, variants, tenantId)
-    results.push({ table: 'semantic.dm_order_items_shopify', count: orderItems.length })
-    totalRecords += orderItems.length
-
-    // 6. Pixel events
-    const pixelEvents = ShopifyGenerator.generateShopifyPixelEvents(orders, tenantId)
-    results.push({ table: 'semantic.dm_shopify_pixel_events', count: pixelEvents.length })
-    totalRecords += pixelEvents.length
-
-    console.log(`  ✓ Generated ${totalRecords} total records`)
+    return await generateShopify(tenantId, targetCount, analysis)
+  } else if (platform === 'bigcommerce') {
+    return await generateBigCommerce(tenantId, targetCount, analysis)
+  } else if (platform === 'woocommerce') {
+    return await generateWooCommerce(tenantId, targetCount, analysis)
+  } else if (platform === 'magento') {
+    return await generateMagento(tenantId, targetCount, analysis)
+  } else if (platform === 'google_ads') {
+    return await generateGoogleAds(tenantId, targetCount)
   } else {
     throw new Error(`Platform ${platform} not yet implemented`)
   }
+}
+
+async function generateShopify(tenantId: string, targetCount: number, analysis: AnalysisReport): Promise<GenerationResult> {
+  const results: TableResult[] = []
+  let totalRecords = 0
+
+  // 1. Products
+  const productCount = Math.ceil(targetCount * 0.5)
+  const products = ShopifyGenerator.generateShopifyProducts(productCount, tenantId, analysis)
+  results.push({ table: 'semantic.dm_products_shopify', count: products.length })
+  totalRecords += products.length
+
+  // 2. Variants
+  const variants = ShopifyGenerator.generateShopifyVariants(products, tenantId)
+  results.push({ table: 'semantic.dm_variants_shopify', count: variants.length })
+  totalRecords += variants.length
+
+  // 3. Customers
+  const customerCount = Math.ceil(targetCount * 0.4)
+  const customers = ShopifyGenerator.generateShopifyCustomers(customerCount, tenantId)
+  results.push({ table: 'semantic.dm_customers_shopify', count: customers.length })
+  totalRecords += customers.length
+
+  // 4. Orders
+  const orders = ShopifyGenerator.generateShopifyOrders(targetCount, tenantId, customers, analysis)
+  results.push({ table: 'semantic.dm_orders_shopify', count: orders.length })
+  totalRecords += orders.length
+
+  // 5. Order items
+  const orderItems = ShopifyGenerator.generateShopifyOrderItems(orders, variants, tenantId)
+  results.push({ table: 'semantic.dm_order_items_shopify', count: orderItems.length })
+  totalRecords += orderItems.length
+
+  // 6. Pixel events
+  const pixelEvents = ShopifyGenerator.generateShopifyPixelEvents(orders, tenantId)
+  results.push({ table: 'semantic.dm_shopify_pixel_events', count: pixelEvents.length })
+  totalRecords += pixelEvents.length
+
+  console.log(`  ✓ Generated ${totalRecords} total records`)
+
+  return { platform: 'shopify', tables: results, totalRecords, success: true }
+}
+
+async function generateBigCommerce(tenantId: string, targetCount: number, analysis: AnalysisReport): Promise<GenerationResult> {
+  const results: TableResult[] = []
+  let totalRecords = 0
+
+  // 1. Products
+  const productCount = Math.ceil(targetCount * 0.5)
+  const products = BigCommerceGenerator.generateBigCommerceProducts(productCount, tenantId, analysis)
+  results.push({ table: 'semantic.dm_products_bigcommerce', count: products.length })
+  totalRecords += products.length
+
+  // 2. Variants
+  const variants = BigCommerceGenerator.generateBigCommerceVariants(products, tenantId)
+  results.push({ table: 'semantic.dm_variants_bigcommerce', count: variants.length })
+  totalRecords += variants.length
+
+  // 3. Customers
+  const customerCount = Math.ceil(targetCount * 0.4)
+  const customers = BigCommerceGenerator.generateBigCommerceCustomers(customerCount, tenantId)
+  results.push({ table: 'semantic.dm_customers_bigcommerce', count: customers.length })
+  totalRecords += customers.length
+
+  // 4. Orders
+  const orders = BigCommerceGenerator.generateBigCommerceOrders(targetCount, tenantId, customers, analysis)
+  results.push({ table: 'semantic.dm_orders_bigcommerce', count: orders.length })
+  totalRecords += orders.length
+
+  // 5. Order items
+  const orderItems = BigCommerceGenerator.generateBigCommerceOrderItems(orders, products, tenantId)
+  results.push({ table: 'semantic.dm_order_items_bigcommerce', count: orderItems.length })
+  totalRecords += orderItems.length
+
+  console.log(`  ✓ Generated ${totalRecords} total records`)
+
+  return { platform: 'bigcommerce', tables: results, totalRecords, success: true }
+}
+
+async function generateWooCommerce(tenantId: string, targetCount: number, analysis: AnalysisReport): Promise<GenerationResult> {
+  const results: TableResult[] = []
+  let totalRecords = 0
+
+  // 1. Products
+  const productCount = Math.ceil(targetCount * 0.5)
+  const products = WooCommerceGenerator.generateWooCommerceProducts(productCount, tenantId, analysis)
+  results.push({ table: 'semantic.dm_products_woocommerce', count: products.length })
+  totalRecords += products.length
+
+  // 2. Variants
+  const variants = WooCommerceGenerator.generateWooCommerceVariants(products, tenantId)
+  results.push({ table: 'semantic.dm_variants_woocommerce', count: variants.length })
+  totalRecords += variants.length
+
+  // 3. Customers
+  const customerCount = Math.ceil(targetCount * 0.4)
+  const customers = WooCommerceGenerator.generateWooCommerceCustomers(customerCount, tenantId)
+  results.push({ table: 'semantic.dm_customers_woocommerce', count: customers.length })
+  totalRecords += customers.length
+
+  // 4. Orders
+  const orders = WooCommerceGenerator.generateWooCommerceOrders(targetCount, tenantId, customers, analysis)
+  results.push({ table: 'semantic.dm_orders_woocommerce', count: orders.length })
+  totalRecords += orders.length
+
+  // 5. Order items
+  const orderItems = WooCommerceGenerator.generateWooCommerceOrderItems(orders, products, tenantId)
+  results.push({ table: 'semantic.dm_order_items_woocommerce', count: orderItems.length })
+  totalRecords += orderItems.length
+
+  console.log(`  ✓ Generated ${totalRecords} total records`)
+
+  return { platform: 'woocommerce', tables: results, totalRecords, success: true }
+}
+
+async function generateMagento(tenantId: string, targetCount: number, analysis: AnalysisReport): Promise<GenerationResult> {
+  const results: TableResult[] = []
+  let totalRecords = 0
+
+  // 1. Products
+  const productCount = Math.ceil(targetCount * 0.5)
+  const products = MagentoGenerator.generateMagentoProducts(productCount, tenantId, analysis)
+  results.push({ table: 'semantic.dm_products_magento', count: products.length })
+  totalRecords += products.length
+
+  // 2. Variants
+  const variants = MagentoGenerator.generateMagentoVariants(products, tenantId)
+  results.push({ table: 'semantic.dm_variants_magento', count: variants.length })
+  totalRecords += variants.length
+
+  // 3. Customers
+  const customerCount = Math.ceil(targetCount * 0.4)
+  const customers = MagentoGenerator.generateMagentoCustomers(customerCount, tenantId)
+  results.push({ table: 'semantic.dm_customers_magento', count: customers.length })
+  totalRecords += customers.length
+
+  // 4. Orders
+  const orders = MagentoGenerator.generateMagentoOrders(targetCount, tenantId, customers, analysis)
+  results.push({ table: 'semantic.dm_orders_magento', count: orders.length })
+  totalRecords += orders.length
+
+  // 5. Order items
+  const orderItems = MagentoGenerator.generateMagentoOrderItems(orders, products, tenantId)
+  results.push({ table: 'semantic.dm_order_items_magento', count: orderItems.length })
+  totalRecords += orderItems.length
+
+  console.log(`  ✓ Generated ${totalRecords} total records`)
+
+  return { platform: 'magento', tables: results, totalRecords, success: true }
+}
+
+async function generateGoogleAds(tenantId: string, targetCount: number): Promise<GenerationResult> {
+  const results: TableResult[] = []
+  let totalRecords = 0
+
+  // 1. Campaigns
+  const campaignCount = Math.max(1, Math.ceil(targetCount / 20))
+  const campaigns = GoogleAdsGenerator.generateGoogleAdsCampaigns(campaignCount, tenantId)
+  results.push({ table: 'semantic.dm_ads_campaigns_google', count: campaigns.length })
+  totalRecords += campaigns.length
+
+  // 2. Keywords
+  const keywords = GoogleAdsGenerator.generateGoogleAdsKeywords(campaigns, tenantId)
+  results.push({ table: 'semantic.dm_ads_keywords_google', count: keywords.length })
+  totalRecords += keywords.length
+
+  // 3. Search terms
+  const searchTerms = GoogleAdsGenerator.generateGoogleAdsSearchTerms(keywords, tenantId)
+  results.push({ table: 'semantic.dm_ads_search_terms_google', count: searchTerms.length })
+  totalRecords += searchTerms.length
+
+  // 4. Creatives
+  const creatives = GoogleAdsGenerator.generateGoogleAdsCreatives(campaigns, tenantId)
+  results.push({ table: 'semantic.dm_ads_creatives_google', count: creatives.length })
+  totalRecords += creatives.length
+
+  // 5. Product ads (no real products, generate mock)
+  const products = campaigns.map(c => ({ id: generateId('product') }))
+  const adsProducts = GoogleAdsGenerator.generateGoogleAdsProducts(campaigns, products, tenantId)
+  results.push({ table: 'semantic.dm_ads_products_google', count: adsProducts.length })
+  totalRecords += adsProducts.length
+
+  console.log(`  ✓ Generated ${totalRecords} total records`)
+
+  return { platform: 'google_ads', tables: results, totalRecords, success: true }
 
   return {
     platform,
