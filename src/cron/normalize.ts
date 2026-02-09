@@ -1,5 +1,6 @@
 import type { CronJobCreate, CronJobPatch } from "./types.js";
 import { sanitizeAgentId } from "../routing/session-key.js";
+import { truncateUtf16Safe } from "../utils.js";
 import { parseAbsoluteTimeMs } from "./parse.js";
 import { migrateLegacyCronPayload } from "./payload-migration.js";
 
@@ -12,6 +13,8 @@ type NormalizeOptions = {
 const DEFAULT_OPTIONS: NormalizeOptions = {
   applyDefaults: false,
 };
+
+const DEFAULT_NAME_MAX = 60;
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -71,6 +74,46 @@ function unwrapJob(raw: UnknownRecord) {
   return raw;
 }
 
+function truncateText(input: string, maxLen: number) {
+  if (input.length <= maxLen) {
+    return input;
+  }
+  const truncated = truncateUtf16Safe(input, Math.max(0, maxLen - 3)).trimEnd();
+  return `${truncated}...`;
+}
+
+function inferDefaultName(job: { schedule?: UnknownRecord; payload?: UnknownRecord }) {
+  const payload = job.payload;
+  const payloadKind = typeof payload?.kind === "string" ? payload.kind : "";
+  const payloadText =
+    payloadKind === "systemEvent" && typeof payload?.text === "string"
+      ? payload.text
+      : payloadKind === "agentTurn" && typeof payload?.message === "string"
+        ? payload.message
+        : "";
+  const firstLine =
+    payloadText
+      .split("\n")
+      .map((line) => line.trim())
+      .find(Boolean) ?? "";
+  if (firstLine) {
+    return truncateText(firstLine, DEFAULT_NAME_MAX);
+  }
+
+  const schedule = job.schedule;
+  const scheduleKind = typeof schedule?.kind === "string" ? schedule.kind : "";
+  if (scheduleKind === "cron" && typeof schedule?.expr === "string") {
+    return `Cron: ${truncateText(schedule.expr, DEFAULT_NAME_MAX - 8)}`;
+  }
+  if (scheduleKind === "every" && typeof schedule?.everyMs === "number") {
+    return `Every: ${schedule.everyMs}ms`;
+  }
+  if (scheduleKind === "at") {
+    return "One-shot";
+  }
+  return "Cron job";
+}
+
 export function normalizeCronJobInput(
   raw: unknown,
   options: NormalizeOptions = DEFAULT_OPTIONS,
@@ -110,6 +153,18 @@ export function normalizeCronJobInput(
     }
   }
 
+  if ("name" in base) {
+    const name = base.name;
+    if (typeof name === "string") {
+      const trimmed = name.trim();
+      if (trimmed) {
+        next.name = trimmed;
+      } else {
+        delete next.name;
+      }
+    }
+  }
+
   if (isRecord(base.schedule)) {
     next.schedule = coerceSchedule(base.schedule);
   }
@@ -119,6 +174,9 @@ export function normalizeCronJobInput(
   }
 
   if (options.applyDefaults) {
+    if (typeof next.enabled !== "boolean") {
+      next.enabled = true;
+    }
     if (!next.wakeMode) {
       next.wakeMode = "next-heartbeat";
     }
@@ -130,6 +188,12 @@ export function normalizeCronJobInput(
       if (kind === "agentTurn") {
         next.sessionTarget = "isolated";
       }
+    }
+    if (!("name" in next)) {
+      next.name = inferDefaultName({
+        schedule: isRecord(next.schedule) ? next.schedule : undefined,
+        payload: isRecord(next.payload) ? next.payload : undefined,
+      });
     }
   }
 

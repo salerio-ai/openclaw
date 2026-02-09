@@ -110,4 +110,34 @@ describe("normalizeCronJobCreate", () => {
     expect(schedule.kind).toBe("at");
     expect(schedule.atMs).toBe(Date.parse("2026-01-12T18:00:00Z"));
   });
+
+  it("infers name when missing on create", () => {
+    const normalized = normalizeCronJobCreate({
+      enabled: true,
+      schedule: { kind: "cron", expr: "0 9 * * *" },
+      sessionTarget: "main",
+      wakeMode: "next-heartbeat",
+      payload: {
+        kind: "systemEvent",
+        text: "Morning reminder\nExtra context",
+      },
+    }) as unknown as Record<string, unknown>;
+
+    expect(normalized.name).toBe("Morning reminder");
+  });
+
+  it("defaults enabled to true when missing on create", () => {
+    const normalized = normalizeCronJobCreate({
+      name: "missing enabled",
+      schedule: { kind: "cron", expr: "0 9 * * *" },
+      sessionTarget: "main",
+      wakeMode: "next-heartbeat",
+      payload: {
+        kind: "systemEvent",
+        text: "hello",
+      },
+    }) as unknown as Record<string, unknown>;
+
+    expect(normalized.enabled).toBe(true);
+  });
 });

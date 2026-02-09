@@ -171,7 +171,7 @@ ACTIONS:
 
 JOB SCHEMA (for add action):
 {
-  "name": "string (optional)",
+  "name": "string (optional, auto-generated if omitted)",
   "schedule": { ... },      // Required: when to run
   "payload": { ... },       // Required: what to execute
   "sessionTarget": "main" | "isolated",  // Required
