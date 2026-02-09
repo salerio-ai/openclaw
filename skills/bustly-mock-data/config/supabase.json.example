@@ -1,0 +1,11 @@
+{
+  "staging": {
+    "SUPABASE_SERVICE_ROLE_KEY": "your-staging-service-role-key-here",
+    "SUPABASE_URL": "https://your-project-staging.supabase.co"
+  },
+  "production": {
+    "SUPABASE_SERVICE_ROLE_KEY": "your-production-service-role-key-here",
+    "SUPABASE_URL": "https://your-project-production.supabase.co"
+  },
+  "defaultEnv": "staging"
+}
