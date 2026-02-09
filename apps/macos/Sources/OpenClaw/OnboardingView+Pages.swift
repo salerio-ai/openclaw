@@ -376,7 +376,7 @@ extension OnboardingView {
 
                 Text(
                     "This lets OpenClaw use Claude immediately. Credentials are stored at " +
-                        "`~/.openclaw/credentials/oauth.json` (owner-only).")
+                        "`~/.bustly/credentials/oauth.json` (owner-only).")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -651,7 +651,7 @@ extension OnboardingView {
                                     let saved = await self.saveAgentWorkspace(AgentWorkspace.displayPath(for: url))
                                     if saved {
                                         self.workspaceStatus =
-                                            "Saved to ~/.openclaw/openclaw.json (agents.defaults.workspace)"
+                                            "Saved to ~/.bustly/openclaw.json (agents.defaults.workspace)"
                                     }
                                 }
                             }
@@ -720,7 +720,7 @@ extension OnboardingView {
                         title: "Remote gateway checklist",
                         subtitle: """
                         On your gateway host: install/update the `openclaw` package and make sure credentials exist
-                        (typically `~/.openclaw/credentials/oauth.json`). Then connect again if needed.
+                        (typically `~/.bustly/credentials/oauth.json`). Then connect again if needed.
                         """,
                         systemImage: "network")
                     Divider()

@@ -62,7 +62,7 @@ enum CLIInstaller {
 
     private static func installPrefix() -> String {
         FileManager().homeDirectoryForCurrentUser
-            .appendingPathComponent(".openclaw")
+            .appendingPathComponent(".bustly")
             .path
     }
 

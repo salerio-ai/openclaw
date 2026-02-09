@@ -17,7 +17,7 @@ export function resolveIsNixMode(env: NodeJS.ProcessEnv = process.env): boolean 
 export const isNixMode = resolveIsNixMode();
 
 const LEGACY_STATE_DIRNAMES = [".clawdbot", ".moltbot", ".moldbot"] as const;
-const NEW_STATE_DIRNAME = ".openclaw";
+const NEW_STATE_DIRNAME = ".bustly";
 const CONFIG_FILENAME = "openclaw.json";
 const LEGACY_CONFIG_FILENAMES = ["clawdbot.json", "moltbot.json", "moldbot.json"] as const;
 
@@ -44,7 +44,7 @@ export function resolveNewStateDir(homedir: () => string = os.homedir): string {
 /**
  * State directory for mutable data (sessions, logs, caches).
  * Can be overridden via OPENCLAW_STATE_DIR.
- * Default: ~/.openclaw
+ * Default: ~/.bustly
  */
 export function resolveStateDir(
   env: NodeJS.ProcessEnv = process.env,
@@ -90,7 +90,7 @@ export const STATE_DIR = resolveStateDir();
 /**
  * Config file path (JSON5).
  * Can be overridden via OPENCLAW_CONFIG_PATH.
- * Default: ~/.openclaw/openclaw.json (or $OPENCLAW_STATE_DIR/openclaw.json)
+ * Default: ~/.bustly/openclaw.json (or $OPENCLAW_STATE_DIR/openclaw.json)
  */
 export function resolveCanonicalConfigPath(
   env: NodeJS.ProcessEnv = process.env,

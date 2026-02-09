@@ -53,7 +53,7 @@ Scan system services for extra gateway installs (launchd/systemd/schtasks).
 If you want to review changes before writing, open the config file first:
 
 ```bash
-cat ~/.openclaw/openclaw.json
+cat ~/.bustly/openclaw.json
 ```
 
 ## What it does (summary)
@@ -104,7 +104,7 @@ Doctor will:
 
 - Explain which legacy keys were found.
 - Show the migration it applied.
-- Rewrite `~/.openclaw/openclaw.json` with the updated schema.
+- Rewrite `~/.bustly/openclaw.json` with the updated schema.
 
 The Gateway also auto-runs doctor migrations on startup when it detects a
 legacy config format, so stale configs are repaired without manual intervention.
@@ -138,12 +138,12 @@ remove the override and restore per-model API routing + costs.
 Doctor can migrate older on-disk layouts into the current structure:
 
 - Sessions store + transcripts:
-  - from `~/.openclaw/sessions/` to `~/.openclaw/agents/<agentId>/sessions/`
+  - from `~/.bustly/sessions/` to `~/.bustly/agents/<agentId>/sessions/`
 - Agent dir:
-  - from `~/.openclaw/agent/` to `~/.openclaw/agents/<agentId>/agent/`
+  - from `~/.bustly/agent/` to `~/.bustly/agents/<agentId>/agent/`
 - WhatsApp auth state (Baileys):
-  - from legacy `~/.openclaw/credentials/*.json` (except `oauth.json`)
-  - to `~/.openclaw/credentials/whatsapp/<accountId>/...` (default account id: `default`)
+  - from legacy `~/.bustly/credentials/*.json` (except `oauth.json`)
+  - to `~/.bustly/credentials/whatsapp/<accountId>/...` (default account id: `default`)
 
 These migrations are best-effort and idempotent; doctor will emit warnings when
 it leaves any legacy folders behind as backups. The Gateway/CLI also auto-migrates
@@ -168,12 +168,12 @@ Doctor checks:
   transcript files.
 - **Main session “1-line JSONL”**: flags when the main transcript has only one
   line (history is not accumulating).
-- **Multiple state dirs**: warns when multiple `~/.openclaw` folders exist across
+- **Multiple state dirs**: warns when multiple `~/.bustly` folders exist across
   home directories or when `OPENCLAW_STATE_DIR` points elsewhere (history can
   split between installs).
 - **Remote mode reminder**: if `gateway.mode=remote`, doctor reminds you to run
   it on the remote host (the state lives there).
-- **Config file permissions**: warns if `~/.openclaw/openclaw.json` is
+- **Config file permissions**: warns if `~/.bustly/openclaw.json` is
   group/world readable and offers to tighten to `600`.
 
 ### 5) Model auth health (OAuth expiry)

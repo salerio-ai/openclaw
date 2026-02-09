@@ -76,7 +76,7 @@ vi.mock("../tui/tui.js", () => ({
 describe("runOnboardingWizard", () => {
   it("exits when config is invalid", async () => {
     readConfigFileSnapshot.mockResolvedValueOnce({
-      path: "/tmp/.openclaw/openclaw.json",
+      path: "/tmp/.bustly/openclaw.json",
       exists: true,
       raw: "{}",
       parsed: {},

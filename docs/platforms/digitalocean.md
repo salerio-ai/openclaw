@@ -194,13 +194,13 @@ htop
 
 All state lives in:
 
-- `~/.openclaw/` — config, credentials, session data
-- `~/.openclaw/workspace/` — workspace (SOUL.md, memory, etc.)
+- `~/.bustly/` — config, credentials, session data
+- `~/.bustly/workspace/` — workspace (SOUL.md, memory, etc.)
 
 These survive reboots. Back them up periodically:
 
 ```bash
-tar -czvf openclaw-backup.tar.gz ~/.openclaw ~/.openclaw/workspace
+tar -czvf openclaw-backup.tar.gz ~/.bustly ~/.bustly/workspace
 ```
 
 ---

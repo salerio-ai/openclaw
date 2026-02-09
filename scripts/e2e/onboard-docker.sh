@@ -281,8 +281,8 @@ TRASH
 
     # Assert config + workspace scaffolding.
     workspace_dir="$HOME/openclaw"
-    config_path="$HOME/.openclaw/openclaw.json"
-    sessions_dir="$HOME/.openclaw/agents/main/sessions"
+    config_path="$HOME/.bustly/openclaw.json"
+    sessions_dir="$HOME/.bustly/agents/main/sessions"
 
     assert_file "$config_path"
     assert_dir "$sessions_dir"
@@ -352,7 +352,7 @@ NODE
       --skip-skills \
       --skip-health
 
-    config_path="$HOME/.openclaw/openclaw.json"
+    config_path="$HOME/.bustly/openclaw.json"
     assert_file "$config_path"
 
     CONFIG_PATH="$config_path" node --input-type=module - <<'"'"'NODE'"'"'
@@ -386,9 +386,9 @@ NODE
     local home_dir
     home_dir="$(make_home reset-config)"
     export HOME="$home_dir"
-    mkdir -p "$HOME/.openclaw"
+    mkdir -p "$HOME/.bustly"
     # Seed a remote config to exercise reset path.
-    cat > "$HOME/.openclaw/openclaw.json" <<'"'"'JSON'"'"'
+    cat > "$HOME/.bustly/openclaw.json" <<'"'"'JSON'"'"'
 {
   "agents": { "defaults": { "workspace": "/root/old" } },
   "gateway": {
@@ -410,7 +410,7 @@ JSON
       --skip-ui \
       --skip-health
 
-    config_path="$HOME/.openclaw/openclaw.json"
+    config_path="$HOME/.bustly/openclaw.json"
     assert_file "$config_path"
 
     CONFIG_PATH="$config_path" node --input-type=module - <<'"'"'NODE'"'"'
@@ -443,7 +443,7 @@ NODE
     # Channels-only configure flow.
     run_wizard_cmd channels "$home_dir" "node dist/index.js configure --section channels" send_channels_flow
 
-    config_path="$HOME/.openclaw/openclaw.json"
+    config_path="$HOME/.bustly/openclaw.json"
     assert_file "$config_path"
 
     CONFIG_PATH="$config_path" node --input-type=module - <<'"'"'NODE'"'"'
@@ -481,9 +481,9 @@ NODE
     local home_dir
     home_dir="$(make_home skills)"
     export HOME="$home_dir"
-    mkdir -p "$HOME/.openclaw"
+    mkdir -p "$HOME/.bustly"
     # Seed skills config to ensure it survives the wizard.
-    cat > "$HOME/.openclaw/openclaw.json" <<'"'"'JSON'"'"'
+    cat > "$HOME/.bustly/openclaw.json" <<'"'"'JSON'"'"'
 {
   "skills": {
     "allowBundled": ["__none__"],
@@ -494,7 +494,7 @@ JSON
 
     run_wizard_cmd skills "$home_dir" "node dist/index.js configure --section skills" send_skills_flow
 
-    config_path="$HOME/.openclaw/openclaw.json"
+    config_path="$HOME/.bustly/openclaw.json"
     assert_file "$config_path"
 
     CONFIG_PATH="$config_path" node --input-type=module - <<'"'"'NODE'"'"'

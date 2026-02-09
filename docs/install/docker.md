@@ -59,8 +59,8 @@ After it finishes:
 
 It writes config/workspace on the host:
 
-- `~/.openclaw/`
-- `~/.openclaw/workspace`
+- `~/.bustly/`
+- `~/.bustly/workspace`
 
 Running on a VPS? See [Hetzner (Docker VPS)](/platforms/hetzner).
 
@@ -187,7 +187,7 @@ If you need Playwright to install system deps, rebuild the image with
 ### Permissions + EACCES
 
 The image runs as `node` (uid 1000). If you see permission errors on
-`/home/node/.openclaw`, make sure your host bind mounts are owned by uid 1000.
+`/home/node/.bustly`, make sure your host bind mounts are owned by uid 1000.
 
 Example (Linux host):
 
@@ -275,7 +275,7 @@ pnpm test:docker:qr
 ### Notes
 
 - Gateway bind defaults to `lan` for container use.
-- The gateway container is the source of truth for sessions (`~/.openclaw/agents/<agentId>/sessions/`).
+- The gateway container is the source of truth for sessions (`~/.bustly/agents/<agentId>/sessions/`).
 
 ## Agent Sandbox (host gateway + Docker tools)
 
@@ -313,7 +313,7 @@ precedence, and troubleshooting.
 
 - Image: `openclaw-sandbox:bookworm-slim`
 - One container per agent
-- Agent workspace access: `workspaceAccess: "none"` (default) uses `~/.openclaw/sandboxes`
+- Agent workspace access: `workspaceAccess: "none"` (default) uses `~/.bustly/sandboxes`
   - `"ro"` keeps the sandbox workspace at `/workspace` and mounts the agent workspace read-only at `/agent` (disables `write`/`edit`/`apply_patch`)
   - `"rw"` mounts the agent workspace read/write at `/workspace`
 - Auto-prune: idle > 24h OR age > 7d
@@ -340,7 +340,7 @@ If you plan to install packages in `setupCommand`, note:
         mode: "non-main", // off | non-main | all
         scope: "agent", // session | agent | shared (agent is default)
         workspaceAccess: "none", // none | ro | rw
-        workspaceRoot: "~/.openclaw/sandboxes",
+        workspaceRoot: "~/.bustly/sandboxes",
         docker: {
           image: "openclaw-sandbox:bookworm-slim",
           workdir: "/workspace",

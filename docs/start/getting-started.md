@@ -34,7 +34,7 @@ run on host, set an explicit per-agent override:
   "routing": {
     "agents": {
       "main": {
-        "workspace": "~/.openclaw/workspace",
+        "workspace": "~/.bustly/workspace",
         "sandbox": { "mode": "off" }
       }
     }
@@ -98,8 +98,8 @@ Wizard doc: [Wizard](/start/wizard)
 
 - **Recommended Anthropic path:** set an API key (wizard can store it for service use). `claude setup-token` is also supported if you want to reuse Claude Code credentials.
 
-- OAuth credentials (legacy import): `~/.openclaw/credentials/oauth.json`
-- Auth profiles (OAuth + API keys): `~/.openclaw/agents/<agentId>/agent/auth-profiles.json`
+- OAuth credentials (legacy import): `~/.bustly/credentials/oauth.json`
+- Auth profiles (OAuth + API keys): `~/.bustly/agents/<agentId>/agent/auth-profiles.json`
 
 Headless/server tip: do OAuth on a normal machine first, then copy `oauth.json` to the gateway host.
 

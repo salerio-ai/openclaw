@@ -272,14 +272,14 @@ sequenceDiagram
     Salerio-->>网关: 返回 access_token + workspace_id
     网关-->>桌面端: 返回 token 信息
 
-    桌面端->>桌面端: 写入 ~/.openclaw/openclaw.json
+    桌面端->>桌面端: 写入 ~/.bustly/openclaw.json
 ```
 
 ---
 
 ## 五、配置文件写入示例
 
-登录成功后，桌面端应写入以下配置到 `~/.openclaw/openclaw.json`：
+登录成功后，桌面端应写入以下配置到 `~/.bustly/openclaw.json`：
 
 ```json
 {

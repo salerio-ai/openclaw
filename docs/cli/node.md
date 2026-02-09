@@ -101,12 +101,12 @@ openclaw nodes approve <requestId>
 ```
 
 The node host stores its node id, token, display name, and gateway connection info in
-`~/.openclaw/node.json`.
+`~/.bustly/node.json`.
 
 ## Exec approvals
 
 `system.run` is gated by local exec approvals:
 
-- `~/.openclaw/exec-approvals.json`
+- `~/.bustly/exec-approvals.json`
 - [Exec approvals](/tools/exec-approvals)
 - `openclaw approvals --node <id|name|ip>` (edit from the Gateway)

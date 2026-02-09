@@ -36,9 +36,9 @@ Notes:
 - Know how you installed: **global** (npm/pnpm) vs **from source** (git clone).
 - Know how your Gateway is running: **foreground terminal** vs **supervised service** (launchd/systemd).
 - Snapshot your tailoring:
-  - Config: `~/.openclaw/openclaw.json`
-  - Credentials: `~/.openclaw/credentials/`
-  - Workspace: `~/.openclaw/workspace`
+  - Config: `~/.bustly/openclaw.json`
+  - Credentials: `~/.bustly/credentials/`
+  - Workspace: `~/.bustly/workspace`
 
 ## Update (global install)
 

@@ -170,7 +170,7 @@ The gateway service runs with a **minimal PATH** to avoid shell/manager cruft:
 
 This intentionally excludes version managers (nvm/fnm/volta/asdf) and package
 managers (pnpm/npm) because the service does not load your shell init. Runtime
-variables like `DISPLAY` should live in `~/.openclaw/.env` (loaded early by the
+variables like `DISPLAY` should live in `~/.bustly/.env` (loaded early by the
 gateway).
 Exec runs on `host=gateway` merge your login-shell `PATH` into the exec environment,
 so missing tools usually mean your shell init isn’t exporting them (or set
@@ -263,7 +263,7 @@ only one workspace is active.
 
 ### Main chat running in a sandbox workspace
 
-Symptoms: `pwd` or file tools show `~/.openclaw/sandboxes/...` even though you
+Symptoms: `pwd` or file tools show `~/.bustly/sandboxes/...` even though you
 expected the host workspace.
 
 **Why:** `agents.defaults.sandbox.mode: "non-main"` keys off `session.mainKey` (default `"main"`).
@@ -318,7 +318,7 @@ Look for `AllowFrom: ...` in the output.
 # The message must match mentionPatterns or explicit mentions; defaults live in channel groups/guilds.
 # Multi-agent: `agents.list[].groupChat.mentionPatterns` overrides global patterns.
 grep -n "agents\\|groupChat\\|mentionPatterns\\|channels\\.whatsapp\\.groups\\|channels\\.telegram\\.groups\\|channels\\.imessage\\.groups\\|channels\\.discord\\.guilds" \
-  "${OPENCLAW_CONFIG_PATH:-$HOME/.openclaw/openclaw.json}"
+  "${OPENCLAW_CONFIG_PATH:-$HOME/.bustly/openclaw.json}"
 ```
 
 **Check 3:** Check the logs
@@ -363,7 +363,7 @@ Known issue: When you send an image with ONLY a mention (no other text), WhatsAp
 **Check 1:** Is the session file there?
 
 ```bash
-ls -la ~/.openclaw/agents/<agentId>/sessions/
+ls -la ~/.bustly/agents/<agentId>/sessions/
 ```
 
 **Check 2:** Is the reset window too short?
@@ -418,7 +418,7 @@ If you’re logged out / unlinked:
 
 ```bash
 openclaw channels logout
-trash "${OPENCLAW_STATE_DIR:-$HOME/.openclaw}/credentials" # if logout can't cleanly remove everything
+trash "${OPENCLAW_STATE_DIR:-$HOME/.bustly}/credentials" # if logout can't cleanly remove everything
 openclaw channels login --verbose       # re-scan QR
 ```
 
@@ -670,7 +670,7 @@ Get verbose logging:
 
 ```bash
 # Turn on trace logging in config:
-#   ${OPENCLAW_CONFIG_PATH:-$HOME/.openclaw/openclaw.json} -> { logging: { level: "trace" } }
+#   ${OPENCLAW_CONFIG_PATH:-$HOME/.bustly/openclaw.json} -> { logging: { level: "trace" } }
 #
 # Then run verbose commands to mirror debug output to stdout:
 openclaw gateway --verbose
@@ -682,7 +682,7 @@ openclaw channels login --verbose
 | Log                               | Location                                                                                                                                                                                                                                                                                                                    |
 | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Gateway file logs (structured)    | `/tmp/openclaw/openclaw-YYYY-MM-DD.log` (or `logging.file`)                                                                                                                                                                                                                                                                 |
-| Gateway service logs (supervisor) | macOS: `$OPENCLAW_STATE_DIR/logs/gateway.log` + `gateway.err.log` (default: `~/.openclaw/logs/...`; profiles use `~/.openclaw-<profile>/logs/...`)<br />Linux: `journalctl --user -u openclaw-gateway[-<profile>].service -n 200 --no-pager`<br />Windows: `schtasks /Query /TN "OpenClaw Gateway (<profile>)" /V /FO LIST` |
+| Gateway service logs (supervisor) | macOS: `$OPENCLAW_STATE_DIR/logs/gateway.log` + `gateway.err.log` (default: `~/.bustly/logs/...`; profiles use `~/.bustly-<profile>/logs/...`)<br />Linux: `journalctl --user -u openclaw-gateway[-<profile>].service -n 200 --no-pager`<br />Windows: `schtasks /Query /TN "OpenClaw Gateway (<profile>)" /V /FO LIST` |
 | Session files                     | `$OPENCLAW_STATE_DIR/agents/<agentId>/sessions/`                                                                                                                                                                                                                                                                            |
 | Media cache                       | `$OPENCLAW_STATE_DIR/media/`                                                                                                                                                                                                                                                                                                |
 | Credentials                       | `$OPENCLAW_STATE_DIR/credentials/`                                                                                                                                                                                                                                                                                          |
@@ -718,7 +718,7 @@ openclaw gateway stop
 # If you installed a service and want a clean install:
 # openclaw gateway uninstall
 
-trash "${OPENCLAW_STATE_DIR:-$HOME/.openclaw}"
+trash "${OPENCLAW_STATE_DIR:-$HOME/.bustly}"
 openclaw channels login         # re-pair WhatsApp
 openclaw gateway restart           # or: openclaw gateway
 ```

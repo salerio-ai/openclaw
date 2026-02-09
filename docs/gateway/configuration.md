@@ -1,5 +1,5 @@
 ---
-summary: "All configuration options for ~/.openclaw/openclaw.json with examples"
+summary: "All configuration options for ~/.bustly/openclaw.json with examples"
 read_when:
   - Adding or modifying config fields
 title: "Configuration"
@@ -7,9 +7,9 @@ title: "Configuration"
 
 # Configuration 🔧
 
-OpenClaw reads an optional **JSON5** config from `~/.openclaw/openclaw.json` (comments + trailing commas allowed).
+OpenClaw reads an optional **JSON5** config from `~/.bustly/openclaw.json` (comments + trailing commas allowed).
 
-If the file is missing, OpenClaw uses safe-ish defaults (embedded Pi agent + per-sender sessions + workspace `~/.openclaw/workspace`). You usually only need a config to:
+If the file is missing, OpenClaw uses safe-ish defaults (embedded Pi agent + per-sender sessions + workspace `~/.bustly/workspace`). You usually only need a config to:
 
 - restrict who can trigger the bot (`channels.whatsapp.allowFrom`, `channels.telegram.allowFrom`, etc.)
 - control group allowlists + mention behavior (`channels.whatsapp.groups`, `channels.telegram.groups`, `channels.discord.guilds`, `agents.list[].groupChat`)
@@ -51,7 +51,7 @@ Use `config.apply` to validate + write the full config and restart the Gateway i
 It writes a restart sentinel and pings the last active session after the Gateway comes back.
 
 Warning: `config.apply` replaces the **entire config**. If you want to change only a few keys,
-use `config.patch` or `openclaw config set`. Keep a backup of `~/.openclaw/openclaw.json`.
+use `config.patch` or `openclaw config set`. Keep a backup of `~/.bustly/openclaw.json`.
 
 Params:
 
@@ -66,7 +66,7 @@ Example (via `gateway call`):
 ```bash
 openclaw gateway call config.get --params '{}' # capture payload.hash
 openclaw gateway call config.apply --params '{
-  "raw": "{\\n  agents: { defaults: { workspace: \\"~/.openclaw/workspace\\" } }\\n}\\n",
+  "raw": "{\\n  agents: { defaults: { workspace: \\"~/.bustly/workspace\\" } }\\n}\\n",
   "baseHash": "<hash-from-config.get>",
   "sessionKey": "agent:main:whatsapp:dm:+15555550123",
   "restartDelayMs": 1000
@@ -108,7 +108,7 @@ openclaw gateway call config.patch --params '{
 
 ```json5
 {
-  agents: { defaults: { workspace: "~/.openclaw/workspace" } },
+  agents: { defaults: { workspace: "~/.bustly/workspace" } },
   channels: { whatsapp: { allowFrom: ["+15555550123"] } },
 }
 ```
@@ -126,7 +126,7 @@ To prevent the bot from responding to WhatsApp @-mentions in groups (only respon
 ```json5
 {
   agents: {
-    defaults: { workspace: "~/.openclaw/workspace" },
+    defaults: { workspace: "~/.bustly/workspace" },
     list: [
       {
         id: "main",
@@ -155,7 +155,7 @@ Split your config into multiple files using the `$include` directive. This is us
 ### Basic usage
 
 ```json5
-// ~/.openclaw/openclaw.json
+// ~/.bustly/openclaw.json
 {
   gateway: { port: 17999 },
 
@@ -170,10 +170,10 @@ Split your config into multiple files using the `$include` directive. This is us
 ```
 
 ```json5
-// ~/.openclaw/agents.json5
+// ~/.bustly/agents.json5
 {
   defaults: { sandbox: { mode: "all", scope: "session" } },
-  list: [{ id: "main", workspace: "~/.openclaw/workspace" }],
+  list: [{ id: "main", workspace: "~/.bustly/workspace" }],
 }
 ```
 
@@ -225,7 +225,7 @@ Included files can themselves contain `$include` directives (up to 10 levels dee
 ### Example: Multi-client legal setup
 
 ```json5
-// ~/.openclaw/openclaw.json
+// ~/.bustly/openclaw.json
 {
   gateway: { port: 17999, auth: { token: "secret" } },
 
@@ -248,7 +248,7 @@ Included files can themselves contain `$include` directives (up to 10 levels dee
 ```
 
 ```json5
-// ~/.openclaw/clients/mueller/agents.json5
+// ~/.bustly/clients/mueller/agents.json5
 [
   { id: "mueller-transcribe", workspace: "~/clients/mueller/transcribe" },
   { id: "mueller-docs", workspace: "~/clients/mueller/docs" },
@@ -256,7 +256,7 @@ Included files can themselves contain `$include` directives (up to 10 levels dee
 ```
 
 ```json5
-// ~/.openclaw/clients/mueller/broadcast.json5
+// ~/.bustly/clients/mueller/broadcast.json5
 {
   "120363403215116621@g.us": ["mueller-transcribe", "mueller-docs"],
 }
@@ -271,7 +271,7 @@ OpenClaw reads env vars from the parent process (shell, launchd/systemd, CI, etc
 Additionally, it loads:
 
 - `.env` from the current working directory (if present)
-- a global fallback `.env` from `~/.openclaw/.env` (aka `$OPENCLAW_STATE_DIR/.env`)
+- a global fallback `.env` from `~/.bustly/.env` (aka `$OPENCLAW_STATE_DIR/.env`)
 
 Neither `.env` file overrides existing env vars.
 
@@ -359,13 +359,13 @@ You can reference environment variables directly in any config string value usin
 
 OpenClaw stores **per-agent** auth profiles (OAuth + API keys) in:
 
-- `<agentDir>/auth-profiles.json` (default: `~/.openclaw/agents/<agentId>/agent/auth-profiles.json`)
+- `<agentDir>/auth-profiles.json` (default: `~/.bustly/agents/<agentId>/agent/auth-profiles.json`)
 
 See also: [/concepts/oauth](/concepts/oauth)
 
 Legacy OAuth imports:
 
-- `~/.openclaw/credentials/oauth.json` (or `$OPENCLAW_STATE_DIR/credentials/oauth.json`)
+- `~/.bustly/credentials/oauth.json` (or `$OPENCLAW_STATE_DIR/credentials/oauth.json`)
 
 The embedded Pi agent maintains a runtime cache at:
 
@@ -373,7 +373,7 @@ The embedded Pi agent maintains a runtime cache at:
 
 Legacy agent dir (pre multi-agent):
 
-- `~/.openclaw/agent/*` (migrated by `openclaw doctor` into `~/.openclaw/agents/<defaultAgentId>/agent/*`)
+- `~/.bustly/agent/*` (migrated by `openclaw doctor` into `~/.bustly/agents/<defaultAgentId>/agent/*`)
 
 Overrides:
 
@@ -544,8 +544,8 @@ Run multiple WhatsApp accounts in one gateway:
         default: {}, // optional; keeps the default id stable
         personal: {},
         biz: {
-          // Optional override. Default: ~/.openclaw/credentials/whatsapp/biz
-          // authDir: "~/.openclaw/credentials/whatsapp/biz",
+          // Optional override. Default: ~/.bustly/credentials/whatsapp/biz
+          // authDir: "~/.bustly/credentials/whatsapp/biz",
         },
       },
     },
@@ -740,8 +740,8 @@ Inbound messages are routed to an agent via bindings.
   - `default`: optional; when multiple are set, the first wins and a warning is logged.
     If none are set, the **first entry** in the list is the default agent.
   - `name`: display name for the agent.
-  - `workspace`: default `~/.openclaw/workspace-<agentId>` (for `main`, falls back to `agents.defaults.workspace`).
-  - `agentDir`: default `~/.openclaw/agents/<agentId>/agent`.
+  - `workspace`: default `~/.bustly/workspace-<agentId>` (for `main`, falls back to `agents.defaults.workspace`).
+  - `agentDir`: default `~/.bustly/agents/<agentId>/agent`.
   - `model`: per-agent default model, overrides `agents.defaults.model` for that agent.
     - string form: `"provider/model"`, overrides only `agents.defaults.model.primary`
     - object form: `{ primary, fallbacks }` (fallbacks override `agents.defaults.model.fallbacks`; `[]` disables global fallbacks for that agent)
@@ -799,7 +799,7 @@ Full access (no sandbox):
     list: [
       {
         id: "personal",
-        workspace: "~/.openclaw/workspace-personal",
+        workspace: "~/.bustly/workspace-personal",
         sandbox: { mode: "off" },
       },
     ],
@@ -815,7 +815,7 @@ Read-only tools + read-only workspace:
     list: [
       {
         id: "family",
-        workspace: "~/.openclaw/workspace-family",
+        workspace: "~/.bustly/workspace-family",
         sandbox: {
           mode: "all",
           scope: "agent",
@@ -846,7 +846,7 @@ No filesystem access (messaging/session tools enabled):
     list: [
       {
         id: "public",
-        workspace: "~/.openclaw/workspace-public",
+        workspace: "~/.bustly/workspace-public",
         sandbox: {
           mode: "all",
           scope: "agent",
@@ -892,8 +892,8 @@ Example: two WhatsApp accounts → two agents:
 {
   agents: {
     list: [
-      { id: "home", default: true, workspace: "~/.openclaw/workspace-home" },
-      { id: "work", workspace: "~/.openclaw/workspace-work" },
+      { id: "home", default: true, workspace: "~/.bustly/workspace-home" },
+      { id: "work", workspace: "~/.bustly/workspace-work" },
     ],
   },
   bindings: [
@@ -1427,11 +1427,11 @@ exec ssh -T gateway-host imsg "$@"
 
 Sets the **single global workspace directory** used by the agent for file operations.
 
-Default: `~/.openclaw/workspace`.
+Default: `~/.bustly/workspace`.
 
 ```json5
 {
-  agents: { defaults: { workspace: "~/.openclaw/workspace" } },
+  agents: { defaults: { workspace: "~/.bustly/workspace" } },
 }
 ```
 
@@ -1586,7 +1586,7 @@ voice notes; other channels send MP3 audio.
       },
       maxTextLength: 4000,
       timeoutMs: 30000,
-      prefsPath: "~/.openclaw/settings/tts.json",
+      prefsPath: "~/.bustly/settings/tts.json",
       elevenlabs: {
         apiKey: "elevenlabs_api_key",
         baseUrl: "https://api.elevenlabs.io",
@@ -2270,7 +2270,7 @@ Defaults (if enabled):
 - scope: `"agent"` (one container + workspace per agent)
 - Debian bookworm-slim based image
 - agent workspace access: `workspaceAccess: "none"` (default)
-  - `"none"`: use a per-scope sandbox workspace under `~/.openclaw/sandboxes`
+  - `"none"`: use a per-scope sandbox workspace under `~/.bustly/sandboxes`
 - `"ro"`: keep the sandbox workspace at `/workspace`, and mount the agent workspace read-only at `/agent` (disables `write`/`edit`/`apply_patch`)
   - `"rw"`: mount the agent workspace read/write at `/workspace`
 - auto-prune: idle > 24h OR age > 7d
@@ -2297,7 +2297,7 @@ For package installs, ensure network egress, a writable root FS, and a root user
         mode: "non-main", // off | non-main | all
         scope: "agent", // session | agent | shared (agent is default)
         workspaceAccess: "none", // none | ro | rw
-        workspaceRoot: "~/.openclaw/sandboxes",
+        workspaceRoot: "~/.bustly/sandboxes",
         docker: {
           image: "openclaw-sandbox:bookworm-slim",
           containerPrefix: "openclaw-sbx-",
@@ -2411,12 +2411,12 @@ Allowlists for remote control:
 
 OpenClaw uses the **pi-coding-agent** model catalog. You can add custom providers
 (LiteLLM, local OpenAI-compatible servers, Anthropic proxies, etc.) by writing
-`~/.openclaw/agents/<agentId>/agent/models.json` or by defining the same schema inside your
+`~/.bustly/agents/<agentId>/agent/models.json` or by defining the same schema inside your
 OpenClaw config under `models.providers`.
 Provider-by-provider overview + examples: [/concepts/model-providers](/concepts/model-providers).
 
 When `models.providers` is present, OpenClaw writes/merges a `models.json` into
-`~/.openclaw/agents/<agentId>/agent/` on startup:
+`~/.bustly/agents/<agentId>/agent/` on startup:
 
 - default behavior: **merge** (keeps existing providers, overrides on name)
 - set `models.mode: "replace"` to overwrite the file contents
@@ -2712,7 +2712,7 @@ Notes:
   `google-generative-ai`
 - Use `authHeader: true` + `headers` for custom auth needs.
 - Override the agent config root with `OPENCLAW_AGENT_DIR` (or `PI_CODING_AGENT_DIR`)
-  if you want `models.json` stored elsewhere (default: `~/.openclaw/agents/main/agent`).
+  if you want `models.json` stored elsewhere (default: `~/.bustly/agents/main/agent`).
 
 ### `session`
 
@@ -2737,9 +2737,9 @@ Controls session scoping, reset policy, reset triggers, and where the session st
       group: { mode: "idle", idleMinutes: 120 },
     },
     resetTriggers: ["/new", "/reset"],
-    // Default is already per-agent under ~/.openclaw/agents/<agentId>/sessions/sessions.json
+    // Default is already per-agent under ~/.bustly/agents/<agentId>/sessions/sessions.json
     // You can override with {agentId} templating:
-    store: "~/.openclaw/agents/{agentId}/sessions/sessions.json",
+    store: "~/.bustly/agents/{agentId}/sessions/sessions.json",
     // Direct chats collapse to agent:<agentId>:<mainKey> (default: "main").
     mainKey: "main",
     agentToAgent: {
@@ -2779,7 +2779,7 @@ Fields:
 ### `skills` (skills config)
 
 Controls bundled allowlist, install preferences, extra skill folders, and per-skill
-overrides. Applies to **bundled** skills and `~/.openclaw/skills` (workspace skills
+overrides. Applies to **bundled** skills and `~/.bustly/skills` (workspace skills
 still win on name conflicts).
 
 Fields:
@@ -2827,7 +2827,7 @@ Example:
 ### `plugins` (extensions)
 
 Controls plugin discovery, allow/deny, and per-plugin config. Plugins are loaded
-from `~/.openclaw/extensions`, `<workspace>/.openclaw/extensions`, plus any
+from `~/.bustly/extensions`, `<workspace>/.bustly/extensions`, plus any
 `plugins.load.paths` entries. **Config changes require a gateway restart.**
 See [/plugin](/plugin) for full usage.
 
@@ -3007,7 +3007,7 @@ Remote client defaults (CLI):
 
 macOS app behavior:
 
-- OpenClaw.app watches `~/.openclaw/openclaw.json` and switches modes live when `gateway.mode` or `gateway.remote.url` changes.
+- OpenClaw.app watches `~/.bustly/openclaw.json` and switches modes live when `gateway.mode` or `gateway.remote.url` changes.
 - If `gateway.mode` is unset but `gateway.remote.url` is set, the macOS app treats it as remote mode.
 - When you change connection mode in the macOS app, it writes `gateway.mode` (and `gateway.remote.url` + `gateway.remote.transport` in remote mode) back to the config file.
 
@@ -3041,7 +3041,7 @@ Direct transport example (macOS app):
 
 ### `gateway.reload` (Config hot reload)
 
-The Gateway watches `~/.openclaw/openclaw.json` (or `OPENCLAW_CONFIG_PATH`) and applies changes automatically.
+The Gateway watches `~/.bustly/openclaw.json` (or `OPENCLAW_CONFIG_PATH`) and applies changes automatically.
 
 Modes:
 
@@ -3065,7 +3065,7 @@ Modes:
 
 Files watched:
 
-- `~/.openclaw/openclaw.json` (or `OPENCLAW_CONFIG_PATH`)
+- `~/.bustly/openclaw.json` (or `OPENCLAW_CONFIG_PATH`)
 
 Hot-applied (no full gateway restart):
 
@@ -3097,8 +3097,8 @@ To run multiple gateways on one host (for redundancy or a rescue bot), isolate p
 
 Convenience flags (CLI):
 
-- `openclaw --dev …` → uses `~/.openclaw-dev` + shifts ports from base `19001`
-- `openclaw --profile <name> …` → uses `~/.openclaw-<name>` (port via config/env/flags)
+- `openclaw --dev …` → uses `~/.bustly-dev` + shifts ports from base `19001`
+- `openclaw --profile <name> …` → uses `~/.bustly-<name>` (port via config/env/flags)
 
 See [Gateway runbook](/gateway) for the derived port mapping (gateway/browser/canvas).
 See [Multiple gateways](/gateway/multiple-gateways) for browser/CDP port isolation details.
@@ -3106,8 +3106,8 @@ See [Multiple gateways](/gateway/multiple-gateways) for browser/CDP port isolati
 Example:
 
 ```bash
-OPENCLAW_CONFIG_PATH=~/.openclaw/a.json \
-OPENCLAW_STATE_DIR=~/.openclaw-a \
+OPENCLAW_CONFIG_PATH=~/.bustly/a.json \
+OPENCLAW_STATE_DIR=~/.bustly-a \
 openclaw gateway --port 19001
 ```
 
@@ -3128,7 +3128,7 @@ Defaults:
     token: "shared-secret",
     path: "/hooks",
     presets: ["gmail"],
-    transformsDir: "~/.openclaw/hooks",
+    transformsDir: "~/.bustly/hooks",
     mappings: [
       {
         match: { path: "gmail" },
@@ -3223,7 +3223,7 @@ If you need the backend to receive the prefixed path, set
 
 The Gateway serves a directory of HTML/CSS/JS over HTTP so iOS/Android nodes can simply `canvas.navigate` to it.
 
-Default root: `~/.openclaw/workspace/canvas`  
+Default root: `~/.bustly/workspace/canvas`  
 Default port: `18793` (chosen to avoid the openclaw browser CDP port `18792`)  
 The server listens on the **gateway bind host** (LAN or Tailnet) so nodes can reach it.
 
@@ -3243,7 +3243,7 @@ Disable live reload (and file watching) if the directory is large or you hit `EM
 ```json5
 {
   canvasHost: {
-    root: "~/.openclaw/workspace/canvas",
+    root: "~/.bustly/workspace/canvas",
     port: 18793,
     liveReload: true,
   },
@@ -3299,9 +3299,9 @@ Auto-generated certs require `openssl` on PATH; if generation fails, the bridge 
     bind: "tailnet",
     tls: {
       enabled: true,
-      // Uses ~/.openclaw/bridge/tls/bridge-{cert,key}.pem when omitted.
-      // certPath: "~/.openclaw/bridge/tls/bridge-cert.pem",
-      // keyPath: "~/.openclaw/bridge/tls/bridge-key.pem"
+      // Uses ~/.bustly/bridge/tls/bridge-{cert,key}.pem when omitted.
+      // certPath: "~/.bustly/bridge/tls/bridge-cert.pem",
+      // keyPath: "~/.bustly/bridge/tls/bridge-key.pem"
     },
   },
 }
@@ -3324,7 +3324,7 @@ Controls LAN mDNS discovery broadcasts (`_openclaw-gw._tcp`).
 
 ### `discovery.wideArea` (Wide-Area Bonjour / unicast DNS‑SD)
 
-When enabled, the Gateway writes a unicast DNS-SD zone for `_openclaw-gw._tcp` under `~/.openclaw/dns/` using the configured discovery domain (example: `openclaw.internal.`).
+When enabled, the Gateway writes a unicast DNS-SD zone for `_openclaw-gw._tcp` under `~/.bustly/dns/` using the configured discovery domain (example: `openclaw.internal.`).
 
 To make iOS/Android discover across networks (Vienna ⇄ London), pair this with:
 

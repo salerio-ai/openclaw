@@ -62,7 +62,7 @@ npm run catalog
 
 ## Configuration
 
-This skill reads configuration from `~/.openclaw/bustlyOauth.json` (automatically configured via Bustly OAuth login).
+This skill reads configuration from `~/.bustly/bustlyOauth.json` (automatically configured via Bustly OAuth login).
 
 No manual configuration is required. After logging in via Bustly OAuth in the desktop app, the skill will have access to:
 

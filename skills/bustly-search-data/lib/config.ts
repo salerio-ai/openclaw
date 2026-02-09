@@ -51,7 +51,7 @@ function resolveStateDir(): string {
   if (override) {
     return resolveUserPath(override, homeDir);
   }
-  return resolve(homeDir, '.openclaw');
+  return resolve(homeDir, '.bustly');
 }
 
 // First, try to read from bustlyOauth.json (Bustly OAuth login state)

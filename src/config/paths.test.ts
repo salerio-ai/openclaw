@@ -48,10 +48,10 @@ describe("state + config path candidates", () => {
     const home = "/home/test";
     const candidates = resolveDefaultConfigCandidates({} as NodeJS.ProcessEnv, () => home);
     const expected = [
-      path.join(home, ".openclaw", "openclaw.json"),
-      path.join(home, ".openclaw", "clawdbot.json"),
-      path.join(home, ".openclaw", "moltbot.json"),
-      path.join(home, ".openclaw", "moldbot.json"),
+      path.join(home, ".bustly", "openclaw.json"),
+      path.join(home, ".bustly", "clawdbot.json"),
+      path.join(home, ".bustly", "moltbot.json"),
+      path.join(home, ".bustly", "moldbot.json"),
       path.join(home, ".clawdbot", "openclaw.json"),
       path.join(home, ".clawdbot", "clawdbot.json"),
       path.join(home, ".clawdbot", "moltbot.json"),
@@ -68,10 +68,10 @@ describe("state + config path candidates", () => {
     expect(candidates).toEqual(expected);
   });
 
-  it("prefers ~/.openclaw when it exists and legacy dir is missing", async () => {
+  it("prefers ~/.bustly when it exists and legacy dir is missing", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-state-"));
     try {
-      const newDir = path.join(root, ".openclaw");
+      const newDir = path.join(root, ".bustly");
       await fs.mkdir(newDir, { recursive: true });
       const resolved = resolveStateDir({} as NodeJS.ProcessEnv, () => root);
       expect(resolved).toBe(newDir);
@@ -89,7 +89,7 @@ describe("state + config path candidates", () => {
     const previousOpenClawConfig = process.env.OPENCLAW_CONFIG_PATH;
     const previousOpenClawState = process.env.OPENCLAW_STATE_DIR;
     try {
-      const legacyDir = path.join(root, ".openclaw");
+      const legacyDir = path.join(root, ".bustly");
       await fs.mkdir(legacyDir, { recursive: true });
       const legacyPath = path.join(legacyDir, "openclaw.json");
       await fs.writeFile(legacyPath, "{}", "utf-8");
@@ -156,7 +156,7 @@ describe("state + config path candidates", () => {
   it("respects state dir overrides when config is missing", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-config-override-"));
     try {
-      const legacyDir = path.join(root, ".openclaw");
+      const legacyDir = path.join(root, ".bustly");
       await fs.mkdir(legacyDir, { recursive: true });
       const legacyConfig = path.join(legacyDir, "openclaw.json");
       await fs.writeFile(legacyConfig, "{}", "utf-8");

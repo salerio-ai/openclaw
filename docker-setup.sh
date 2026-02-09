@@ -21,8 +21,8 @@ if ! docker compose version >/dev/null 2>&1; then
   exit 1
 fi
 
-OPENCLAW_CONFIG_DIR="${OPENCLAW_CONFIG_DIR:-$HOME/.openclaw}"
-OPENCLAW_WORKSPACE_DIR="${OPENCLAW_WORKSPACE_DIR:-$HOME/.openclaw/workspace}"
+OPENCLAW_CONFIG_DIR="${OPENCLAW_CONFIG_DIR:-$HOME/.bustly}"
+OPENCLAW_WORKSPACE_DIR="${OPENCLAW_WORKSPACE_DIR:-$HOME/.bustly/workspace}"
 
 mkdir -p "$OPENCLAW_CONFIG_DIR"
 mkdir -p "$OPENCLAW_WORKSPACE_DIR"
@@ -67,8 +67,8 @@ YAML
 
   if [[ -n "$home_volume" ]]; then
     printf '      - %s:/home/node\n' "$home_volume" >>"$EXTRA_COMPOSE_FILE"
-    printf '      - %s:/home/node/.openclaw\n' "$OPENCLAW_CONFIG_DIR" >>"$EXTRA_COMPOSE_FILE"
-    printf '      - %s:/home/node/.openclaw/workspace\n' "$OPENCLAW_WORKSPACE_DIR" >>"$EXTRA_COMPOSE_FILE"
+    printf '      - %s:/home/node/.bustly\n' "$OPENCLAW_CONFIG_DIR" >>"$EXTRA_COMPOSE_FILE"
+    printf '      - %s:/home/node/.bustly/workspace\n' "$OPENCLAW_WORKSPACE_DIR" >>"$EXTRA_COMPOSE_FILE"
   fi
 
   for mount in "${mounts[@]}"; do
@@ -82,8 +82,8 @@ YAML
 
   if [[ -n "$home_volume" ]]; then
     printf '      - %s:/home/node\n' "$home_volume" >>"$EXTRA_COMPOSE_FILE"
-    printf '      - %s:/home/node/.openclaw\n' "$OPENCLAW_CONFIG_DIR" >>"$EXTRA_COMPOSE_FILE"
-    printf '      - %s:/home/node/.openclaw/workspace\n' "$OPENCLAW_WORKSPACE_DIR" >>"$EXTRA_COMPOSE_FILE"
+    printf '      - %s:/home/node/.bustly\n' "$OPENCLAW_CONFIG_DIR" >>"$EXTRA_COMPOSE_FILE"
+    printf '      - %s:/home/node/.bustly/workspace\n' "$OPENCLAW_WORKSPACE_DIR" >>"$EXTRA_COMPOSE_FILE"
   fi
 
   for mount in "${mounts[@]}"; do

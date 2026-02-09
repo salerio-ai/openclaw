@@ -1,6 +1,6 @@
 /**
  * Bustly OAuth state management (shared between gateway and Electron main process)
- * Manages login state using ~/.openclaw/bustlyOauth.json
+ * Manages login state using ~/.bustly/bustlyOauth.json
  */
 
 import { randomBytes } from "node:crypto";
@@ -9,15 +9,15 @@ import * as os from "node:os";
 import { resolve } from "node:path";
 import type { BustlyOAuthState, BustlySearchDataConfig } from "./config/types.base.js";
 
-const BUSTLY_OAUTH_FILE = resolve(os.homedir(), ".openclaw", "bustlyOauth.json");
+const BUSTLY_OAUTH_FILE = resolve(os.homedir(), ".bustly", "bustlyOauth.json");
 
 export type { BustlyOAuthState, BustlySearchDataConfig };
 
 /**
- * Ensure ~/.openclaw directory exists
+ * Ensure ~/.bustly directory exists
  */
 function ensureConfigDir(): void {
-  const dir = resolve(os.homedir(), ".openclaw");
+  const dir = resolve(os.homedir(), ".bustly");
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true, mode: 0o700 });
   }

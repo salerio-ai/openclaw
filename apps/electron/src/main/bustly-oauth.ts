@@ -26,7 +26,7 @@ function resolveStateDir(): string {
   if (override) {
     return resolveUserPath(override, homeDir);
   }
-  return resolve(homeDir, ".openclaw");
+  return resolve(homeDir, ".bustly");
 }
 
 function resolveBustlyOauthFile(): string {

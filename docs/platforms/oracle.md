@@ -193,7 +193,7 @@ This setup often removes the _need_ for extra host-based firewall rules purely t
 
 ### Still Recommended
 
-- **Credential permissions:** `chmod 700 ~/.openclaw`
+- **Credential permissions:** `chmod 700 ~/.bustly`
 - **Security audit:** `openclaw security audit`
 - **System updates:** `sudo apt update && sudo apt upgrade` regularly
 - **Monitor Tailscale:** Review devices in [Tailscale admin console](https://login.tailscale.com/admin)
@@ -283,13 +283,13 @@ Most npm packages work fine. For binaries, look for `linux-arm64` or `aarch64` r
 
 All state lives in:
 
-- `~/.openclaw/` — config, credentials, session data
-- `~/.openclaw/workspace/` — workspace (SOUL.md, memory, artifacts)
+- `~/.bustly/` — config, credentials, session data
+- `~/.bustly/workspace/` — workspace (SOUL.md, memory, artifacts)
 
 Back up periodically:
 
 ```bash
-tar -czvf openclaw-backup.tar.gz ~/.openclaw ~/.openclaw/workspace
+tar -czvf openclaw-backup.tar.gz ~/.bustly ~/.bustly/workspace
 ```
 
 ---

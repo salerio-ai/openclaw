@@ -35,10 +35,10 @@ describe("Nix integration (U3, U5, U9)", () => {
   });
 
   describe("U5: CONFIG_PATH and STATE_DIR env var overrides", () => {
-    it("STATE_DIR defaults to ~/.openclaw when env not set", async () => {
+    it("STATE_DIR defaults to ~/.bustly when env not set", async () => {
       await withEnvOverride({ OPENCLAW_STATE_DIR: undefined }, async () => {
         const { STATE_DIR } = await import("./config.js");
-        expect(STATE_DIR).toMatch(/\.openclaw$/);
+        expect(STATE_DIR).toMatch(/\.bustly$/);
       });
     });
 
@@ -49,12 +49,12 @@ describe("Nix integration (U3, U5, U9)", () => {
       });
     });
 
-    it("CONFIG_PATH defaults to ~/.openclaw/openclaw.json when env not set", async () => {
+    it("CONFIG_PATH defaults to ~/.bustly/openclaw.json when env not set", async () => {
       await withEnvOverride(
         { OPENCLAW_CONFIG_PATH: undefined, OPENCLAW_STATE_DIR: undefined },
         async () => {
           const { CONFIG_PATH } = await import("./config.js");
-          expect(CONFIG_PATH).toMatch(/\.openclaw[\\/]openclaw\.json$/);
+          expect(CONFIG_PATH).toMatch(/\.bustly[\\/]openclaw\.json$/);
         },
       );
     });
@@ -68,9 +68,9 @@ describe("Nix integration (U3, U5, U9)", () => {
 
     it("CONFIG_PATH expands ~ in OPENCLAW_CONFIG_PATH override", async () => {
       await withTempHome(async (home) => {
-        await withEnvOverride({ OPENCLAW_CONFIG_PATH: "~/.openclaw/custom.json" }, async () => {
+        await withEnvOverride({ OPENCLAW_CONFIG_PATH: "~/.bustly/custom.json" }, async () => {
           const { CONFIG_PATH } = await import("./config.js");
-          expect(CONFIG_PATH).toBe(path.join(home, ".openclaw", "custom.json"));
+          expect(CONFIG_PATH).toBe(path.join(home, ".bustly", "custom.json"));
         });
       });
     });
@@ -92,7 +92,7 @@ describe("Nix integration (U3, U5, U9)", () => {
   describe("U5b: tilde expansion for config paths", () => {
     it("expands ~ in common path-ish config fields", async () => {
       await withTempHome(async (home) => {
-        const configDir = path.join(home, ".openclaw");
+        const configDir = path.join(home, ".bustly");
         await fs.mkdir(configDir, { recursive: true });
         const pluginDir = path.join(home, "plugins", "demo-plugin");
         await fs.mkdir(pluginDir, { recursive: true });
@@ -128,7 +128,7 @@ describe("Nix integration (U3, U5, U9)", () => {
                   {
                     id: "main",
                     workspace: "~/ws-agent",
-                    agentDir: "~/.openclaw/agents/main",
+                    agentDir: "~/.bustly/agents/main",
                     sandbox: { workspaceRoot: "~/sandbox-root" },
                   },
                 ],
@@ -137,7 +137,7 @@ describe("Nix integration (U3, U5, U9)", () => {
                 whatsapp: {
                   accounts: {
                     personal: {
-                      authDir: "~/.openclaw/credentials/wa-personal",
+                      authDir: "~/.bustly/credentials/wa-personal",
                     },
                   },
                 },
@@ -156,12 +156,10 @@ describe("Nix integration (U3, U5, U9)", () => {
         expect(cfg.plugins?.load?.paths?.[0]).toBe(path.join(home, "plugins", "demo-plugin"));
         expect(cfg.agents?.defaults?.workspace).toBe(path.join(home, "ws-default"));
         expect(cfg.agents?.list?.[0]?.workspace).toBe(path.join(home, "ws-agent"));
-        expect(cfg.agents?.list?.[0]?.agentDir).toBe(
-          path.join(home, ".openclaw", "agents", "main"),
-        );
+        expect(cfg.agents?.list?.[0]?.agentDir).toBe(path.join(home, ".bustly", "agents", "main"));
         expect(cfg.agents?.list?.[0]?.sandbox?.workspaceRoot).toBe(path.join(home, "sandbox-root"));
         expect(cfg.channels?.whatsapp?.accounts?.personal?.authDir).toBe(
-          path.join(home, ".openclaw", "credentials", "wa-personal"),
+          path.join(home, ".bustly", "credentials", "wa-personal"),
         );
       });
     });
@@ -193,7 +191,7 @@ describe("Nix integration (U3, U5, U9)", () => {
   describe("U9: telegram.tokenFile schema validation", () => {
     it("accepts config with only botToken", async () => {
       await withTempHome(async (home) => {
-        const configDir = path.join(home, ".openclaw");
+        const configDir = path.join(home, ".bustly");
         await fs.mkdir(configDir, { recursive: true });
         await fs.writeFile(
           path.join(configDir, "openclaw.json"),
@@ -213,7 +211,7 @@ describe("Nix integration (U3, U5, U9)", () => {
 
     it("accepts config with only tokenFile", async () => {
       await withTempHome(async (home) => {
-        const configDir = path.join(home, ".openclaw");
+        const configDir = path.join(home, ".bustly");
         await fs.mkdir(configDir, { recursive: true });
         await fs.writeFile(
           path.join(configDir, "openclaw.json"),
@@ -233,7 +231,7 @@ describe("Nix integration (U3, U5, U9)", () => {
 
     it("accepts config with both botToken and tokenFile", async () => {
       await withTempHome(async (home) => {
-        const configDir = path.join(home, ".openclaw");
+        const configDir = path.join(home, ".bustly");
         await fs.mkdir(configDir, { recursive: true });
         await fs.writeFile(
           path.join(configDir, "openclaw.json"),

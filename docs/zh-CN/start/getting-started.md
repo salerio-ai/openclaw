@@ -39,7 +39,7 @@ x-i18n:
   "routing": {
     "agents": {
       "main": {
-        "workspace": "~/.openclaw/workspace",
+        "workspace": "~/.bustly/workspace",
         "sandbox": { "mode": "off" }
       }
     }
@@ -103,8 +103,8 @@ openclaw onboard --install-daemon
 
 - **推荐的 Anthropic 路径：** 设置 API 密钥（向导可以将其存储以供服务使用）。 `claude setup-token` 如果您想复用 Claude Code 凭据，也受支持。
 
-- OAuth 凭据（旧版导入）： `~/.openclaw/credentials/oauth.json`
-- 认证配置文件（OAuth + API 密钥）： `~/.openclaw/agents/<agentId>/agent/auth-profiles.json`
+- OAuth 凭据（旧版导入）： `~/.bustly/credentials/oauth.json`
+- 认证配置文件（OAuth + API 密钥）： `~/.bustly/agents/<agentId>/agent/auth-profiles.json`
 
 无头/服务器提示：先在普通机器上完成 OAuth，然后复制 `oauth.json` 到 Gateway 主机上。
 

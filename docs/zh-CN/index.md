@@ -156,8 +156,8 @@ openclaw onboard --install-daemon
 多实例快速开始（可选）：
 
 ```bash
-OPENCLAW_CONFIG_PATH=~/.openclaw/a.json \
-OPENCLAW_STATE_DIR=~/.openclaw-a \
+OPENCLAW_CONFIG_PATH=~/.bustly/a.json \
+OPENCLAW_STATE_DIR=~/.bustly-a \
 openclaw gateway --port 19001
 ```
 
@@ -169,7 +169,7 @@ openclaw message send --target +15555550123 --message "Hello from OpenClaw"
 
 ## 配置（可选）
 
-配置文件位于 `~/.openclaw/openclaw.json`.
+配置文件位于 `~/.bustly/openclaw.json`.
 
 - 如果你 **不做任何操作**，OpenClaw 将使用内置的 Pi 二进制文件以 RPC 模式运行，并采用按发送者区分的会话。
 - 如果你想锁定访问权限，请从以下内容开始 `channels.whatsapp.allowFrom` 以及（针对群组的）提及规则。

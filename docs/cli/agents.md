@@ -18,8 +18,8 @@ Related:
 
 ```bash
 openclaw agents list
-openclaw agents add work --workspace ~/.openclaw/workspace-work
-openclaw agents set-identity --workspace ~/.openclaw/workspace --from-identity
+openclaw agents add work --workspace ~/.bustly/workspace-work
+openclaw agents set-identity --workspace ~/.bustly/workspace --from-identity
 openclaw agents set-identity --agent main --avatar avatars/openclaw.png
 openclaw agents delete work
 ```
@@ -28,7 +28,7 @@ openclaw agents delete work
 
 Each agent workspace can include an `IDENTITY.md` at the workspace root:
 
-- Example path: `~/.openclaw/workspace/IDENTITY.md`
+- Example path: `~/.bustly/workspace/IDENTITY.md`
 - `set-identity --from-identity` reads from the workspace root (or an explicit `--identity-file`)
 
 Avatar paths resolve relative to the workspace root.
@@ -45,7 +45,7 @@ Avatar paths resolve relative to the workspace root.
 Load from `IDENTITY.md`:
 
 ```bash
-openclaw agents set-identity --workspace ~/.openclaw/workspace --from-identity
+openclaw agents set-identity --workspace ~/.bustly/workspace --from-identity
 ```
 
 Override fields explicitly:

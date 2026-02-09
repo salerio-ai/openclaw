@@ -817,8 +817,8 @@ describe("security audit", () => {
       config: cfg,
       includeFilesystem: false,
       includeChannelSecurity: false,
-      stateDir: "/Users/test/Dropbox/.openclaw",
-      configPath: "/Users/test/Dropbox/.openclaw/openclaw.json",
+      stateDir: "/Users/test/Dropbox/.bustly",
+      configPath: "/Users/test/Dropbox/.bustly/openclaw.json",
     });
 
     expect(res.findings).toEqual(

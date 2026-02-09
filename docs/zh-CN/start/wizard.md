@@ -76,7 +76,7 @@ openclaw agents add <name>
 ## 流程详情（本地）
 
 1. **现有配置检测**
-   - 如果 `~/.openclaw/openclaw.json` 存在，请选择 **保留 / 修改 / 重置**。
+   - 如果 `~/.bustly/openclaw.json` 存在，请选择 **保留 / 修改 / 重置**。
    - 重新运行向导 **不会** 不会删除任何内容，除非您明确选择 **重置**
      （或传入 `--reset`）。
    - 如果配置无效或包含遗留键，向导会停止并要求您运行 `openclaw doctor` 后再继续。
@@ -92,7 +92,7 @@ openclaw agents add <name>
    - **OpenAI Code (Codex) 订阅 (Codex CLI)**：如果 `~/.codex/auth.json` 存在，向导可以复用它。
    - **OpenAI Code (Codex) 订阅 (OAuth)**：浏览器流程；粘贴 `code#state`。
      - 设置 `agents.defaults.model` 为 `openai-codex/gpt-5.2` （当模型未设置或为 `openai/*`。
-   - **OpenAI API 密钥**：使用 `OPENAI_API_KEY` （如果存在）或提示输入密钥，然后保存到 `~/.openclaw/.env` 以便 launchd 可以读取。
+   - **OpenAI API 密钥**：使用 `OPENAI_API_KEY` （如果存在）或提示输入密钥，然后保存到 `~/.bustly/.env` 以便 launchd 可以读取。
    - **OpenCode Zen（多模型代理）**：提示输入 `OPENCODE_API_KEY` （或 `OPENCODE_ZEN_API_KEY`，请在 https://opencode.ai/auth)。
    - **API 密钥**：为您存储密钥。
    - **Vercel AI Gateway（多模型代理）**：提示输入 `AI_GATEWAY_API_KEY`。
@@ -108,11 +108,11 @@ openclaw agents add <name>
    - 从检测到的选项中选择默认模型（或手动输入提供商/模型）。
    - 向导会运行模型检查，如果配置的模型未知或缺少认证则发出警告。
 
-- OAuth 凭据存储在 `~/.openclaw/credentials/oauth.json`；认证配置存储在 `~/.openclaw/agents/<agentId>/agent/auth-profiles.json` （API 密钥 + OAuth）。
+- OAuth 凭据存储在 `~/.bustly/credentials/oauth.json`；认证配置存储在 `~/.bustly/agents/<agentId>/agent/auth-profiles.json` （API 密钥 + OAuth）。
 - 更多详情： [/concepts/oauth](/concepts/oauth)
 
 3. **工作区**
-   - 默认 `~/.openclaw/workspace` （可配置）。
+   - 默认 `~/.bustly/workspace` （可配置）。
    - 生成智能体引导启动仪式所需的工作区文件。
    - 完整工作区布局 + 备份指南： [智能体工作区](/concepts/agent-workspace)
 
@@ -184,7 +184,7 @@ openclaw agents add <name>
 
 注意事项：
 
-- 默认工作区遵循 `~/.openclaw/workspace-<agentId>`。
+- 默认工作区遵循 `~/.bustly/workspace-<agentId>`。
 - 添加 `bindings` 以路由入站消息（向导可以执行此操作）。
 - 非交互标志： `--model`， `--agent-dir`， `--bind`， `--non-interactive`。
 
@@ -276,7 +276,7 @@ openclaw onboard --non-interactive \
 
 ```bash
 openclaw agents add work \
-  --workspace ~/.openclaw/workspace-work \
+  --workspace ~/.bustly/workspace-work \
   --model openai/gpt-5.2 \
   --bind whatsapp:biz \
   --non-interactive \
@@ -292,7 +292,7 @@ Gateway 通过 RPC 暴露向导流程（`wizard.start`， `wizard.next`， `wiza
 向导可以安装 `signal-cli` （从 GitHub 发布版本）：
 
 - 下载相应的发布资源。
-- 将其存储在 `~/.openclaw/tools/signal-cli/<version>/`。
+- 将其存储在 `~/.bustly/tools/signal-cli/<version>/`。
 - 写入 `channels.signal.cliPath` 到您的配置中。
 
 注意事项：
@@ -303,7 +303,7 @@ Gateway 通过 RPC 暴露向导流程（`wizard.start`， `wizard.next`， `wiza
 
 ## 向导写入的内容
 
-中的典型字段 `~/.openclaw/openclaw.json`：
+中的典型字段 `~/.bustly/openclaw.json`：
 
 - `agents.defaults.workspace`
 - `agents.defaults.model` / `models.providers` （如果选择了 Minimax）
@@ -319,7 +319,7 @@ Gateway 通过 RPC 暴露向导流程（`wizard.start`， `wizard.next`， `wiza
 
 `openclaw agents add` 写入 `agents.list[]` 和可选的 `bindings`。
 
-WhatsApp 凭据存储在 `~/.openclaw/credentials/whatsapp/<accountId>/`下。会话存储在 `~/.openclaw/agents/<agentId>/sessions/`。
+WhatsApp 凭据存储在 `~/.bustly/credentials/whatsapp/<accountId>/`下。会话存储在 `~/.bustly/agents/<agentId>/sessions/`。
 
 部分渠道以插件形式提供。当您在上手引导期间选择某个渠道时，向导会提示先安装它（通过 npm 或本地路径），然后才能进行配置。
 

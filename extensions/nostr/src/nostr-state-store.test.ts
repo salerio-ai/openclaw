@@ -21,7 +21,7 @@ async function withTempStateDir<T>(fn: (dir: string) => Promise<T>) {
         if (override) {
           return override;
         }
-        return path.join(homedir(), ".openclaw");
+        return path.join(homedir(), ".bustly");
       },
     },
   } as PluginRuntime);

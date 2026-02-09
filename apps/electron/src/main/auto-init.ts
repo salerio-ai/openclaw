@@ -32,8 +32,23 @@ function resolveConfigPathSafe(): string {
       );
       return join(resolved, "openclaw.json");
     }
-    return join(homeDir, ".openclaw", "openclaw.json");
+    return join(homeDir, ".bustly", "openclaw.json");
   }
+}
+
+function resolveDefaultWorkspaceDir(explicit?: string): string {
+  if (explicit?.trim()) {
+    return explicit.trim();
+  }
+  const homeDir = homedir();
+  const stateOverride = process.env.OPENCLAW_STATE_DIR?.trim();
+  if (stateOverride) {
+    const resolved = resolve(
+      stateOverride.startsWith("~") ? stateOverride.replace(/^~(?=$|[\\/])/, homeDir) : stateOverride,
+    );
+    return join(resolved, "workspace");
+  }
+  return join(homeDir, ".bustly", "workspace");
 }
 
 async function runCliOnboard(options: InitializationOptions): Promise<void> {
@@ -53,9 +68,8 @@ async function runCliOnboard(options: InitializationOptions): Promise<void> {
     "--json",
   ];
 
-  if (options.workspace) {
-    args.push("--workspace", options.workspace);
-  }
+  const workspace = resolveDefaultWorkspaceDir(options.workspace);
+  args.push("--workspace", workspace);
   if (options.gatewayPort) {
     args.push("--gateway-port", String(options.gatewayPort));
   }
@@ -130,12 +144,9 @@ export async function initializeOpenClaw(
       }
     }
 
-    const config = JSON.parse(readFileSync(configPath, "utf-8"));
+  const config = JSON.parse(readFileSync(configPath, "utf-8"));
     const workspaceDir =
-      config.agents?.defaults?.workspace ||
-      (process.env.OPENCLAW_STATE_DIR?.trim()
-        ? `${process.env.OPENCLAW_STATE_DIR.trim()}/workspace`
-        : "~/.openclaw/workspace");
+      config.agents?.defaults?.workspace || resolveDefaultWorkspaceDir(options.workspace);
     const resolvedWorkspace = workspaceDir.startsWith("~")
       ? join(homedir(), workspaceDir.slice(1))
       : workspaceDir;

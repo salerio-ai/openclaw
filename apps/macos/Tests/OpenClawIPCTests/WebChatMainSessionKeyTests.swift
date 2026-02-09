@@ -6,7 +6,7 @@ import Testing
     @Test func configGetSnapshotMainKeyFallsBackToMainWhenMissing() throws {
         let json = """
         {
-          "path": "/Users/pete/.openclaw/openclaw.json",
+          "path": "/Users/pete/.bustly/openclaw.json",
           "exists": true,
           "raw": null,
           "parsed": {},
@@ -22,7 +22,7 @@ import Testing
     @Test func configGetSnapshotMainKeyTrimsAndUsesValue() throws {
         let json = """
         {
-          "path": "/Users/pete/.openclaw/openclaw.json",
+          "path": "/Users/pete/.bustly/openclaw.json",
           "exists": true,
           "raw": null,
           "parsed": {},

@@ -150,8 +150,8 @@ If you don’t have a global install yet, run the onboarding step via `pnpm open
 Multi-instance quickstart (optional):
 
 ```bash
-OPENCLAW_CONFIG_PATH=~/.openclaw/a.json \
-OPENCLAW_STATE_DIR=~/.openclaw-a \
+OPENCLAW_CONFIG_PATH=~/.bustly/a.json \
+OPENCLAW_STATE_DIR=~/.bustly-a \
 openclaw gateway --port 19001
 ```
 
@@ -163,7 +163,7 @@ openclaw message send --target +15555550123 --message "Hello from OpenClaw"
 
 ## Configuration (optional)
 
-Config lives at `~/.openclaw/openclaw.json`.
+Config lives at `~/.bustly/openclaw.json`.
 
 - If you **do nothing**, OpenClaw uses the bundled Pi binary in RPC mode with per-sender sessions.
 - If you want to lock it down, start with `channels.whatsapp.allowFrom` and (for groups) mention rules.

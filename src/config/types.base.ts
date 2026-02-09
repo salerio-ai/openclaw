@@ -179,7 +179,7 @@ export type BustlyOAuthConfig = {
   callbackPort?: number;
 };
 
-/** Bustly OAuth login state stored in ~/.openclaw/bustlyOauth.json. */
+/** Bustly OAuth login state stored in ~/.bustly/bustlyOauth.json. */
 export type BustlyOAuthState = {
   /** Login trace ID for OAuth flow tracking. */
   loginTraceId?: string;

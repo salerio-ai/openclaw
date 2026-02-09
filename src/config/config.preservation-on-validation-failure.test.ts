@@ -16,7 +16,7 @@ describe("config strict validation", () => {
 
   it("flags legacy config entries without auto-migrating", async () => {
     await withTempHome(async (home) => {
-      const configDir = path.join(home, ".openclaw");
+      const configDir = path.join(home, ".bustly");
       await fs.mkdir(configDir, { recursive: true });
       await fs.writeFile(
         path.join(configDir, "openclaw.json"),

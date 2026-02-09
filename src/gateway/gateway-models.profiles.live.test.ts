@@ -541,7 +541,7 @@ async function runGatewayModelSuite(params: GatewayModelSuiteParams) {
   await fs.mkdir(workspaceDir, { recursive: true });
   const nonceA = randomUUID();
   const nonceB = randomUUID();
-  const toolProbePath = path.join(workspaceDir, `.openclaw-live-tool-probe.${nonceA}.txt`);
+  const toolProbePath = path.join(workspaceDir, `.bustly-live-tool-probe.${nonceA}.txt`);
   await fs.writeFile(toolProbePath, `nonceA=${nonceA}\nnonceB=${nonceB}\n`);
 
   const agentDir = resolveOpenClawAgentDir();
@@ -1145,7 +1145,7 @@ describeLive("gateway live (dev agent, profile keys)", () => {
     await fs.mkdir(workspaceDir, { recursive: true });
     const nonceA = randomUUID();
     const nonceB = randomUUID();
-    const toolProbePath = path.join(workspaceDir, `.openclaw-live-zai-fallback.${nonceA}.txt`);
+    const toolProbePath = path.join(workspaceDir, `.bustly-live-zai-fallback.${nonceA}.txt`);
     await fs.writeFile(toolProbePath, `nonceA=${nonceA}\nnonceB=${nonceB}\n`);
 
     const port = await getFreeGatewayPort();

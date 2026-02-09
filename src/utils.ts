@@ -253,16 +253,7 @@ export function resolveConfigDir(
   if (override) {
     return resolveUserPath(override);
   }
-  const newDir = path.join(homedir(), ".openclaw");
-  try {
-    const hasNew = fs.existsSync(newDir);
-    if (hasNew) {
-      return newDir;
-    }
-  } catch {
-    // best-effort
-  }
-  return newDir;
+  return path.join(homedir(), ".bustly");
 }
 
 export function resolveHomeDir(): string | undefined {
