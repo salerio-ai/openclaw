@@ -64,7 +64,7 @@ describe("gateway config.apply", () => {
       expect(res.ok).toBe(true);
 
       // Verify sentinel file was created (restart was scheduled)
-      const sentinelPath = path.join(os.homedir(), ".openclaw", "restart-sentinel.json");
+      const sentinelPath = path.join(os.homedir(), ".bustly", "restart-sentinel.json");
 
       // Wait for file to be written
       await new Promise((resolve) => setTimeout(resolve, 100));

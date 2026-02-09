@@ -2,7 +2,7 @@ import type { IconName } from "./icons.js";
 
 export const TAB_GROUPS = [
   { label: "Chat", tabs: ["chat"] },
-  { label: "Control", tabs: ["channels"] },
+  { label: "Control", tabs: ["channels", "skills"] },
 ] as const;
 
 export type Tab =
@@ -192,7 +192,7 @@ export function subtitleForTab(tab: Tab) {
     case "chat":
       return "Direct gateway chat session for quick interventions.";
     case "config":
-      return "Edit ~/.openclaw/openclaw.json safely.";
+      return "Edit ~/.bustly/openclaw.json safely.";
     case "debug":
       return "Gateway snapshots, events, and manual RPC calls.";
     case "logs":

@@ -69,7 +69,7 @@ description: E-commerce data query skill for Shopify, Google Ads, BigCommerce, a
 ## Auto-Loading Configuration
 
 ### Current Configuration (✅ Verified)
-Configuration is now loaded from `~/.openclaw/bustlyOauth.json` (Bustly OAuth login state):
+Configuration is now loaded from `~/.bustly/bustlyOauth.json` (Bustly OAuth login state):
 
 ```json
 {
@@ -154,7 +154,7 @@ npm run orders:recent
 - [x] All Chinese text translated to English
 - [x] Configuration relies on OpenClaw environment injection
 - [x] workspaceId is optional (warns instead of errors)
-- [x] Skill entry exists in `~/.openclaw/openclaw.json`
+- [x] Skill entry exists in `~/.bustly/openclaw.json`
 - [x] All required environment variables configured
 - [x] Error messages are in English
 - [x] README.md with comprehensive documentation
@@ -180,7 +180,7 @@ npm run orders:recent
 ### Skill Not Detected
 ```bash
 # Check Bustly OAuth login state
-cat ~/.openclaw/bustlyOauth.json | jq '.bustlySearchData'
+cat ~/.bustly/bustlyOauth.json | jq '.bustlySearchData'
 
 # Restart gateway to reload skills
 pkill -f openclaw-gateway
@@ -189,7 +189,7 @@ pkill -f openclaw-gateway
 ### Configuration Errors
 ```bash
 # Verify Bustly OAuth configuration
-cat ~/.openclaw/bustlyOauth.json | jq '.bustlySearchData'
+cat ~/.bustly/bustlyOauth.json | jq '.bustlySearchData'
 
 # Check skill metadata
 head -10 skills/bustly-search-data/SKILL.md

@@ -29,7 +29,7 @@ enum GatewayDiscoveryHelpers {
             return "wss://\(tailnetDns)"
         }
         guard let lanHost = self.trimmed(lanHost), !lanHost.isEmpty else { return nil }
-        let port = gatewayPort ?? 18789
+        let port = gatewayPort ?? 17999
         return "ws://\(lanHost):\(port)"
     }
 

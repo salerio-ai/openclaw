@@ -283,6 +283,7 @@ export class OpenClawApp extends LitElement {
   private themeMedia: MediaQueryList | null = null;
   private themeMediaHandler: ((event: MediaQueryListEvent) => void) | null = null;
   private topbarObserver: ResizeObserver | null = null;
+  private bustlyLoginRefreshUnsubscribe: (() => void) | null = null;
 
   createRenderRoot() {
     return this;
@@ -295,6 +296,15 @@ export class OpenClawApp extends LitElement {
     }
     handleConnected(this as unknown as Parameters<typeof handleConnected>[0]);
     document.addEventListener('click', this.handleBustlyUserMenuClose.bind(this));
+
+    const electronAPI = (window as unknown as {
+      electronAPI?: { onBustlyLoginRefresh?: (callback: () => void) => () => void };
+    }).electronAPI;
+    if (electronAPI?.onBustlyLoginRefresh) {
+      this.bustlyLoginRefreshUnsubscribe = electronAPI.onBustlyLoginRefresh(() => {
+        void this.checkBustlyLoginStatus();
+      });
+    }
   }
 
   protected firstUpdated() {
@@ -304,6 +314,10 @@ export class OpenClawApp extends LitElement {
   disconnectedCallback() {
     handleDisconnected(this as unknown as Parameters<typeof handleDisconnected>[0]);
     document.removeEventListener('click', this.handleBustlyUserMenuClose.bind(this));
+    if (this.bustlyLoginRefreshUnsubscribe) {
+      this.bustlyLoginRefreshUnsubscribe();
+      this.bustlyLoginRefreshUnsubscribe = null;
+    }
     super.disconnectedCallback();
   }
 
@@ -705,6 +719,7 @@ export class OpenClawApp extends LitElement {
     try {
       const electronAPI = (window as unknown as { electronAPI?: {
         bustlyLogout?: () => Promise<{ success: boolean; error?: string }>;
+        bustlyOpenLogin?: () => Promise<{ success: boolean; error?: string }>;
       } }).electronAPI;
       if (electronAPI?.bustlyLogout) {
         const result = await electronAPI.bustlyLogout();
@@ -718,6 +733,13 @@ export class OpenClawApp extends LitElement {
       this.bustlyUserInfo = null;
       this.bustlyUserMenuOpen = false;
       this.oauthLoginSuccess = false;
+
+      if (electronAPI?.bustlyOpenLogin) {
+        const openResult = await electronAPI.bustlyOpenLogin();
+        if (openResult?.success) {
+          return;
+        }
+      }
 
       // Reload overview to reflect logout
       await loadOverviewInternal(this as unknown as Parameters<typeof loadOverviewInternal>[0]);

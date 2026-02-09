@@ -3,11 +3,11 @@
  */
 
 interface PresetConfigOptions {
-  /** Gateway port (default: 18789) */
+  /** Gateway port (default: 17999) */
   gatewayPort?: number;
   /** Gateway bind address (default: "loopback") */
   gatewayBind?: "loopback" | "lan" | "auto";
-  /** Workspace directory (default: "~/.openclaw/workspace") */
+  /** Workspace directory (default: "$OPENCLAW_STATE_DIR/workspace", fallback "~/.bustly/workspace") */
   workspace?: string;
   /** Node manager for skills (default: "pnpm") */
   nodeManager?: "npm" | "pnpm" | "bun";
@@ -144,6 +144,7 @@ interface ElectronAPI {
   bustlyIsLoggedIn: () => Promise<boolean>;
   bustlyGetUserInfo: () => Promise<BustlyUserInfo | null>;
   bustlyLogout: () => Promise<{ success: boolean; error?: string }>;
+  bustlyOpenLogin: () => Promise<{ success: boolean; error?: string }>;
   onboardListProviders: () => Promise<ProviderConfig[]>;
   onboardAuthApiKey: (provider: string, apiKey: string) => Promise<AuthResult>;
   onboardAuthToken: (provider: string, token: string) => Promise<AuthResult>;
@@ -167,6 +168,7 @@ interface ElectronAPI {
   onGatewayLog: (callback: (data: GatewayLogData) => void) => () => void;
   onGatewayExit: (callback: (data: GatewayExitData) => void) => () => void;
   onMainLog: (callback: (data: MainLogData) => void) => () => void;
+  onBustlyLoginRefresh: (callback: () => void) => () => void;
 }
 
 interface Window {

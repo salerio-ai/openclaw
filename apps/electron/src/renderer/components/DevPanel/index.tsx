@@ -32,26 +32,39 @@ export default function DevPanel({
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [isLoadingUserInfo, setIsLoadingUserInfo] = useState<boolean>(false);
 
+  const loadBustlyUserInfo = useCallback(async () => {
+    if (!window.electronAPI) return;
+
+    try {
+      const loggedIn = await window.electronAPI.bustlyIsLoggedIn();
+      setIsLoggedIn(loggedIn);
+
+      if (loggedIn) {
+        const userInfo = await window.electronAPI.bustlyGetUserInfo();
+        setBustlyUserInfo(userInfo);
+      } else {
+        setBustlyUserInfo(null);
+      }
+    } catch (err) {
+      console.error("Failed to load Bustly user info:", err);
+    }
+  }, []);
+
   // Load Bustly user info on mount
   useEffect(() => {
-    const loadBustlyUserInfo = async () => {
-      if (!window.electronAPI) return;
-
-      try {
-        const loggedIn = await window.electronAPI.bustlyIsLoggedIn();
-        setIsLoggedIn(loggedIn);
-
-        if (loggedIn) {
-          const userInfo = await window.electronAPI.bustlyGetUserInfo();
-          setBustlyUserInfo(userInfo);
-        }
-      } catch (err) {
-        console.error("Failed to load Bustly user info:", err);
-      }
-    };
-
     loadBustlyUserInfo();
-  }, []);
+  }, [loadBustlyUserInfo]);
+
+  // Refresh login status when main window regains focus
+  useEffect(() => {
+    if (!window.electronAPI?.onBustlyLoginRefresh) return;
+    const unsubscribe = window.electronAPI.onBustlyLoginRefresh(() => {
+      void loadBustlyUserInfo();
+    });
+    return () => {
+      unsubscribe?.();
+    };
+  }, [loadBustlyUserInfo]);
 
   const handleOpenControlUI = useCallback(() => {
     onOpenControlUI();

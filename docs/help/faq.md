@@ -317,7 +317,7 @@ curl -fsSL https://openclaw.ai/install.sh | bash
 openclaw onboard --install-daemon
 ```
 
-The wizard can also build UI assets automatically. After onboarding, you typically run the Gateway on port **18789**.
+The wizard can also build UI assets automatically. After onboarding, you typically run the Gateway on port **17999**.
 
 From source (contributors/dev):
 
@@ -340,15 +340,15 @@ The wizard now opens your browser with a tokenized dashboard URL right after onb
 
 **Localhost (same machine):**
 
-- Open `http://127.0.0.1:18789/`.
+- Open `http://127.0.0.1:17999/`.
 - If it asks for auth, run `openclaw dashboard` and use the tokenized link (`?token=...`).
 - The token is the same value as `gateway.auth.token` (or `OPENCLAW_GATEWAY_TOKEN`) and is stored by the UI after first load.
 
 **Not on localhost:**
 
 - **Tailscale Serve** (recommended): keep bind loopback, run `openclaw gateway --tailscale serve`, open `https://<magicdns>/`. If `gateway.auth.allowTailscale` is `true`, identity headers satisfy auth (no token).
-- **Tailnet bind**: run `openclaw gateway --bind tailnet --token "<token>"`, open `http://<tailscale-ip>:18789/`, paste token in dashboard settings.
-- **SSH tunnel**: `ssh -N -L 18789:127.0.0.1:18789 user@host` then open `http://127.0.0.1:18789/?token=...` from `openclaw dashboard`.
+- **Tailnet bind**: run `openclaw gateway --bind tailnet --token "<token>"`, open `http://<tailscale-ip>:17999/`, paste token in dashboard settings.
+- **SSH tunnel**: `ssh -N -L 17999:127.0.0.1:17999 user@host` then open `http://127.0.0.1:17999/?token=...` from `openclaw dashboard`.
 
 See [Dashboard](/web/dashboard) and [Web surfaces](/web) for bind modes and auth details.
 
@@ -414,8 +414,8 @@ keeps your bot “exactly the same” (memory, session history, auth, and channe
 state) as long as you copy **both** locations:
 
 1. Install OpenClaw on the new machine.
-2. Copy `$OPENCLAW_STATE_DIR` (default: `~/.openclaw`) from the old machine.
-3. Copy your workspace (default: `~/.openclaw/workspace`).
+2. Copy `$OPENCLAW_STATE_DIR` (default: `~/.bustly`) from the old machine.
+3. Copy your workspace (default: `~/.bustly/workspace`).
 4. Run `openclaw doctor` and restart the Gateway service.
 
 That preserves config, auth profiles, WhatsApp creds, sessions, and memory. If you’re in
@@ -423,7 +423,7 @@ remote mode, remember the gateway host owns the session store and workspace.
 
 **Important:** if you only commit/push your workspace to GitHub, you’re backing
 up **memory + bootstrap files**, but **not** session history or auth. Those live
-under `~/.openclaw/` (for example `~/.openclaw/agents/<agentId>/sessions/`).
+under `~/.bustly/` (for example `~/.bustly/agents/<agentId>/sessions/`).
 
 Related: [Migrating](/install/migrating), [Where things live on disk](/help/faq#where-does-openclaw-store-its-data),
 [Agent workspace](/concepts/agent-workspace), [Doctor](/gateway/doctor),
@@ -836,7 +836,7 @@ Docs: [Getting started](/start/getting-started), [Updating](/install/updating).
 
 Yes. Install the other flavor, then run Doctor so the gateway service points at the new entrypoint.
 This **does not delete your data** - it only changes the OpenClaw code install. Your state
-(`~/.openclaw`) and workspace (`~/.openclaw/workspace`) stay untouched.
+(`~/.bustly`) and workspace (`~/.bustly/workspace`) stay untouched.
 
 From npm → git:
 
@@ -998,11 +998,11 @@ Showcase: https://openclaw.ai/showcase
 
 ### How do I customize skills without keeping the repo dirty
 
-Use managed overrides instead of editing the repo copy. Put your changes in `~/.openclaw/skills/<name>/SKILL.md` (or add a folder via `skills.load.extraDirs` in `~/.openclaw/openclaw.json`). Precedence is `<workspace>/skills` > `~/.openclaw/skills` > bundled, so managed overrides win without touching git. Only upstream-worthy edits should live in the repo and go out as PRs.
+Use managed overrides instead of editing the repo copy. Put your changes in `~/.bustly/skills/<name>/SKILL.md` (or add a folder via `skills.load.extraDirs` in `~/.bustly/openclaw.json`). Precedence is `<workspace>/skills` > `~/.bustly/skills` > bundled, so managed overrides win without touching git. Only upstream-worthy edits should live in the repo and go out as PRs.
 
 ### Can I load skills from a custom folder
 
-Yes. Add extra directories via `skills.load.extraDirs` in `~/.openclaw/openclaw.json` (lowest precedence). Default precedence remains: `<workspace>/skills` → `~/.openclaw/skills` → bundled → `skills.load.extraDirs`. `clawhub` installs into `./skills` by default, which OpenClaw treats as `<workspace>/skills`.
+Yes. Add extra directories via `skills.load.extraDirs` in `~/.bustly/openclaw.json` (lowest precedence). Default precedence remains: `<workspace>/skills` → `~/.bustly/skills` → bundled → `skills.load.extraDirs`. `clawhub` installs into `./skills` by default, which OpenClaw treats as `<workspace>/skills`.
 
 ### How can I use different models for different tasks
 
@@ -1095,7 +1095,7 @@ Keep the Gateway on Linux, but make the required CLI binaries resolve to SSH wra
    exec ssh -T user@mac-host /opt/homebrew/bin/imsg "$@"
    ```
 2. Put the wrapper on `PATH` on the Linux host (for example `~/bin/imsg`).
-3. Override the skill metadata (workspace or `~/.openclaw/skills`) to allow Linux:
+3. Override the skill metadata (workspace or `~/.bustly/skills`) to allow Linux:
    ```markdown
    ---
    name: imsg
@@ -1131,7 +1131,7 @@ clawhub install <skill-slug>
 clawhub update --all
 ```
 
-ClawHub installs into `./skills` under your current directory (or falls back to your configured OpenClaw workspace); OpenClaw treats that as `<workspace>/skills` on the next session. For shared skills across agents, place them in `~/.openclaw/skills/<name>/SKILL.md`. Some skills expect binaries installed via Homebrew; on Linux that means Linuxbrew (see the Homebrew Linux FAQ entry above). See [Skills](/tools/skills) and [ClawHub](/tools/clawhub).
+ClawHub installs into `./skills` under your current directory (or falls back to your configured OpenClaw workspace); OpenClaw treats that as `<workspace>/skills` on the next session. For shared skills across agents, place them in `~/.bustly/skills/<name>/SKILL.md`. Some skills expect binaries installed via Homebrew; on Linux that means Linuxbrew (see the Homebrew Linux FAQ entry above). See [Skills](/tools/skills) and [ClawHub](/tools/clawhub).
 
 ### How do I install the Chrome extension for browser takeover
 
@@ -1241,7 +1241,7 @@ Docs: [Memory](/concepts/memory), [Context](/concepts/context).
 No - **OpenClaw’s state is local**, but **external services still see what you send them**.
 
 - **Local by default:** sessions, memory files, config, and workspace live on the Gateway host
-  (`~/.openclaw` + your workspace directory).
+  (`~/.bustly` + your workspace directory).
 - **Remote by necessity:** messages you send to model providers (Anthropic/OpenAI/etc.) go to
   their APIs, and chat platforms (WhatsApp/Telegram/Slack/etc.) store message data on their
   servers.
@@ -1252,7 +1252,7 @@ Related: [Agent workspace](/concepts/agent-workspace), [Memory](/concepts/memory
 
 ### Where does OpenClaw store its data
 
-Everything lives under `$OPENCLAW_STATE_DIR` (default: `~/.openclaw`):
+Everything lives under `$OPENCLAW_STATE_DIR` (default: `~/.bustly`):
 
 | Path                                                            | Purpose                                                      |
 | --------------------------------------------------------------- | ------------------------------------------------------------ |
@@ -1265,24 +1265,24 @@ Everything lives under `$OPENCLAW_STATE_DIR` (default: `~/.openclaw`):
 | `$OPENCLAW_STATE_DIR/agents/<agentId>/sessions/`                | Conversation history & state (per agent)                     |
 | `$OPENCLAW_STATE_DIR/agents/<agentId>/sessions/sessions.json`   | Session metadata (per agent)                                 |
 
-Legacy single‑agent path: `~/.openclaw/agent/*` (migrated by `openclaw doctor`).
+Legacy single‑agent path: `~/.bustly/agent/*` (migrated by `openclaw doctor`).
 
-Your **workspace** (AGENTS.md, memory files, skills, etc.) is separate and configured via `agents.defaults.workspace` (default: `~/.openclaw/workspace`).
+Your **workspace** (AGENTS.md, memory files, skills, etc.) is separate and configured via `agents.defaults.workspace` (default: `~/.bustly/workspace`).
 
 ### Where should AGENTSmd SOULmd USERmd MEMORYmd live
 
-These files live in the **agent workspace**, not `~/.openclaw`.
+These files live in the **agent workspace**, not `~/.bustly`.
 
 - **Workspace (per agent)**: `AGENTS.md`, `SOUL.md`, `IDENTITY.md`, `USER.md`,
   `MEMORY.md` (or `memory.md`), `memory/YYYY-MM-DD.md`, optional `HEARTBEAT.md`.
-- **State dir (`~/.openclaw`)**: config, credentials, auth profiles, sessions, logs,
-  and shared skills (`~/.openclaw/skills`).
+- **State dir (`~/.bustly`)**: config, credentials, auth profiles, sessions, logs,
+  and shared skills (`~/.bustly/skills`).
 
-Default workspace is `~/.openclaw/workspace`, configurable via:
+Default workspace is `~/.bustly/workspace`, configurable via:
 
 ```json5
 {
-  agents: { defaults: { workspace: "~/.openclaw/workspace" } },
+  agents: { defaults: { workspace: "~/.bustly/workspace" } },
 }
 ```
 
@@ -1301,7 +1301,7 @@ Put your **agent workspace** in a **private** git repo and back it up somewhere
 private (for example GitHub private). This captures memory + AGENTS/SOUL/USER
 files, and lets you restore the assistant’s “mind” later.
 
-Do **not** commit anything under `~/.openclaw` (credentials, sessions, tokens).
+Do **not** commit anything under `~/.bustly` (credentials, sessions, tokens).
 If you need a full restore, back up both the workspace and the state directory
 separately (see the migration question above).
 
@@ -1341,13 +1341,13 @@ Session state is owned by the **gateway host**. If you’re in remote mode, the 
 
 ### What format is the config Where is it
 
-OpenClaw reads an optional **JSON5** config from `$OPENCLAW_CONFIG_PATH` (default: `~/.openclaw/openclaw.json`):
+OpenClaw reads an optional **JSON5** config from `$OPENCLAW_CONFIG_PATH` (default: `~/.bustly/openclaw.json`):
 
 ```
 $OPENCLAW_CONFIG_PATH
 ```
 
-If the file is missing, it uses safe‑ish defaults (including a default workspace of `~/.openclaw/workspace`).
+If the file is missing, it uses safe‑ish defaults (including a default workspace of `~/.bustly/workspace`).
 
 ### I set gatewaybind lan or tailnet and now nothing listens the UI says unauthorized
 
@@ -1411,7 +1411,7 @@ Notes:
 
 - If you use allowlists, add `web_search`/`web_fetch` or `group:web`.
 - `web_fetch` is enabled by default (unless explicitly disabled).
-- Daemons read env vars from `~/.openclaw/.env` (or the service environment).
+- Daemons read env vars from `~/.bustly/.env` (or the service environment).
 
 Docs: [Web tools](/tools/web).
 
@@ -1588,7 +1588,7 @@ else is removed.
 
 Recover:
 
-- Restore from backup (git or a copied `~/.openclaw/openclaw.json`).
+- Restore from backup (git or a copied `~/.bustly/openclaw.json`).
 - If you have no backup, re-run `openclaw doctor` and reconfigure channels/models.
 - If this was unexpected, file a bug and include your last known config or any backup.
 - A local coding agent can often reconstruct a working config from logs or history.
@@ -1604,7 +1604,7 @@ Docs: [Config](/cli/config), [Configure](/cli/configure), [Doctor](/gateway/doct
 
 ```json5
 {
-  agents: { defaults: { workspace: "~/.openclaw/workspace" } },
+  agents: { defaults: { workspace: "~/.bustly/workspace" } },
   channels: { whatsapp: { allowFrom: ["+15555550123"] } },
 }
 ```
@@ -1626,7 +1626,7 @@ Minimal steps:
    - In the Tailscale admin console, enable MagicDNS so the VPS has a stable name.
 4. **Use the tailnet hostname**
    - SSH: `ssh user@your-vps.tailnet-xxxx.ts.net`
-   - Gateway WS: `ws://your-vps.tailnet-xxxx.ts.net:18789`
+   - Gateway WS: `ws://your-vps.tailnet-xxxx.ts.net:17999`
 
 If you want the Control UI without SSH, use Tailscale Serve on the VPS:
 
@@ -1660,7 +1660,7 @@ Docs: [Gateway protocol](/gateway/protocol), [Discovery](/gateway/discovery), [m
 OpenClaw reads env vars from the parent process (shell, launchd/systemd, CI, etc.) and additionally loads:
 
 - `.env` from the current working directory
-- a global fallback `.env` from `~/.openclaw/.env` (aka `$OPENCLAW_STATE_DIR/.env`)
+- a global fallback `.env` from `~/.bustly/.env` (aka `$OPENCLAW_STATE_DIR/.env`)
 
 Neither `.env` file overrides existing env vars.
 
@@ -1681,7 +1681,7 @@ See [/environment](/environment) for full precedence and sources.
 
 Two common fixes:
 
-1. Put the missing keys in `~/.openclaw/.env` so they’re picked up even when the service doesn’t inherit your shell env.
+1. Put the missing keys in `~/.bustly/.env` so they’re picked up even when the service doesn’t inherit your shell env.
 2. Enable shell import (opt‑in convenience):
 
 ```json5
@@ -1707,7 +1707,7 @@ your login shell automatically.
 If the Gateway runs as a service (launchd/systemd), it won’t inherit your shell
 environment. Fix by doing one of these:
 
-1. Put the token in `~/.openclaw/.env`:
+1. Put the token in `~/.bustly/.env`:
    ```
    COPILOT_GITHUB_TOKEN=...
    ```
@@ -1791,7 +1791,7 @@ openclaw onboard --install-daemon
 Notes:
 
 - The onboarding wizard also offers **Reset** if it sees an existing config. See [Wizard](/start/wizard).
-- If you used profiles (`--profile` / `OPENCLAW_PROFILE`), reset each state dir (defaults are `~/.openclaw-<profile>`).
+- If you used profiles (`--profile` / `OPENCLAW_PROFILE`), reset each state dir (defaults are `~/.bustly-<profile>`).
 - Dev reset: `openclaw gateway --dev --reset` (dev-only; wipes dev config + credentials + sessions + workspace).
 
 ### Im getting context too large errors how do I reset or compact
@@ -1903,7 +1903,7 @@ Direct chats collapse to the main session by default. Groups/channels have their
 
 No hard limits. Dozens (even hundreds) are fine, but watch for:
 
-- **Disk growth:** sessions + transcripts live under `~/.openclaw/agents/<agentId>/sessions/`.
+- **Disk growth:** sessions + transcripts live under `~/.bustly/agents/<agentId>/sessions/`.
 - **Token cost:** more agents means more concurrent model usage.
 - **Ops overhead:** per-agent auth profiles, workspaces, and channel routing.
 
@@ -1986,7 +1986,7 @@ Safe options:
 - `/model` in chat (quick, per-session)
 - `openclaw models set ...` (updates just model config)
 - `openclaw configure --section models` (interactive)
-- edit `agents.defaults.model` in `~/.openclaw/openclaw.json`
+- edit `agents.defaults.model` in `~/.bustly/openclaw.json`
 
 Avoid `config.apply` with a partial object unless you intend to replace the whole config.
 If you did overwrite config, restore from backup or re-run `openclaw doctor` to repair.
@@ -2192,7 +2192,7 @@ This usually means the **new agent** has an empty auth store. Auth is per-agent 
 stored in:
 
 ```
-~/.openclaw/agents/<agentId>/agent/auth-profiles.json
+~/.bustly/agents/<agentId>/agent/auth-profiles.json
 ```
 
 Fix options:
@@ -2224,10 +2224,10 @@ It means the system attempted to use the auth profile ID `anthropic:default`, bu
 ### Fix checklist for No credentials found for profile anthropicdefault
 
 - **Confirm where auth profiles live** (new vs legacy paths)
-  - Current: `~/.openclaw/agents/<agentId>/agent/auth-profiles.json`
-  - Legacy: `~/.openclaw/agent/*` (migrated by `openclaw doctor`)
+  - Current: `~/.bustly/agents/<agentId>/agent/auth-profiles.json`
+  - Legacy: `~/.bustly/agent/*` (migrated by `openclaw doctor`)
 - **Confirm your env var is loaded by the Gateway**
-  - If you set `ANTHROPIC_API_KEY` in your shell but run the Gateway via systemd/launchd, it may not inherit it. Put it in `~/.openclaw/.env` or enable `env.shellEnv`.
+  - If you set `ANTHROPIC_API_KEY` in your shell but run the Gateway via systemd/launchd, it may not inherit it. Put it in `~/.bustly/.env` or enable `env.shellEnv`.
 - **Make sure you’re editing the correct agent**
   - Multi‑agent setups mean there can be multiple `auth-profiles.json` files.
 - **Sanity‑check model/auth status**
@@ -2242,7 +2242,7 @@ can’t find it in its auth store.
   - Run `claude setup-token`, then paste it with `openclaw models auth setup-token --provider anthropic`.
   - If the token was created on another machine, use `openclaw models auth paste-token --provider anthropic`.
 - **If you want to use an API key instead**
-  - Put `ANTHROPIC_API_KEY` in `~/.openclaw/.env` on the **gateway host**.
+  - Put `ANTHROPIC_API_KEY` in `~/.bustly/.env` on the **gateway host**.
   - Clear any pinned order that forces a missing profile:
     ```bash
     openclaw models auth order clear --provider anthropic
@@ -2272,7 +2272,7 @@ Related: [/concepts/oauth](/concepts/oauth) (OAuth flows, token storage, multi-a
 An auth profile is a named credential record (OAuth or API key) tied to a provider. Profiles live in:
 
 ```
-~/.openclaw/agents/<agentId>/agent/auth-profiles.json
+~/.bustly/agents/<agentId>/agent/auth-profiles.json
 ```
 
 ### What are typical profile IDs
@@ -2329,7 +2329,7 @@ The wizard explicitly supports Anthropic setup-token and OpenAI Codex OAuth and 
 Precedence:
 
 ```
---port > OPENCLAW_GATEWAY_PORT > gateway.port > default 18789
+--port > OPENCLAW_GATEWAY_PORT > gateway.port > default 17999
 ```
 
 ### Why does openclaw gateway status say Runtime running but RPC probe failed
@@ -2356,7 +2356,7 @@ Run that from the same `--profile` / environment you want the service to use.
 
 ### What does another gateway instance is already listening mean
 
-OpenClaw enforces a runtime lock by binding the WebSocket listener immediately on startup (default `ws://127.0.0.1:18789`). If the bind fails with `EADDRINUSE`, it throws `GatewayLockError` indicating another instance is already listening.
+OpenClaw enforces a runtime lock by binding the WebSocket listener immediately on startup (default `ws://127.0.0.1:17999`). If the bind fails with `EADDRINUSE`, it throws `GatewayLockError` indicating another instance is already listening.
 
 Fix: stop the other instance, free the port, or run with `openclaw gateway --port <port>`.
 
@@ -2369,7 +2369,7 @@ Set `gateway.mode: "remote"` and point to a remote WebSocket URL, optionally wit
   gateway: {
     mode: "remote",
     remote: {
-      url: "ws://gateway.tailnet:18789",
+      url: "ws://gateway.tailnet:17999",
       token: "your-token",
       password: "your-password",
     },
@@ -2395,7 +2395,7 @@ Fix:
 
 - Fastest: `openclaw dashboard` (prints + copies tokenized link, tries to open; shows SSH hint if headless).
 - If you don’t have a token yet: `openclaw doctor --generate-gateway-token`.
-- If remote, tunnel first: `ssh -N -L 18789:127.0.0.1:18789 user@host` then open `http://127.0.0.1:18789/?token=...`.
+- If remote, tunnel first: `ssh -N -L 17999:127.0.0.1:17999 user@host` then open `http://127.0.0.1:17999/?token=...`.
 - Set `gateway.auth.token` (or `OPENCLAW_GATEWAY_TOKEN`) on the gateway host.
 - In the Control UI settings, paste the same token (or refresh with a one-time `?token=...` link).
 - Still stuck? Run `openclaw status --all` and follow [Troubleshooting](/gateway/troubleshooting). See [Dashboard](/web/dashboard) for auth details.
@@ -2424,7 +2424,7 @@ Yes, but you must isolate:
 
 Quick setup (recommended):
 
-- Use `openclaw --profile <name> …` per instance (auto-creates `~/.openclaw-<name>`).
+- Use `openclaw --profile <name> …` per instance (auto-creates `~/.bustly-<name>`).
 - Set a unique `gateway.port` in each profile config (or pass `--port` for manual runs).
 - Install a per-profile service: `openclaw --profile <name> gateway install`.
 
@@ -2445,14 +2445,14 @@ Common causes:
 
 Quick fixes:
 
-1. Use the WS URL: `ws://<host>:18789` (or `wss://...` if HTTPS).
+1. Use the WS URL: `ws://<host>:17999` (or `wss://...` if HTTPS).
 2. Don’t open the WS port in a normal browser tab.
 3. If auth is on, include the token/password in the `connect` frame.
 
 If you’re using the CLI or TUI, the URL should look like:
 
 ```
-openclaw tui --url ws://<host>:18789 --token <token>
+openclaw tui --url ws://<host>:17999 --token <token>
 ```
 
 Protocol details: [Gateway protocol](/gateway/protocol).
@@ -2477,7 +2477,7 @@ openclaw logs --follow
 
 Service/supervisor logs (when the gateway runs via launchd/systemd):
 
-- macOS: `$OPENCLAW_STATE_DIR/logs/gateway.log` and `gateway.err.log` (default: `~/.openclaw/logs/...`; profiles use `~/.openclaw-<profile>/logs/...`)
+- macOS: `$OPENCLAW_STATE_DIR/logs/gateway.log` and `gateway.err.log` (default: `~/.bustly/logs/...`; profiles use `~/.bustly-<profile>/logs/...`)
 - Linux: `journalctl --user -u openclaw-gateway[-<profile>].service -n 200 --no-pager`
 - Windows: `schtasks /Query /TN "OpenClaw Gateway (<profile>)" /V /FO LIST`
 

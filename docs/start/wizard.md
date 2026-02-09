@@ -40,7 +40,7 @@ The wizard starts with **QuickStart** (defaults) vs **Advanced** (full control).
 
 - Local gateway (loopback)
 - Workspace default (or existing workspace)
-- Gateway port **18789**
+- Gateway port **17999**
 - Gateway auth **Token** (auto‑generated, even on loopback)
 - Tailscale exposure **Off**
 - Telegram + WhatsApp DMs default to **allowlist** (you’ll be prompted for your phone number)
@@ -73,7 +73,7 @@ Tip: `--json` does **not** imply non-interactive mode. Use `--non-interactive` (
 ## Flow details (local)
 
 1. **Existing config detection**
-   - If `~/.openclaw/openclaw.json` exists, choose **Keep / Modify / Reset**.
+   - If `~/.bustly/openclaw.json` exists, choose **Keep / Modify / Reset**.
    - Re-running the wizard does **not** wipe anything unless you explicitly choose **Reset**
      (or pass `--reset`).
    - If the config is invalid or contains legacy keys, the wizard stops and asks
@@ -90,7 +90,7 @@ Tip: `--json` does **not** imply non-interactive mode. Use `--non-interactive` (
    - **OpenAI Code (Codex) subscription (Codex CLI)**: if `~/.codex/auth.json` exists, the wizard can reuse it.
    - **OpenAI Code (Codex) subscription (OAuth)**: browser flow; paste the `code#state`.
      - Sets `agents.defaults.model` to `openai-codex/gpt-5.2` when model is unset or `openai/*`.
-   - **OpenAI API key**: uses `OPENAI_API_KEY` if present or prompts for a key, then saves it to `~/.openclaw/.env` so launchd can read it.
+   - **OpenAI API key**: uses `OPENAI_API_KEY` if present or prompts for a key, then saves it to `~/.bustly/.env` so launchd can read it.
    - **OpenCode Zen (multi-model proxy)**: prompts for `OPENCODE_API_KEY` (or `OPENCODE_ZEN_API_KEY`, get it at https://opencode.ai/auth).
    - **API key**: stores the key for you.
    - **Vercel AI Gateway (multi-model proxy)**: prompts for `AI_GATEWAY_API_KEY`.
@@ -106,11 +106,11 @@ Tip: `--json` does **not** imply non-interactive mode. Use `--non-interactive` (
    - Pick a default model from detected options (or enter provider/model manually).
    - Wizard runs a model check and warns if the configured model is unknown or missing auth.
 
-- OAuth credentials live in `~/.openclaw/credentials/oauth.json`; auth profiles live in `~/.openclaw/agents/<agentId>/agent/auth-profiles.json` (API keys + OAuth).
+- OAuth credentials live in `~/.bustly/credentials/oauth.json`; auth profiles live in `~/.bustly/agents/<agentId>/agent/auth-profiles.json` (API keys + OAuth).
 - More detail: [/concepts/oauth](/concepts/oauth)
 
 3. **Workspace**
-   - Default `~/.openclaw/workspace` (configurable).
+   - Default `~/.bustly/workspace` (configurable).
    - Seeds the workspace files needed for the agent bootstrap ritual.
    - Full workspace layout + backup guide: [Agent workspace](/concepts/agent-workspace)
 
@@ -183,7 +183,7 @@ What it sets:
 
 Notes:
 
-- Default workspaces follow `~/.openclaw/workspace-<agentId>`.
+- Default workspaces follow `~/.bustly/workspace-<agentId>`.
 - Add `bindings` to route inbound messages (the wizard can do this).
 - Non-interactive flags: `--model`, `--agent-dir`, `--bind`, `--non-interactive`.
 
@@ -196,7 +196,7 @@ openclaw onboard --non-interactive \
   --mode local \
   --auth-choice apiKey \
   --anthropic-api-key "$ANTHROPIC_API_KEY" \
-  --gateway-port 18789 \
+  --gateway-port 17999 \
   --gateway-bind loopback \
   --install-daemon \
   --daemon-runtime node \
@@ -212,7 +212,7 @@ openclaw onboard --non-interactive \
   --mode local \
   --auth-choice gemini-api-key \
   --gemini-api-key "$GEMINI_API_KEY" \
-  --gateway-port 18789 \
+  --gateway-port 17999 \
   --gateway-bind loopback
 ```
 
@@ -223,7 +223,7 @@ openclaw onboard --non-interactive \
   --mode local \
   --auth-choice zai-api-key \
   --zai-api-key "$ZAI_API_KEY" \
-  --gateway-port 18789 \
+  --gateway-port 17999 \
   --gateway-bind loopback
 ```
 
@@ -234,7 +234,7 @@ openclaw onboard --non-interactive \
   --mode local \
   --auth-choice ai-gateway-api-key \
   --ai-gateway-api-key "$AI_GATEWAY_API_KEY" \
-  --gateway-port 18789 \
+  --gateway-port 17999 \
   --gateway-bind loopback
 ```
 
@@ -245,7 +245,7 @@ openclaw onboard --non-interactive \
   --mode local \
   --auth-choice moonshot-api-key \
   --moonshot-api-key "$MOONSHOT_API_KEY" \
-  --gateway-port 18789 \
+  --gateway-port 17999 \
   --gateway-bind loopback
 ```
 
@@ -256,7 +256,7 @@ openclaw onboard --non-interactive \
   --mode local \
   --auth-choice synthetic-api-key \
   --synthetic-api-key "$SYNTHETIC_API_KEY" \
-  --gateway-port 18789 \
+  --gateway-port 17999 \
   --gateway-bind loopback
 ```
 
@@ -267,7 +267,7 @@ openclaw onboard --non-interactive \
   --mode local \
   --auth-choice opencode-zen \
   --opencode-zen-api-key "$OPENCODE_API_KEY" \
-  --gateway-port 18789 \
+  --gateway-port 17999 \
   --gateway-bind loopback
 ```
 
@@ -275,7 +275,7 @@ Add agent (non‑interactive) example:
 
 ```bash
 openclaw agents add work \
-  --workspace ~/.openclaw/workspace-work \
+  --workspace ~/.bustly/workspace-work \
   --model openai/gpt-5.2 \
   --bind whatsapp:biz \
   --non-interactive \
@@ -292,7 +292,7 @@ Clients (macOS app, Control UI) can render steps without re‑implementing onboa
 The wizard can install `signal-cli` from GitHub releases:
 
 - Downloads the appropriate release asset.
-- Stores it under `~/.openclaw/tools/signal-cli/<version>/`.
+- Stores it under `~/.bustly/tools/signal-cli/<version>/`.
 - Writes `channels.signal.cliPath` to your config.
 
 Notes:
@@ -303,7 +303,7 @@ Notes:
 
 ## What the wizard writes
 
-Typical fields in `~/.openclaw/openclaw.json`:
+Typical fields in `~/.bustly/openclaw.json`:
 
 - `agents.defaults.workspace`
 - `agents.defaults.model` / `models.providers` (if Minimax chosen)
@@ -319,8 +319,8 @@ Typical fields in `~/.openclaw/openclaw.json`:
 
 `openclaw agents add` writes `agents.list[]` and optional `bindings`.
 
-WhatsApp credentials go under `~/.openclaw/credentials/whatsapp/<accountId>/`.
-Sessions are stored under `~/.openclaw/agents/<agentId>/sessions/`.
+WhatsApp credentials go under `~/.bustly/credentials/whatsapp/<accountId>/`.
+Sessions are stored under `~/.bustly/agents/<agentId>/sessions/`.
 
 Some channels are delivered as plugins. When you pick one during onboarding, the wizard
 will prompt to install it (npm or a local path) before it can be configured.

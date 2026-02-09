@@ -18,25 +18,25 @@ Last updated: 2025-12-09
 ## How to run (local)
 
 ```bash
-openclaw gateway --port 18789
+openclaw gateway --port 17999
 # for full debug/trace logs in stdio:
-openclaw gateway --port 18789 --verbose
+openclaw gateway --port 17999 --verbose
 # if the port is busy, terminate listeners then start:
 openclaw gateway --force
 # dev loop (auto-reload on TS changes):
 pnpm gateway:watch
 ```
 
-- Config hot reload watches `~/.openclaw/openclaw.json` (or `OPENCLAW_CONFIG_PATH`).
+- Config hot reload watches `~/.bustly/openclaw.json` (or `OPENCLAW_CONFIG_PATH`).
   - Default mode: `gateway.reload.mode="hybrid"` (hot-apply safe changes, restart on critical).
   - Hot reload uses in-process restart via **SIGUSR1** when needed.
   - Disable with `gateway.reload.mode="off"`.
-- Binds WebSocket control plane to `127.0.0.1:<port>` (default 18789).
+- Binds WebSocket control plane to `127.0.0.1:<port>` (default 17999).
 - The same port also serves HTTP (control UI, hooks, A2UI). Single-port multiplex.
   - OpenAI Chat Completions (HTTP): [`/v1/chat/completions`](/gateway/openai-http-api).
   - OpenResponses (HTTP): [`/v1/responses`](/gateway/openresponses-http-api).
   - Tools Invoke (HTTP): [`/tools/invoke`](/gateway/tools-invoke-http-api).
-- Starts a Canvas file server by default on `canvasHost.port` (default `18793`), serving `http://<gateway-host>:18793/__openclaw__/canvas/` from `~/.openclaw/workspace/canvas`. Disable with `canvasHost.enabled=false` or `OPENCLAW_SKIP_CANVAS_HOST=1`.
+- Starts a Canvas file server by default on `canvasHost.port` (default `18793`), serving `http://<gateway-host>:18793/__openclaw__/canvas/` from `~/.bustly/workspace/canvas`. Disable with `canvasHost.enabled=false` or `OPENCLAW_SKIP_CANVAS_HOST=1`.
 - Logs to stdout; use launchd/systemd to keep it alive and rotate logs.
 - Pass `--verbose` to mirror debug logging (handshakes, req/res, events) from the log file into stdio when troubleshooting.
 - `--force` uses `lsof` to find listeners on the chosen port, sends SIGTERM, logs what it killed, then starts the gateway (fails fast if `lsof` is missing).
@@ -44,15 +44,15 @@ pnpm gateway:watch
 - **SIGUSR1** triggers an in-process restart when authorized (gateway tool/config apply/update, or enable `commands.restart` for manual restarts).
 - Gateway auth is required by default: set `gateway.auth.token` (or `OPENCLAW_GATEWAY_TOKEN`) or `gateway.auth.password`. Clients must send `connect.params.auth.token/password` unless using Tailscale Serve identity.
 - The wizard now generates a token by default, even on loopback.
-- Port precedence: `--port` > `OPENCLAW_GATEWAY_PORT` > `gateway.port` > default `18789`.
+- Port precedence: `--port` > `OPENCLAW_GATEWAY_PORT` > `gateway.port` > default `17999`.
 
 ## Remote access
 
 - Tailscale/VPN preferred; otherwise SSH tunnel:
   ```bash
-  ssh -N -L 18789:127.0.0.1:18789 user@host
+  ssh -N -L 17999:127.0.0.1:17999 user@host
   ```
-- Clients then connect to `ws://127.0.0.1:18789` through the tunnel.
+- Clients then connect to `ws://127.0.0.1:17999` through the tunnel.
 - If a token is configured, clients must include it in `connect.params.auth.token` even over the tunnel.
 
 ## Multiple gateways (same host)
@@ -89,12 +89,12 @@ openclaw --dev health
 
 Defaults (can be overridden via env/flags/config):
 
-- `OPENCLAW_STATE_DIR=~/.openclaw-dev`
-- `OPENCLAW_CONFIG_PATH=~/.openclaw-dev/openclaw.json`
+- `OPENCLAW_STATE_DIR=~/.bustly-dev`
+- `OPENCLAW_CONFIG_PATH=~/.bustly-dev/openclaw.json`
 - `OPENCLAW_GATEWAY_PORT=19001` (Gateway WS + HTTP)
 - browser control service port = `19003` (derived: `gateway.port+2`, loopback only)
 - `canvasHost.port=19005` (derived: `gateway.port+4`)
-- `agents.defaults.workspace` default becomes `~/.openclaw/workspace-dev` when you run `setup`/`onboard` under `--dev`.
+- `agents.defaults.workspace` default becomes `~/.bustly/workspace-dev` when you run `setup`/`onboard` under `--dev`.
 
 Derived ports (rules of thumb):
 
@@ -121,8 +121,8 @@ openclaw --profile rescue gateway install
 Example:
 
 ```bash
-OPENCLAW_CONFIG_PATH=~/.openclaw/a.json OPENCLAW_STATE_DIR=~/.openclaw-a openclaw gateway --port 19001
-OPENCLAW_CONFIG_PATH=~/.openclaw/b.json OPENCLAW_STATE_DIR=~/.openclaw-b openclaw gateway --port 19002
+OPENCLAW_CONFIG_PATH=~/.bustly/a.json OPENCLAW_STATE_DIR=~/.bustly-a openclaw gateway --port 19001
+OPENCLAW_CONFIG_PATH=~/.bustly/b.json OPENCLAW_STATE_DIR=~/.bustly-b openclaw gateway --port 19002
 ```
 
 ## Protocol (operator view)
@@ -263,7 +263,7 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStart=/usr/local/bin/openclaw gateway --port 18789
+ExecStart=/usr/local/bin/openclaw gateway --port 17999
 Restart=always
 RestartSec=5
 Environment=OPENCLAW_GATEWAY_TOKEN=

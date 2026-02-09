@@ -34,7 +34,7 @@ macOS split:
 
 Approvals live in a local JSON file on the execution host:
 
-`~/.openclaw/exec-approvals.json`
+`~/.bustly/exec-approvals.json`
 
 Example schema:
 
@@ -42,7 +42,7 @@ Example schema:
 {
   "version": 1,
   "socket": {
-    "path": "~/.openclaw/exec-approvals.sock",
+    "path": "~/.bustly/exec-approvals.sock",
     "token": "base64url-token"
   },
   "defaults": {
@@ -141,7 +141,7 @@ per pattern so you can keep the list tidy.
 The target selector chooses **Gateway** (local approvals) or a **Node**. Nodes
 must advertise `system.execApprovals.get/set` (macOS app or headless node host).
 If a node does not advertise exec approvals yet, edit its local
-`~/.openclaw/exec-approvals.json` directly.
+`~/.bustly/exec-approvals.json` directly.
 
 CLI: `openclaw approvals` supports gateway or node editing (see [Approvals CLI](/cli/approvals)).
 

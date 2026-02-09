@@ -51,14 +51,14 @@ OpenClaw 同时也驱动着 OpenClaw 助手。
 
 - **从零开始全新安装：** [快速入门](/start/getting-started)
 - **引导式设置（推荐）：** [向导](/start/wizard) （`openclaw onboard`）
-- **打开仪表盘（本地 Gateway）：** http://127.0.0.1:18789/（或 http://localhost:18789/）
+- **打开仪表盘（本地 Gateway）：** http://127.0.0.1:17999/（或 http://localhost:17999/）
 
 如果 Gateway 运行在同一台计算机上，该链接会立即打开浏览器控制界面。如果无法打开，请先启动 Gateway： `openclaw gateway`.
 
 ## 仪表盘（浏览器控制界面）
 
 仪表盘是用于聊天、配置、节点、会话等功能的浏览器控制界面。
-本地默认地址：http://127.0.0.1:18789/
+本地默认地址：http://127.0.0.1:17999/
 远程访问： [Web 界面](/web) 和 [Tailscale](/gateway/tailscale)
 
 <p align="center">
@@ -72,7 +72,7 @@ WhatsApp / Telegram / Discord / iMessage (+ plugins)
         │
         ▼
   ┌───────────────────────────┐
-  │          Gateway          │  ws://127.0.0.1:18789 (loopback-only)
+  │          Gateway          │  ws://127.0.0.1:17999 (loopback-only)
   │     (single source)       │
   │                           │  http://<gateway-host>:18793
   │                           │    /__openclaw__/canvas/ (Canvas host)
@@ -91,7 +91,7 @@ WhatsApp / Telegram / Discord / iMessage (+ plugins)
 ## 网络模型
 
 - **每台主机一个 Gateway（推荐）**：它是唯一允许持有 WhatsApp Web 会话的进程。如果需要备用机器人或严格隔离，可使用独立配置文件和端口运行多个 Gateway；请参阅 [多 Gateway 部署](/gateway/multiple-gateways).
-- **优先回环**：Gateway WS 默认监听 `ws://127.0.0.1:18789`.
+- **优先回环**：Gateway WS 默认监听 `ws://127.0.0.1:17999`.
   - 向导现在默认会生成一个 Gateway 令牌（即使在回环模式下也是如此）。
   - 如需 Tailnet 访问，请运行 `openclaw gateway --bind tailnet --token ...` （非回环绑定时必须提供令牌）。
 - **节点**：通过 WebSocket 连接到 Gateway（根据需要使用局域网/Tailnet/SSH）；旧版 TCP 桥接已弃用/移除。
@@ -135,7 +135,7 @@ openclaw onboard --install-daemon
 openclaw channels login
 
 # Gateway runs via the service after onboarding; manual run is still possible:
-openclaw gateway --port 18789
+openclaw gateway --port 17999
 ```
 
 之后在 npm 安装和 git 安装之间切换很简单：安装另一种方式并运行 `openclaw doctor` 以更新 Gateway 服务入口点。
@@ -156,8 +156,8 @@ openclaw onboard --install-daemon
 多实例快速开始（可选）：
 
 ```bash
-OPENCLAW_CONFIG_PATH=~/.openclaw/a.json \
-OPENCLAW_STATE_DIR=~/.openclaw-a \
+OPENCLAW_CONFIG_PATH=~/.bustly/a.json \
+OPENCLAW_STATE_DIR=~/.bustly-a \
 openclaw gateway --port 19001
 ```
 
@@ -169,7 +169,7 @@ openclaw message send --target +15555550123 --message "Hello from OpenClaw"
 
 ## 配置（可选）
 
-配置文件位于 `~/.openclaw/openclaw.json`.
+配置文件位于 `~/.bustly/openclaw.json`.
 
 - 如果你 **不做任何操作**，OpenClaw 将使用内置的 Pi 二进制文件以 RPC 模式运行，并采用按发送者区分的会话。
 - 如果你想锁定访问权限，请从以下内容开始 `channels.whatsapp.allowFrom` 以及（针对群组的）提及规则。

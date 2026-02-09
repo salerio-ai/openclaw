@@ -10,7 +10,7 @@ Automatically saves session context to memory when you issue `/new`.
 
 **Events**: `command:new`
 **What it does**: Creates a dated memory file with LLM-generated slug based on conversation content.
-**Output**: `<workspace>/memory/YYYY-MM-DD-slug.md` (defaults to `~/.openclaw/workspace`)
+**Output**: `<workspace>/memory/YYYY-MM-DD-slug.md` (defaults to `~/.bustly/workspace`)
 
 **Enable**:
 
@@ -24,7 +24,7 @@ Logs all command events to a centralized audit file.
 
 **Events**: `command` (all commands)
 **What it does**: Appends JSONL entries to command log file.
-**Output**: `~/.openclaw/logs/commands.log`
+**Output**: `~/.bustly/logs/commands.log`
 
 **Enable**:
 
@@ -108,7 +108,7 @@ Documentation goes here...
 To create your own hooks, place them in:
 
 - **Workspace hooks**: `<workspace>/hooks/` (highest precedence)
-- **Managed hooks**: `~/.openclaw/hooks/` (shared across workspaces)
+- **Managed hooks**: `~/.bustly/hooks/` (shared across workspaces)
 
 Custom hooks follow the same structure as bundled hooks.
 
@@ -141,7 +141,7 @@ openclaw hooks disable command-logger
 
 ## Configuration
 
-Hooks can be configured in `~/.openclaw/openclaw.json`:
+Hooks can be configured in `~/.bustly/openclaw.json`:
 
 ```json
 {

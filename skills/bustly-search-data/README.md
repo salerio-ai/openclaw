@@ -8,7 +8,7 @@ This skill is bundled with OpenClaw and located in the `skills/bustly-search-dat
 
 ## Auto-Loading Configuration
 
-The skill reads configuration from `~/.openclaw/bustlyOauth.json` (automatically configured via Bustly OAuth login in the desktop app).
+The skill reads configuration from `~/.bustly/bustlyOauth.json` (automatically configured via Bustly OAuth login in the desktop app).
 
 ### How Auto-Loading Works
 
@@ -16,7 +16,7 @@ The skill reads configuration from `~/.openclaw/bustlyOauth.json` (automatically
 2. **Frontmatter Metadata**: The `SKILL.md` file contains frontmatter with:
    - `name`: Skill identifier
    - `description`: What the skill does
-   - `metadata.openclaw.requires.env`: Required environment variables
+   - `metadata.bustly.requires.env`: Required environment variables
 3. **Configuration Loading**: The skill's `lib/config.ts` automatically reads from `bustlyOauth.json`:
    - `SEARCH_DATA_SUPABASE_URL` - Supabase API URL
    - `SEARCH_DATA_SUPABASE_ANON_KEY` - Supabase anonymous key
@@ -26,7 +26,7 @@ The skill reads configuration from `~/.openclaw/bustlyOauth.json` (automatically
 
 ## Environment Variables
 
-Required environment variables (automatically loaded from `~/.openclaw/bustlyOauth.json` after Bustly OAuth login):
+Required environment variables (automatically loaded from `~/.bustly/bustlyOauth.json` after Bustly OAuth login):
 
 | Variable | Description |
 |----------|-------------|
@@ -138,12 +138,12 @@ export async function getCustomReport() {
 
 1. Check that you're logged in via Bustly OAuth:
    ```bash
-   cat ~/.openclaw/bustlyOauth.json | jq '.bustlySearchData'
+   cat ~/.bustly/bustlyOauth.json | jq '.bustlySearchData'
    ```
 
 2. Verify the configuration exists:
    ```bash
-   cat ~/.openclaw/bustlyOauth.json | jq '.bustlySearchData.SEARCH_DATA_SUPABASE_URL'
+   cat ~/.bustly/bustlyOauth.json | jq '.bustlySearchData.SEARCH_DATA_SUPABASE_URL'
    ```
 
 3. Restart the gateway:
@@ -156,7 +156,7 @@ export async function getCustomReport() {
 
 If you see "Missing required Supabase configuration":
 - Verify you're logged in via Bustly OAuth in the desktop app
-- Check that `~/.openclaw/bustlyOauth.json` exists and contains `bustlySearchData`
+- Check that `~/.bustly/bustlyOauth.json` exists and contains `bustlySearchData`
 - For manual testing, set the environment variables directly
 
 ## License

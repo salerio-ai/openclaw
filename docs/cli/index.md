@@ -54,8 +54,8 @@ This page describes the current CLI behavior. If commands change, update this do
 
 ## Global flags
 
-- `--dev`: isolate state under `~/.openclaw-dev` and shift default ports.
-- `--profile <name>`: isolate state under `~/.openclaw-<name>`.
+- `--dev`: isolate state under `~/.bustly-dev` and shift default ports.
+- `--profile <name>`: isolate state under `~/.bustly-<name>`.
 - `--no-color`: disable ANSI colors.
 - `--update`: shorthand for `openclaw update` (source installs only).
 - `-V`, `--version`, `-v`: print version and exit.
@@ -283,7 +283,7 @@ Initialize config + workspace.
 
 Options:
 
-- `--workspace <dir>`: agent workspace path (default `~/.openclaw/workspace`).
+- `--workspace <dir>`: agent workspace path (default `~/.bustly/workspace`).
 - `--wizard`: run the onboarding wizard.
 - `--non-interactive`: run wizard without prompts.
 - `--mode <local|remote>`: wizard mode.
@@ -909,7 +909,7 @@ All `cron` commands accept `--url`, `--token`, `--timeout`, `--expect-final`.
 
 Subcommands:
 
-- `node run --host <gateway-host> --port 18789`
+- `node run --host <gateway-host> --port 17999`
 - `node status`
 - `node install [--host <gateway-host>] [--port <port>] [--tls] [--tls-fingerprint <sha256>] [--node-id <id>] [--display-name <name>] [--runtime <node|bun>] [--force]`
 - `node uninstall`

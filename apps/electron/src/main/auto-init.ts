@@ -20,8 +20,35 @@ function resolveConfigPathSafe(): string {
   try {
     return resolveConfigPathFromSrc();
   } catch {
-    return join(homedir(), ".openclaw", "openclaw.json");
+    const homeDir = homedir();
+    const override = process.env.OPENCLAW_CONFIG_PATH?.trim();
+    if (override) {
+      return resolve(override.startsWith("~") ? override.replace(/^~(?=$|[\\/])/, homeDir) : override);
+    }
+    const stateOverride = process.env.OPENCLAW_STATE_DIR?.trim();
+    if (stateOverride) {
+      const resolved = resolve(
+        stateOverride.startsWith("~") ? stateOverride.replace(/^~(?=$|[\\/])/, homeDir) : stateOverride,
+      );
+      return join(resolved, "openclaw.json");
+    }
+    return join(homeDir, ".bustly", "openclaw.json");
   }
+}
+
+function resolveDefaultWorkspaceDir(explicit?: string): string {
+  if (explicit?.trim()) {
+    return explicit.trim();
+  }
+  const homeDir = homedir();
+  const stateOverride = process.env.OPENCLAW_STATE_DIR?.trim();
+  if (stateOverride) {
+    const resolved = resolve(
+      stateOverride.startsWith("~") ? stateOverride.replace(/^~(?=$|[\\/])/, homeDir) : stateOverride,
+    );
+    return join(resolved, "workspace");
+  }
+  return join(homeDir, ".bustly", "workspace");
 }
 
 async function runCliOnboard(options: InitializationOptions): Promise<void> {
@@ -41,9 +68,8 @@ async function runCliOnboard(options: InitializationOptions): Promise<void> {
     "--json",
   ];
 
-  if (options.workspace) {
-    args.push("--workspace", options.workspace);
-  }
+  const workspace = resolveDefaultWorkspaceDir(options.workspace);
+  args.push("--workspace", workspace);
   if (options.gatewayPort) {
     args.push("--gateway-port", String(options.gatewayPort));
   }
@@ -118,8 +144,9 @@ export async function initializeOpenClaw(
       }
     }
 
-    const config = JSON.parse(readFileSync(configPath, "utf-8"));
-    const workspaceDir = config.agents?.defaults?.workspace || "~/.openclaw/workspace";
+  const config = JSON.parse(readFileSync(configPath, "utf-8"));
+    const workspaceDir =
+      config.agents?.defaults?.workspace || resolveDefaultWorkspaceDir(options.workspace);
     const resolvedWorkspace = workspaceDir.startsWith("~")
       ? join(homedir(), workspaceDir.slice(1))
       : workspaceDir;
@@ -127,7 +154,7 @@ export async function initializeOpenClaw(
     return {
       success: true,
       configPath,
-      gatewayPort: config.gateway?.port || 18789,
+      gatewayPort: config.gateway?.port || 17999,
       gatewayBind: config.gateway?.bind || "loopback",
       gatewayToken: config.gateway?.auth?.token,
       workspace: resolvedWorkspace,
@@ -137,7 +164,7 @@ export async function initializeOpenClaw(
     return {
       success: false,
       configPath: "",
-      gatewayPort: 18789,
+      gatewayPort: 17999,
       gatewayBind: "loopback",
       workspace: "",
       error: error instanceof Error ? error.message : String(error),

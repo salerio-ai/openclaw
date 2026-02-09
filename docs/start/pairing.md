@@ -40,7 +40,7 @@ Supported channels: `telegram`, `whatsapp`, `signal`, `imessage`, `discord`, `sl
 
 ### Where the state lives
 
-Stored under `~/.openclaw/credentials/`:
+Stored under `~/.bustly/credentials/`:
 
 - Pending requests: `<channel>-pairing.json`
 - Approved allowlist store: `<channel>-allowFrom.json`
@@ -62,7 +62,7 @@ openclaw devices reject <requestId>
 
 ### Where the state lives
 
-Stored under `~/.openclaw/devices/`:
+Stored under `~/.bustly/devices/`:
 
 - `pending.json` (short-lived; pending requests expire)
 - `paired.json` (paired devices + tokens)

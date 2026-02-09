@@ -80,10 +80,10 @@ If silent approval fails, it falls back to the normal “Approve/Reject” promp
 
 ## Storage (local, private)
 
-Pairing state is stored under the Gateway state directory (default `~/.openclaw`):
+Pairing state is stored under the Gateway state directory (default `~/.bustly`):
 
-- `~/.openclaw/nodes/paired.json`
-- `~/.openclaw/nodes/pending.json`
+- `~/.bustly/nodes/paired.json`
+- `~/.bustly/nodes/pending.json`
 
 If you override `OPENCLAW_STATE_DIR`, the `nodes/` folder moves with it.
 

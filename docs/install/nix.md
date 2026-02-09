@@ -65,7 +65,7 @@ defaults write bot.molt.mac openclaw.nixMode -bool true
 
 OpenClaw reads JSON5 config from `OPENCLAW_CONFIG_PATH` and stores mutable data in `OPENCLAW_STATE_DIR`.
 
-- `OPENCLAW_STATE_DIR` (default: `~/.openclaw`)
+- `OPENCLAW_STATE_DIR` (default: `~/.bustly`)
 - `OPENCLAW_CONFIG_PATH` (default: `$OPENCLAW_STATE_DIR/openclaw.json`)
 
 When running under Nix, set these explicitly to Nix-managed locations so runtime state and config

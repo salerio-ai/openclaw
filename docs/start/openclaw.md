@@ -78,10 +78,10 @@ openclaw channels login
 2. Start the Gateway (leave it running):
 
 ```bash
-openclaw gateway --port 18789
+openclaw gateway --port 17999
 ```
 
-3. Put a minimal config in `~/.openclaw/openclaw.json`:
+3. Put a minimal config in `~/.bustly/openclaw.json`:
 
 ```json5
 {
@@ -97,7 +97,7 @@ When onboarding finishes, we auto-open the dashboard with your gateway token and
 
 OpenClaw reads operating instructions and “memory” from its workspace directory.
 
-By default, OpenClaw uses `~/.openclaw/workspace` as the agent workspace, and will create it (plus starter `AGENTS.md`, `SOUL.md`, `TOOLS.md`, `IDENTITY.md`, `USER.md`) automatically on setup/first agent run. `BOOTSTRAP.md` is only created when the workspace is brand new (it should not come back after you delete it).
+By default, OpenClaw uses `~/.bustly/workspace` as the agent workspace, and will create it (plus starter `AGENTS.md`, `SOUL.md`, `TOOLS.md`, `IDENTITY.md`, `USER.md`) automatically on setup/first agent run. `BOOTSTRAP.md` is only created when the workspace is brand new (it should not come back after you delete it).
 
 Tip: treat this folder like OpenClaw’s “memory” and make it a git repo (ideally private) so your `AGENTS.md` + memory files are backed up. If git is installed, brand-new workspaces are auto-initialized.
 
@@ -113,7 +113,7 @@ Optional: choose a different workspace with `agents.defaults.workspace` (support
 ```json5
 {
   agent: {
-    workspace: "~/.openclaw/workspace",
+    workspace: "~/.bustly/workspace",
   },
 }
 ```
@@ -143,7 +143,7 @@ Example:
   logging: { level: "info" },
   agent: {
     model: "anthropic/claude-opus-4-5",
-    workspace: "~/.openclaw/workspace",
+    workspace: "~/.bustly/workspace",
     thinkingDefault: "high",
     timeoutSeconds: 1800,
     // Start with 0; enable later.
@@ -176,8 +176,8 @@ Example:
 
 ## Sessions and memory
 
-- Session files: `~/.openclaw/agents/<agentId>/sessions/{{SessionId}}.jsonl`
-- Session metadata (token usage, last route, etc): `~/.openclaw/agents/<agentId>/sessions/sessions.json` (legacy: `~/.openclaw/sessions/sessions.json`)
+- Session files: `~/.bustly/agents/<agentId>/sessions/{{SessionId}}.jsonl`
+- Session metadata (token usage, last route, etc): `~/.bustly/agents/<agentId>/sessions/sessions.json` (legacy: `~/.bustly/sessions/sessions.json`)
 - `/new` or `/reset` starts a fresh session for that chat (configurable via `resetTriggers`). If sent alone, the agent replies with a short hello to confirm the reset.
 - `/compact [instructions]` compacts the session context and reports the remaining context budget.
 

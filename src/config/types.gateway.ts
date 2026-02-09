@@ -38,7 +38,7 @@ export type DiscoveryConfig = {
 
 export type CanvasHostConfig = {
   enabled?: boolean;
-  /** Directory to serve (default: ~/.openclaw/workspace/canvas). */
+  /** Directory to serve (default: ~/.bustly/workspace/canvas). */
   root?: string;
   /** HTTP port to listen on (default: 18793). */
   port?: number;
@@ -208,7 +208,7 @@ export type GatewayNodesConfig = {
 };
 
 export type GatewayConfig = {
-  /** Single multiplexed port for Gateway WS + HTTP (default: 18789). */
+  /** Single multiplexed port for Gateway WS + HTTP (default: 17999). */
   port?: number;
   /**
    * Explicit gateway mode. When set to "remote", local gateway start is disabled.

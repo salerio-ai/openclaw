@@ -83,7 +83,7 @@ TRASH
   }
 
   start_gateway() {
-    node dist/index.js gateway --port 18789 --bind loopback --allow-unconfigured > /tmp/gateway-e2e.log 2>&1 &
+    node dist/index.js gateway --port 17999 --bind loopback --allow-unconfigured > /tmp/gateway-e2e.log 2>&1 &
     GATEWAY_PID="$!"
   }
 
@@ -91,7 +91,7 @@ TRASH
     for _ in $(seq 1 20); do
       if node --input-type=module -e "
         import net from 'node:net';
-        const socket = net.createConnection({ host: '127.0.0.1', port: 18789 });
+        const socket = net.createConnection({ host: '127.0.0.1', port: 17999 });
         const timeout = setTimeout(() => {
           socket.destroy();
           process.exit(1);
@@ -108,7 +108,7 @@ TRASH
       " >/dev/null 2>&1; then
         return 0
       fi
-      if [ -f /tmp/gateway-e2e.log ] && grep -E -q "listening on ws://[^ ]+:18789" /tmp/gateway-e2e.log; then
+      if [ -f /tmp/gateway-e2e.log ] && grep -E -q "listening on ws://[^ ]+:17999" /tmp/gateway-e2e.log; then
         if [ -n "${GATEWAY_PID:-}" ] && kill -0 "$GATEWAY_PID" 2>/dev/null; then
           return 0
         fi
@@ -281,8 +281,8 @@ TRASH
 
     # Assert config + workspace scaffolding.
     workspace_dir="$HOME/openclaw"
-    config_path="$HOME/.openclaw/openclaw.json"
-    sessions_dir="$HOME/.openclaw/agents/main/sessions"
+    config_path="$HOME/.bustly/openclaw.json"
+    sessions_dir="$HOME/.bustly/agents/main/sessions"
 
     assert_file "$config_path"
     assert_dir "$sessions_dir"
@@ -347,12 +347,12 @@ NODE
     # Smoke test non-interactive remote config write.
     node dist/index.js onboard --non-interactive --accept-risk \
       --mode remote \
-      --remote-url ws://gateway.local:18789 \
+      --remote-url ws://gateway.local:17999 \
       --remote-token remote-token \
       --skip-skills \
       --skip-health
 
-    config_path="$HOME/.openclaw/openclaw.json"
+    config_path="$HOME/.bustly/openclaw.json"
     assert_file "$config_path"
 
     CONFIG_PATH="$config_path" node --input-type=module - <<'"'"'NODE'"'"'
@@ -365,7 +365,7 @@ const errors = [];
 if (cfg?.gateway?.mode !== "remote") {
   errors.push(`gateway.mode mismatch (got ${cfg?.gateway?.mode ?? "unset"})`);
 }
-if (cfg?.gateway?.remote?.url !== "ws://gateway.local:18789") {
+if (cfg?.gateway?.remote?.url !== "ws://gateway.local:17999") {
   errors.push(`gateway.remote.url mismatch (got ${cfg?.gateway?.remote?.url ?? "unset"})`);
 }
 if (cfg?.gateway?.remote?.token !== "remote-token") {
@@ -386,14 +386,14 @@ NODE
     local home_dir
     home_dir="$(make_home reset-config)"
     export HOME="$home_dir"
-    mkdir -p "$HOME/.openclaw"
+    mkdir -p "$HOME/.bustly"
     # Seed a remote config to exercise reset path.
-    cat > "$HOME/.openclaw/openclaw.json" <<'"'"'JSON'"'"'
+    cat > "$HOME/.bustly/openclaw.json" <<'"'"'JSON'"'"'
 {
   "agents": { "defaults": { "workspace": "/root/old" } },
   "gateway": {
     "mode": "remote",
-    "remote": { "url": "ws://old.example:18789", "token": "old-token" }
+    "remote": { "url": "ws://old.example:17999", "token": "old-token" }
   }
 }
 JSON
@@ -410,7 +410,7 @@ JSON
       --skip-ui \
       --skip-health
 
-    config_path="$HOME/.openclaw/openclaw.json"
+    config_path="$HOME/.bustly/openclaw.json"
     assert_file "$config_path"
 
     CONFIG_PATH="$config_path" node --input-type=module - <<'"'"'NODE'"'"'
@@ -443,7 +443,7 @@ NODE
     # Channels-only configure flow.
     run_wizard_cmd channels "$home_dir" "node dist/index.js configure --section channels" send_channels_flow
 
-    config_path="$HOME/.openclaw/openclaw.json"
+    config_path="$HOME/.bustly/openclaw.json"
     assert_file "$config_path"
 
     CONFIG_PATH="$config_path" node --input-type=module - <<'"'"'NODE'"'"'
@@ -481,9 +481,9 @@ NODE
     local home_dir
     home_dir="$(make_home skills)"
     export HOME="$home_dir"
-    mkdir -p "$HOME/.openclaw"
+    mkdir -p "$HOME/.bustly"
     # Seed skills config to ensure it survives the wizard.
-    cat > "$HOME/.openclaw/openclaw.json" <<'"'"'JSON'"'"'
+    cat > "$HOME/.bustly/openclaw.json" <<'"'"'JSON'"'"'
 {
   "skills": {
     "allowBundled": ["__none__"],
@@ -494,7 +494,7 @@ JSON
 
     run_wizard_cmd skills "$home_dir" "node dist/index.js configure --section skills" send_skills_flow
 
-    config_path="$HOME/.openclaw/openclaw.json"
+    config_path="$HOME/.bustly/openclaw.json"
     assert_file "$config_path"
 
     CONFIG_PATH="$config_path" node --input-type=module - <<'"'"'NODE'"'"'

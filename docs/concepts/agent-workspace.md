@@ -11,7 +11,7 @@ title: "Agent Workspace"
 The workspace is the agent's home. It is the only working directory used for
 file tools and for workspace context. Keep it private and treat it as memory.
 
-This is separate from `~/.openclaw/`, which stores config, credentials, and
+This is separate from `~/.bustly/`, which stores config, credentials, and
 sessions.
 
 **Important:** the workspace is the **default cwd**, not a hard sandbox. Tools
@@ -19,19 +19,19 @@ resolve relative paths against the workspace, but absolute paths can still reach
 elsewhere on the host unless sandboxing is enabled. If you need isolation, use
 [`agents.defaults.sandbox`](/gateway/sandboxing) (and/or per‑agent sandbox config).
 When sandboxing is enabled and `workspaceAccess` is not `"rw"`, tools operate
-inside a sandbox workspace under `~/.openclaw/sandboxes`, not your host workspace.
+inside a sandbox workspace under `~/.bustly/sandboxes`, not your host workspace.
 
 ## Default location
 
-- Default: `~/.openclaw/workspace`
+- Default: `~/.bustly/workspace`
 - If `OPENCLAW_PROFILE` is set and not `"default"`, the default becomes
-  `~/.openclaw/workspace-<profile>`.
-- Override in `~/.openclaw/openclaw.json`:
+  `~/.bustly/workspace-<profile>`.
+- Override in `~/.bustly/openclaw.json`:
 
 ```json5
 {
   agent: {
-    workspace: "~/.openclaw/workspace",
+    workspace: "~/.bustly/workspace",
   },
 }
 ```
@@ -122,12 +122,12 @@ files.
 
 ## What is NOT in the workspace
 
-These live under `~/.openclaw/` and should NOT be committed to the workspace repo:
+These live under `~/.bustly/` and should NOT be committed to the workspace repo:
 
-- `~/.openclaw/openclaw.json` (config)
-- `~/.openclaw/credentials/` (OAuth tokens, API keys)
-- `~/.openclaw/agents/<agentId>/sessions/` (session transcripts + metadata)
-- `~/.openclaw/skills/` (managed skills)
+- `~/.bustly/openclaw.json` (config)
+- `~/.bustly/credentials/` (OAuth tokens, API keys)
+- `~/.bustly/agents/<agentId>/sessions/` (session transcripts + metadata)
+- `~/.bustly/skills/` (managed skills)
 
 If you need to migrate sessions or config, copy them separately and keep them
 out of version control.
@@ -146,7 +146,7 @@ If git is installed, brand-new workspaces are initialized automatically. If this
 workspace is not already a repo, run:
 
 ```bash
-cd ~/.openclaw/workspace
+cd ~/.bustly/workspace
 git init
 git add AGENTS.md SOUL.md TOOLS.md IDENTITY.md USER.md HEARTBEAT.md memory/
 git commit -m "Add agent workspace"
@@ -201,11 +201,11 @@ git push
 Even in a private repo, avoid storing secrets in the workspace:
 
 - API keys, OAuth tokens, passwords, or private credentials.
-- Anything under `~/.openclaw/`.
+- Anything under `~/.bustly/`.
 - Raw dumps of chats or sensitive attachments.
 
 If you must store sensitive references, use placeholders and keep the real
-secret elsewhere (password manager, environment variables, or `~/.openclaw/`).
+secret elsewhere (password manager, environment variables, or `~/.bustly/`).
 
 Suggested `.gitignore` starter:
 
@@ -219,10 +219,10 @@ Suggested `.gitignore` starter:
 
 ## Moving the workspace to a new machine
 
-1. Clone the repo to the desired path (default `~/.openclaw/workspace`).
-2. Set `agents.defaults.workspace` to that path in `~/.openclaw/openclaw.json`.
+1. Clone the repo to the desired path (default `~/.bustly/workspace`).
+2. Set `agents.defaults.workspace` to that path in `~/.bustly/openclaw.json`.
 3. Run `openclaw setup --workspace <path>` to seed any missing files.
-4. If you need sessions, copy `~/.openclaw/agents/<agentId>/sessions/` from the
+4. If you need sessions, copy `~/.bustly/agents/<agentId>/sessions/` from the
    old machine separately.
 
 ## Advanced notes

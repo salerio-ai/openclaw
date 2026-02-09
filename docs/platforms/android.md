@@ -25,7 +25,7 @@ System control (launchd/systemd) lives on the Gateway host. See [Gateway](/gatew
 
 Android node app ⇄ (mDNS/NSD + WebSocket) ⇄ **Gateway**
 
-Android connects directly to the Gateway WebSocket (default `ws://<host>:18789`) and uses Gateway-owned pairing.
+Android connects directly to the Gateway WebSocket (default `ws://<host>:17999`) and uses Gateway-owned pairing.
 
 ### Prerequisites
 
@@ -39,16 +39,16 @@ Android connects directly to the Gateway WebSocket (default `ws://<host>:18789`)
 ### 1) Start the Gateway
 
 ```bash
-openclaw gateway --port 18789 --verbose
+openclaw gateway --port 17999 --verbose
 ```
 
 Confirm in logs you see something like:
 
-- `listening on ws://0.0.0.0:18789`
+- `listening on ws://0.0.0.0:17999`
 
 For tailnet-only setups (recommended for Vienna ⇄ London), bind the gateway to the tailnet IP:
 
-- Set `gateway.bind: "tailnet"` in `~/.openclaw/openclaw.json` on the gateway host.
+- Set `gateway.bind: "tailnet"` in `~/.bustly/openclaw.json` on the gateway host.
 - Restart the Gateway / macOS menubar app.
 
 ### 2) Verify discovery (optional)
@@ -122,7 +122,7 @@ If you want the node to show real HTML/CSS/JS that the agent can edit on disk, p
 
 Note: nodes use the standalone canvas host on `canvasHost.port` (default `18793`).
 
-1. Create `~/.openclaw/workspace/canvas/index.html` on the gateway host.
+1. Create `~/.bustly/workspace/canvas/index.html` on the gateway host.
 
 2. Navigate the node to it (LAN):
 

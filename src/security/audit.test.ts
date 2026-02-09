@@ -670,7 +670,7 @@ describe("security audit", () => {
       includeChannelSecurity: false,
       probeGatewayFn: async () => ({
         ok: false,
-        url: "ws://127.0.0.1:18789",
+        url: "ws://127.0.0.1:17999",
         connectLatencyMs: null,
         error: "connect failed",
         close: null,
@@ -817,8 +817,8 @@ describe("security audit", () => {
       config: cfg,
       includeFilesystem: false,
       includeChannelSecurity: false,
-      stateDir: "/Users/test/Dropbox/.openclaw",
-      configPath: "/Users/test/Dropbox/.openclaw/openclaw.json",
+      stateDir: "/Users/test/Dropbox/.bustly",
+      configPath: "/Users/test/Dropbox/.bustly/openclaw.json",
     });
 
     expect(res.findings).toEqual(
@@ -1142,7 +1142,7 @@ describe("security audit", () => {
           mode: "remote",
           auth: { token: "local-token-should-not-use" },
           remote: {
-            url: "ws://remote.example.com:18789",
+            url: "ws://remote.example.com:17999",
             token: "remote-token-xyz789",
           },
         },
@@ -1181,7 +1181,7 @@ describe("security audit", () => {
           mode: "remote",
           auth: { token: "local-token-should-not-use" },
           remote: {
-            url: "ws://remote.example.com:18789",
+            url: "ws://remote.example.com:17999",
             token: "remote-token",
           },
         },
@@ -1218,7 +1218,7 @@ describe("security audit", () => {
         gateway: {
           mode: "remote",
           remote: {
-            url: "ws://remote.example.com:18789",
+            url: "ws://remote.example.com:17999",
             password: "remote-pass",
           },
         },
@@ -1256,7 +1256,7 @@ describe("security audit", () => {
         gateway: {
           mode: "remote",
           remote: {
-            url: "ws://remote.example.com:18789",
+            url: "ws://remote.example.com:17999",
             password: "remote-pass",
           },
         },

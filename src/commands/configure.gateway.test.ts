@@ -49,10 +49,10 @@ import { promptGatewayConfig } from "./configure.gateway.js";
 
 describe("promptGatewayConfig", () => {
   it("generates a token when the prompt returns undefined", async () => {
-    mocks.resolveGatewayPort.mockReturnValue(18789);
+    mocks.resolveGatewayPort.mockReturnValue(17999);
     const selectQueue = ["loopback", "token", "off"];
     mocks.select.mockImplementation(async () => selectQueue.shift());
-    const textQueue = ["18789", undefined];
+    const textQueue = ["17999", undefined];
     mocks.text.mockImplementation(async () => textQueue.shift());
     mocks.randomToken.mockReturnValue("generated-token");
     mocks.buildGatewayAuthConfig.mockImplementation(({ mode, token, password }) => ({

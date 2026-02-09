@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 
 // Types are defined in electron.d.ts
 import Onboard from "./components/Onboard";
+import BustlyLoginPage from "./components/Onboard/BustlyLoginPage";
 import DevPanel from "./components/DevPanel";
 
 interface LogEntry {
@@ -22,6 +23,8 @@ export default function App() {
   const logIdRef = useRef(0);
   const controlUiRequestedRef = useRef(false);
   const isDevPanelWindow = typeof window !== "undefined" && window.location.hash === "#devpanel";
+  const isBustlyLoginWindow =
+    typeof window !== "undefined" && window.location.hash === "#bustly-login";
 
   // Load initial data
   useEffect(() => {
@@ -60,7 +63,7 @@ export default function App() {
 
   // When onboarding is complete, ensure the Control UI is loaded into the main window.
   useEffect(() => {
-    if (!showOnboardLoading || isDevPanelWindow) {
+    if (!showOnboardLoading || isDevPanelWindow || isBustlyLoginWindow) {
       return;
     }
     if (controlUiRequestedRef.current) {
@@ -72,7 +75,7 @@ export default function App() {
 
   // If gateway becomes ready after reopening, trigger Control UI load.
   useEffect(() => {
-    if (!showOnboardLoading || isDevPanelWindow) {
+    if (!showOnboardLoading || isDevPanelWindow || isBustlyLoginWindow) {
       return;
     }
     if (!gatewayStatus?.running) {
@@ -240,6 +243,19 @@ export default function App() {
         onReOnboard={handleReOnboard}
         onOpenControlUI={handleOpenControlUI}
         onClearLogs={handleClearLogs}
+      />
+    );
+  }
+
+  if (isBustlyLoginWindow) {
+    return (
+      <BustlyLoginPage
+        onContinue={() => {
+          void window.electronAPI?.onboardOpenControlUi?.();
+        }}
+        autoContinue
+        showSignOut={false}
+        showContinueWhenLoggedIn={false}
       />
     );
   }

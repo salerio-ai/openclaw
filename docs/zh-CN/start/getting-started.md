@@ -18,7 +18,7 @@ x-i18n:
 目标：从 **零开始** → **第一次成功聊天** （使用合理的默认配置）尽可能快地完成。
 
 最快聊天方式：打开控制界面（无需设置渠道）。运行 `openclaw dashboard`
-然后在浏览器中聊天，或打开 `http://127.0.0.1:18789/` （在 Gateway 主机上）。
+然后在浏览器中聊天，或打开 `http://127.0.0.1:17999/` （在 Gateway 主机上）。
 文档： [仪表盘](/web/dashboard) 和 [控制界面](/web/control-ui)。
 
 推荐路径：使用 **CLI 上手引导向导** （`openclaw onboard`）。它会设置：
@@ -39,7 +39,7 @@ x-i18n:
   "routing": {
     "agents": {
       "main": {
-        "workspace": "~/.openclaw/workspace",
+        "workspace": "~/.bustly/workspace",
         "sandbox": { "mode": "off" }
       }
     }
@@ -103,8 +103,8 @@ openclaw onboard --install-daemon
 
 - **推荐的 Anthropic 路径：** 设置 API 密钥（向导可以将其存储以供服务使用）。 `claude setup-token` 如果您想复用 Claude Code 凭据，也受支持。
 
-- OAuth 凭据（旧版导入）： `~/.openclaw/credentials/oauth.json`
-- 认证配置文件（OAuth + API 密钥）： `~/.openclaw/agents/<agentId>/agent/auth-profiles.json`
+- OAuth 凭据（旧版导入）： `~/.bustly/credentials/oauth.json`
+- 认证配置文件（OAuth + API 密钥）： `~/.bustly/agents/<agentId>/agent/auth-profiles.json`
 
 无头/服务器提示：先在普通机器上完成 OAuth，然后复制 `oauth.json` 到 Gateway 主机上。
 
@@ -119,10 +119,10 @@ openclaw gateway status
 手动运行（前台）：
 
 ```bash
-openclaw gateway --port 18789 --verbose
+openclaw gateway --port 17999 --verbose
 ```
 
-仪表盘（本地回环）： `http://127.0.0.1:18789/`
+仪表盘（本地回环）： `http://127.0.0.1:17999/`
 如果配置了令牌，请将其粘贴到控制界面设置中（存储为 `connect.params.auth.token`）。
 
 ⚠️ **Bun 警告（WhatsApp + Telegram）：** Bun 在这些渠道上存在已知问题。如果您使用 WhatsApp 或 Telegram，请使用 **Node **。
@@ -188,7 +188,7 @@ openclaw onboard --install-daemon
 Gateway（从此仓库）：
 
 ```bash
-node openclaw.mjs gateway --port 18789 --verbose
+node openclaw.mjs gateway --port 17999 --verbose
 ```
 
 ## 7）端到端验证

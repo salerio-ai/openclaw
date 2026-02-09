@@ -67,7 +67,7 @@ let gatewayProcess: ChildProcess | null = null;
 let mainWindow: BrowserWindow | null = null;
 let devPanelWindow: BrowserWindow | null = null;
 let needsOnboardAtLaunch = false;
-let gatewayPort: number = 18789;
+let gatewayPort: number = 17999;
 let gatewayBind: string = "loopback";
 let gatewayToken: string | null = null;
 let initResult: InitializationResult | null = null;
@@ -88,17 +88,47 @@ type WhatsAppConfigRequest =
 // Gateway configuration
 const GATEWAY_HOST = "127.0.0.1";
 const DEV_PANEL_HASH = "devpanel";
+const BUSTLY_LOGIN_HASH = "bustly-login";
 const DEV_PANEL_SHORTCUT = "CommandOrControl+Shift+Alt+D";
 const DASHBOARD_CHANNEL_PLUGIN_IDS = ["whatsapp"] as const;
 const PRELOAD_PATH = process.env.NODE_ENV === "development"
   ? resolve(__dirname, "main/preload.js")
   : resolve(__dirname, "preload.js");
 
+function resolveUserPath(input: string, homeDir: string): string {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+  if (trimmed.startsWith("~")) {
+    return resolve(trimmed.replace(/^~(?=$|[\\/])/, homeDir));
+  }
+  return resolve(trimmed);
+}
+
+function resolveElectronStateDir(): string {
+  const homeDir = app.getPath("home");
+  const override = process.env.OPENCLAW_STATE_DIR?.trim();
+  if (override) {
+    return resolveUserPath(override, homeDir);
+  }
+  return resolve(homeDir, ".bustly");
+}
+
+function resolveElectronConfigPath(): string {
+  const homeDir = app.getPath("home");
+  const override = process.env.OPENCLAW_CONFIG_PATH?.trim();
+  if (override) {
+    return resolveUserPath(override, homeDir);
+  }
+  return resolve(resolveElectronStateDir(), "openclaw.json");
+}
+
 function ensureMainLogPath(): string {
   if (mainLogPath) {
     return mainLogPath;
   }
-  const logDir = resolve(app.getPath("home"), ".openclaw/electron/logs");
+  const logDir = resolve(resolveElectronStateDir(), "electron", "logs");
   mkdirSync(logDir, { recursive: true, mode: 0o700 });
   mainLogPath = resolve(logDir, "main.log");
   return mainLogPath;
@@ -205,13 +235,13 @@ function resolveBundledOpenClawVersion(): string | null {
  */
 function loadGatewayConfig(): { port: number; bind: string; token?: string } | null {
   try {
-    const configPath = resolve(app.getPath("home"), ".openclaw/openclaw.json");
+    const configPath = resolveElectronConfigPath();
     if (!existsSync(configPath)) {
       return null;
     }
 
     const config = JSON.parse(readFileSync(configPath, "utf-8"));
-    const port = config.gateway?.port ?? 18789;
+    const port = config.gateway?.port ?? 17999;
     const bind = config.gateway?.bind ?? "loopback";
     const token = config.gateway?.auth?.token;
 
@@ -323,7 +353,7 @@ async function startGateway(): Promise<boolean> {
       writeMainLog(`Bundled OpenClaw version: ${bundledVersion}`);
     }
     const homeDir = app.getPath("home");
-    const stateDir = resolve(homeDir, ".openclaw");
+    const stateDir = resolveElectronStateDir();
     const shellPath = process.env.SHELL?.trim() || "/bin/zsh";
     const fixedPath =
       process.env.PATH?.trim() ||
@@ -400,7 +430,7 @@ async function startGateway(): Promise<boolean> {
       NODE_ENV: "production",
       OPENCLAW_BUNDLED_PLUGINS_DIR: bundledPluginsDir,
       OPENCLAW_STATE_DIR: stateDir,
-      OPENCLAW_CONFIG: resolve(stateDir, "openclaw.json"),
+      OPENCLAW_CONFIG_PATH: resolveElectronConfigPath(),
       HOME: homeDir,
       USERPROFILE: homeDir,
       OPENCLAW_LOAD_SHELL_ENV: "0",
@@ -413,7 +443,7 @@ async function startGateway(): Promise<boolean> {
       COLORTERM: process.env.COLORTERM?.trim() || "truecolor",
       TERM_PROGRAM: process.env.TERM_PROGRAM?.trim() || "OpenClaw",
       NODE_PATH: effectiveNodePath,
-      BUSTLY_OAUTH_CALLBACK_PORT: String(oauthCallbackPort),
+      OPENCLAW_OAUTH_CALLBACK_PORT: String(oauthCallbackPort),
       ...(bundledVersion ? { OPENCLAW_BUNDLED_VERSION: bundledVersion } : {}),
     };
     if (existsSync(bundledPluginsDir)) {
@@ -621,8 +651,16 @@ function openControlUiInMainWindow(): void {
   });
 }
 
+function openBustlyLoginInMainWindow(): void {
+  writeMainLog("[Bustly Login] Opening login page in main window");
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  loadRendererWindow(mainWindow, { hash: BUSTLY_LOGIN_HASH });
+}
+
 function resolveOpenClawConfigPath(): string {
-  return getConfigPath() ?? resolve(app.getPath("home"), ".openclaw/openclaw.json");
+  return getConfigPath() ?? resolveElectronConfigPath();
 }
 
 function readOpenClawConfigFile(): OpenClawConfig {
@@ -767,6 +805,19 @@ function createWindow(): void {
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
+
+  mainWindow.on("focus", () => {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return;
+    }
+    void (async () => {
+      await BustlyOAuth.verifyBustlyLoginStatus();
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        return;
+      }
+      mainWindow.webContents.send("bustly-login-refresh");
+    })();
+  });
 }
 
 function ensureWindow(): void {
@@ -807,18 +858,19 @@ function setupIpcHandlers(): void {
   // Whether this launch needs onboarding (computed on app start)
   ipcMain.handle("openclaw-needs-onboard", () => {
     const initialized = isFullyInitialized();
+    writeMainLog(`[Init] needsOnboardAtLaunch=${needsOnboardAtLaunch} initialized=${initialized}`);
     if (initialized && needsOnboardAtLaunch) {
       needsOnboardAtLaunch = false;
     }
     return needsOnboardAtLaunch && !initialized;
   });
 
-  // Reset onboarding (delete ~/.openclaw and stop gateway)
+  // Reset onboarding (delete state dir and stop gateway)
   ipcMain.handle("openclaw-reset", async () => {
     try {
       await stopGateway();
-      const openclawDir = resolve(app.getPath("home"), ".openclaw");
-      rmSync(openclawDir, { recursive: true, force: true });
+      const stateDir = resolveElectronStateDir();
+      rmSync(stateDir, { recursive: true, force: true });
       initResult = null;
       gatewayToken = null;
       gatewayProcess = null;
@@ -902,13 +954,23 @@ function setupIpcHandlers(): void {
   // === Bustly OAuth handlers ===
 
   // Check if user is logged in to Bustly
-  ipcMain.handle("bustly-is-logged-in", () => {
-    return BustlyOAuth.isBustlyLoggedIn();
+  ipcMain.handle("bustly-is-logged-in", async () => {
+    return await BustlyOAuth.isBustlyLoggedIn();
   });
 
   // Get current Bustly user info
-  ipcMain.handle("bustly-get-user-info", () => {
-    return BustlyOAuth.getBustlyUserInfo();
+  ipcMain.handle("bustly-get-user-info", async () => {
+    return await BustlyOAuth.getBustlyUserInfo();
+  });
+
+  // Open Bustly login page (standalone)
+  ipcMain.handle("bustly-open-login", () => {
+    try {
+      openBustlyLoginInMainWindow();
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
   });
 
   // Bustly OAuth login
@@ -1012,9 +1074,9 @@ function setupIpcHandlers(): void {
 
   ipcMain.handle("bustly-open-settings", async () => {
     try {
-      const baseUrl = process.env.BUSTLY_WEB_BASE_URL;
+      const baseUrl = process.env.OPENCLAW_WEB_BASE_URL;
       if (!baseUrl) {
-        throw new Error("Missing BUSTLY_WEB_BASE_URL");
+        throw new Error("Missing OPENCLAW_WEB_BASE_URL");
       }
       const url = `${baseUrl.replace(/\/+$/, "")}/admin?setting_modal=profile`;
       await shell.openExternal(url);
@@ -1165,7 +1227,7 @@ function setupIpcHandlers(): void {
       }
 
       // Update config with the credential
-      const configPath = resolve(app.getPath("home"), ".openclaw/openclaw.json");
+      const configPath = resolveElectronConfigPath();
       const config = JSON.parse(readFileSync(configPath, "utf-8"));
 
       let nextConfig = config;
@@ -1238,7 +1300,7 @@ function setupIpcHandlers(): void {
       writeFileSync(configPath, JSON.stringify(nextConfig, null, 2));
 
       // Update gateway settings
-      gatewayPort = nextConfig.gateway?.port || 18789;
+      gatewayPort = nextConfig.gateway?.port || 17999;
       gatewayBind = nextConfig.gateway?.bind || "loopback";
       if (nextConfig.gateway?.auth?.token) {
         gatewayToken = nextConfig.gateway.auth.token;
@@ -1406,7 +1468,12 @@ app.whenReady().then(async () => {
               }
             }
           }
-          console.log(`[Env] Loaded environment variables from ${envPath}:`, Object.keys(process.env).filter(k => k.startsWith("BUSTLY_")));
+          console.log(
+            `[Env] Loaded environment variables from ${envPath}:`,
+            Object.keys(process.env).filter(
+              (k) => k.startsWith("OPENCLAW_") || k.startsWith("BUSTLY_"),
+            ),
+          );
           break;
         }
       } catch (error) {
@@ -1415,6 +1482,16 @@ app.whenReady().then(async () => {
     }
   };
   loadDotEnv();
+
+  // If no Bustly OAuth state exists, remove the config/state directory.
+  const stateDir = resolveElectronStateDir();
+  const bustlyOauthPath = resolve(stateDir, "bustlyOauth.json");
+  if (!existsSync(bustlyOauthPath)) {
+    writeMainLog(`[Init] bustlyOauth.json missing; clearing stateDir=${stateDir}`);
+    rmSync(stateDir, { recursive: true, force: true });
+  } else {
+    writeMainLog(`[Init] bustlyOauth.json found at ${bustlyOauthPath}`);
+  }
 
   setupIpcHandlers();
 

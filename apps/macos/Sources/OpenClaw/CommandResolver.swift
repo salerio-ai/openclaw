@@ -101,7 +101,7 @@ enum CommandResolver {
 
     private static func openclawManagedPaths(home: URL) -> [String] {
         let bases = [
-            home.appendingPathComponent(".openclaw"),
+            home.appendingPathComponent(".bustly"),
         ]
         var paths: [String] = []
         for base in bases {

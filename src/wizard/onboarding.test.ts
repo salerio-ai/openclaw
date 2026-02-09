@@ -51,8 +51,8 @@ vi.mock("../commands/onboard-helpers.js", async (importActual) => {
     printWizardHeader: vi.fn(),
     probeGatewayReachable: vi.fn(async () => ({ ok: true })),
     resolveControlUiLinks: vi.fn(() => ({
-      httpUrl: "http://127.0.0.1:18789",
-      wsUrl: "ws://127.0.0.1:18789",
+      httpUrl: "http://127.0.0.1:17999",
+      wsUrl: "ws://127.0.0.1:17999",
     })),
   };
 });
@@ -76,7 +76,7 @@ vi.mock("../tui/tui.js", () => ({
 describe("runOnboardingWizard", () => {
   it("exits when config is invalid", async () => {
     readConfigFileSnapshot.mockResolvedValueOnce({
-      path: "/tmp/.openclaw/openclaw.json",
+      path: "/tmp/.bustly/openclaw.json",
       exists: true,
       raw: "{}",
       parsed: {},

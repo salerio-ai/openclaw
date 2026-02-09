@@ -416,7 +416,7 @@ run_profile() {
   IMAGE_PNG="$workspace/proof.png"
   IMAGE_TXT="$workspace/image.txt"
   SESSION_ID="e2e-tools-${profile}"
-  SESSION_JSONL="/root/.openclaw-${profile}/agents/main/sessions/${SESSION_ID}.jsonl"
+  SESSION_JSONL="/root/.bustly-${profile}/agents/main/sessions/${SESSION_ID}.jsonl"
 
   PROOF_VALUE="$(node -e 'console.log(require("node:crypto").randomBytes(16).toString("hex"))')"
   echo -n "$PROOF_VALUE" >"$PROOF_TXT"
@@ -511,7 +511,7 @@ run_profile() {
   sleep 1
   if [[ ! -f "$SESSION_JSONL" ]]; then
     echo "ERROR: missing session transcript ($profile): $SESSION_JSONL" >&2
-    ls -la "/root/.openclaw-${profile}/agents/main/sessions" >&2 || true
+    ls -la "/root/.bustly-${profile}/agents/main/sessions" >&2 || true
     exit 1
   fi
   assert_session_used_tools "$SESSION_JSONL" read write exec image
@@ -521,7 +521,7 @@ run_profile() {
 }
 
 if [[ "$MODELS_MODE" == "openai" || "$MODELS_MODE" == "both" ]]; then
-  run_profile "e2e-openai" "18789" "/tmp/openclaw-e2e-openai" "openai"
+  run_profile "e2e-openai" "17999" "/tmp/openclaw-e2e-openai" "openai"
 fi
 
 if [[ "$MODELS_MODE" == "anthropic" || "$MODELS_MODE" == "both" ]]; then

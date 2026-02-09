@@ -165,7 +165,7 @@ Concrete config example (Tailscale hostname):
   channels: {
     imessage: {
       enabled: true,
-      cliPath: "~/.openclaw/scripts/imsg-ssh",
+      cliPath: "~/.bustly/scripts/imsg-ssh",
       remoteHost: "bot@mac-mini.tailnet-1234.ts.net",
       includeAttachments: true,
       dbPath: "/Users/bot/Library/Messages/chat.db",
@@ -174,7 +174,7 @@ Concrete config example (Tailscale hostname):
 }
 ```
 
-Example wrapper (`~/.openclaw/scripts/imsg-ssh`):
+Example wrapper (`~/.bustly/scripts/imsg-ssh`):
 
 ```bash
 #!/usr/bin/env bash
@@ -187,7 +187,7 @@ Notes:
 - Use SSH keys so `ssh bot@mac-mini.tailnet-1234.ts.net` works without prompts.
 - `remoteHost` should match the SSH target so SCP can fetch attachments.
 
-Multi-account support: use `channels.imessage.accounts` with per-account config and optional `name`. See [`gateway/configuration`](/gateway/configuration#telegramaccounts--discordaccounts--slackaccounts--signalaccounts--imessageaccounts) for the shared pattern. Don't commit `~/.openclaw/openclaw.json` (it often contains tokens).
+Multi-account support: use `channels.imessage.accounts` with per-account config and optional `name`. See [`gateway/configuration`](/gateway/configuration#telegramaccounts--discordaccounts--slackaccounts--signalaccounts--imessageaccounts) for the shared pattern. Don't commit `~/.bustly/openclaw.json` (it often contains tokens).
 
 ## Access control (DMs + groups)
 

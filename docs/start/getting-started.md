@@ -11,7 +11,7 @@ title: "Getting Started"
 Goal: go from **zero** → **first working chat** (with sane defaults) as quickly as possible.
 
 Fastest chat: open the Control UI (no channel setup needed). Run `openclaw dashboard`
-and chat in the browser, or open `http://127.0.0.1:18789/` on the gateway host.
+and chat in the browser, or open `http://127.0.0.1:17999/` on the gateway host.
 Docs: [Dashboard](/web/dashboard) and [Control UI](/web/control-ui).
 
 Recommended path: use the **CLI onboarding wizard** (`openclaw onboard`). It sets up:
@@ -34,7 +34,7 @@ run on host, set an explicit per-agent override:
   "routing": {
     "agents": {
       "main": {
-        "workspace": "~/.openclaw/workspace",
+        "workspace": "~/.bustly/workspace",
         "sandbox": { "mode": "off" }
       }
     }
@@ -98,8 +98,8 @@ Wizard doc: [Wizard](/start/wizard)
 
 - **Recommended Anthropic path:** set an API key (wizard can store it for service use). `claude setup-token` is also supported if you want to reuse Claude Code credentials.
 
-- OAuth credentials (legacy import): `~/.openclaw/credentials/oauth.json`
-- Auth profiles (OAuth + API keys): `~/.openclaw/agents/<agentId>/agent/auth-profiles.json`
+- OAuth credentials (legacy import): `~/.bustly/credentials/oauth.json`
+- Auth profiles (OAuth + API keys): `~/.bustly/agents/<agentId>/agent/auth-profiles.json`
 
 Headless/server tip: do OAuth on a normal machine first, then copy `oauth.json` to the gateway host.
 
@@ -114,10 +114,10 @@ openclaw gateway status
 Manual run (foreground):
 
 ```bash
-openclaw gateway --port 18789 --verbose
+openclaw gateway --port 17999 --verbose
 ```
 
-Dashboard (local loopback): `http://127.0.0.1:18789/`
+Dashboard (local loopback): `http://127.0.0.1:17999/`
 If a token is configured, paste it into the Control UI settings (stored as `connect.params.auth.token`).
 
 ⚠️ **Bun warning (WhatsApp + Telegram):** Bun has known issues with these
@@ -184,7 +184,7 @@ If you don’t have a global install yet, run the onboarding step via `pnpm open
 Gateway (from this repo):
 
 ```bash
-node openclaw.mjs gateway --port 18789 --verbose
+node openclaw.mjs gateway --port 17999 --verbose
 ```
 
 ## 7) Verify end-to-end

@@ -13,9 +13,9 @@ docker run --rm -t "$IMAGE_NAME" bash -lc '
 
   home_dir=$(mktemp -d "/tmp/openclaw-plugins-e2e.XXXXXX")
   export HOME="$home_dir"
-  mkdir -p "$HOME/.openclaw/extensions"
+  mkdir -p "$HOME/.bustly/extensions"
 
-  cat > "$HOME/.openclaw/extensions/demo-plugin.js" <<'"'"'JS'"'"'
+  cat > "$HOME/.bustly/extensions/demo-plugin.js" <<'"'"'JS'"'"'
 module.exports = {
   id: "demo-plugin",
   name: "Demo Plugin",

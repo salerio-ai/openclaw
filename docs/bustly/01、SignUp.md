@@ -8,7 +8,7 @@
 ### 核心新增两点
 
 1. 登录后分支：是否新用户
-2. 最终产物：token + workspace_id，并写入 `~/.openclaw/openclaw.json`
+2. 最终产物：token + workspace_id，并写入 `~/.bustly/openclaw.json`
 
 ---
 
@@ -86,7 +86,7 @@ Onboarding 包含的步骤：
 
 ### 7️⃣ 桌面端写入本地配置文件
 
-**文件路径**：`~/.openclaw/openclaw.json`
+**文件路径**：`~/.bustly/openclaw.json`
 
 **写入逻辑**（只保留必要内容）：
 
@@ -127,7 +127,7 @@ sequenceDiagram
     participant 网页端 as Salerio 网页
     participant 认证服务 as Salerio 认证服务
     participant 业务服务 as Salerio 业务服务
-    participant 桌面文件 as 本地配置文件 ~/.openclaw/openclaw.json
+    participant 桌面文件 as 本地配置文件 ~/.bustly/openclaw.json
 
     %% ===== 触发登录 =====
     用户->>桌面端: 点击「登录 Salerio」

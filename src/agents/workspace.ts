@@ -12,9 +12,9 @@ export function resolveDefaultAgentWorkspaceDir(
 ): string {
   const profile = env.OPENCLAW_PROFILE?.trim();
   if (profile && profile.toLowerCase() !== "default") {
-    return path.join(homedir(), ".openclaw", `workspace-${profile}`);
+    return path.join(homedir(), ".bustly", `workspace-${profile}`);
   }
-  return path.join(homedir(), ".openclaw", "workspace");
+  return path.join(homedir(), ".bustly", "workspace");
 }
 
 export const DEFAULT_AGENT_WORKSPACE_DIR = resolveDefaultAgentWorkspaceDir();

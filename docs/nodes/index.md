@@ -51,14 +51,14 @@ forwards `exec` calls to the **node host** when `host=node` is selected.
 
 - **Gateway host**: receives messages, runs the model, routes tool calls.
 - **Node host**: executes `system.run`/`system.which` on the node machine.
-- **Approvals**: enforced on the node host via `~/.openclaw/exec-approvals.json`.
+- **Approvals**: enforced on the node host via `~/.bustly/exec-approvals.json`.
 
 ### Start a node host (foreground)
 
 On the node machine:
 
 ```bash
-openclaw node run --host <gateway-host> --port 18789 --display-name "Build Node"
+openclaw node run --host <gateway-host> --port 17999 --display-name "Build Node"
 ```
 
 ### Remote gateway via SSH tunnel (loopback bind)
@@ -70,8 +70,8 @@ node host at the local end of the tunnel.
 Example (node host -> gateway host):
 
 ```bash
-# Terminal A (keep running): forward local 18790 -> gateway 127.0.0.1:18789
-ssh -N -L 18790:127.0.0.1:18789 user@gateway-host
+# Terminal A (keep running): forward local 18790 -> gateway 127.0.0.1:17999
+ssh -N -L 18790:127.0.0.1:17999 user@gateway-host
 
 # Terminal B: export the gateway token and connect through the tunnel
 export OPENCLAW_GATEWAY_TOKEN="<gateway-token>"
@@ -80,13 +80,13 @@ openclaw node run --host 127.0.0.1 --port 18790 --display-name "Build Node"
 
 Notes:
 
-- The token is `gateway.auth.token` from the gateway config (`~/.openclaw/openclaw.json` on the gateway host).
+- The token is `gateway.auth.token` from the gateway config (`~/.bustly/openclaw.json` on the gateway host).
 - `openclaw node run` reads `OPENCLAW_GATEWAY_TOKEN` for auth.
 
 ### Start a node host (service)
 
 ```bash
-openclaw node install --host <gateway-host> --port 18789 --display-name "Build Node"
+openclaw node install --host <gateway-host> --port 17999 --display-name "Build Node"
 openclaw node restart
 ```
 
@@ -102,7 +102,7 @@ openclaw nodes list
 
 Naming options:
 
-- `--display-name` on `openclaw node run` / `openclaw node install` (persists in `~/.openclaw/node.json` on the node).
+- `--display-name` on `openclaw node run` / `openclaw node install` (persists in `~/.bustly/node.json` on the node).
 - `openclaw nodes rename --node <id|name|ip> --name "Build Node"` (gateway override).
 
 ### Allowlist the commands
@@ -114,7 +114,7 @@ openclaw approvals allowlist add --node <id|name|ip> "/usr/bin/uname"
 openclaw approvals allowlist add --node <id|name|ip> "/usr/bin/sw_vers"
 ```
 
-Approvals live on the node host at `~/.openclaw/exec-approvals.json`.
+Approvals live on the node host at `~/.bustly/exec-approvals.json`.
 
 ### Point exec at the node
 
@@ -281,7 +281,7 @@ Notes:
 - macOS nodes drop `PATH` overrides; headless node hosts only accept `PATH` when it prepends the node host PATH.
 - On macOS node mode, `system.run` is gated by exec approvals in the macOS app (Settings → Exec approvals).
   Ask/allowlist/full behave the same as the headless node host; denied prompts return `SYSTEM_RUN_DENIED`.
-- On headless node host, `system.run` is gated by exec approvals (`~/.openclaw/exec-approvals.json`).
+- On headless node host, `system.run` is gated by exec approvals (`~/.bustly/exec-approvals.json`).
 
 ## Exec node binding
 
@@ -321,14 +321,14 @@ or for running a minimal node alongside a server.
 Start it:
 
 ```bash
-openclaw node run --host <gateway-host> --port 18789
+openclaw node run --host <gateway-host> --port 17999
 ```
 
 Notes:
 
 - Pairing is still required (the Gateway will show a node approval prompt).
-- The node host stores its node id, token, display name, and gateway connection info in `~/.openclaw/node.json`.
-- Exec approvals are enforced locally via `~/.openclaw/exec-approvals.json`
+- The node host stores its node id, token, display name, and gateway connection info in `~/.bustly/node.json`.
+- Exec approvals are enforced locally via `~/.bustly/exec-approvals.json`
   (see [Exec approvals](/tools/exec-approvals)).
 - On macOS, the headless node host prefers the companion app exec host when reachable and falls
   back to local execution if the app is unavailable. Set `OPENCLAW_NODE_EXEC_HOST=app` to require

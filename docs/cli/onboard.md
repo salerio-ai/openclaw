@@ -19,7 +19,7 @@ Related:
 openclaw onboard
 openclaw onboard --flow quickstart
 openclaw onboard --flow manual
-openclaw onboard --mode remote --remote-url ws://gateway-host:18789
+openclaw onboard --mode remote --remote-url ws://gateway-host:17999
 ```
 
 Flow notes:

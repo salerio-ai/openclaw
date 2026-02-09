@@ -139,7 +139,7 @@ systemctl --user status openclaw-gateway
 tailscale serve status
 
 # Test local response
-curl http://localhost:18789
+curl http://localhost:17999
 ```
 
 ## 8) Lock Down VCN Security
@@ -193,7 +193,7 @@ This setup often removes the _need_ for extra host-based firewall rules purely t
 
 ### Still Recommended
 
-- **Credential permissions:** `chmod 700 ~/.openclaw`
+- **Credential permissions:** `chmod 700 ~/.bustly`
 - **Security audit:** `openclaw security audit`
 - **System updates:** `sudo apt update && sudo apt upgrade` regularly
 - **Monitor Tailscale:** Review devices in [Tailscale admin console](https://login.tailscale.com/admin)
@@ -219,10 +219,10 @@ If Tailscale Serve isn't working, use an SSH tunnel:
 
 ```bash
 # From your local machine (via Tailscale)
-ssh -L 18789:127.0.0.1:18789 ubuntu@openclaw
+ssh -L 17999:127.0.0.1:17999 ubuntu@openclaw
 ```
 
-Then open `http://localhost:18789`.
+Then open `http://localhost:17999`.
 
 ---
 
@@ -261,7 +261,7 @@ journalctl --user -u openclaw-gateway -n 50
 tailscale serve status
 
 # Check gateway is listening
-curl http://localhost:18789
+curl http://localhost:17999
 
 # Restart if needed
 systemctl --user restart openclaw-gateway
@@ -283,13 +283,13 @@ Most npm packages work fine. For binaries, look for `linux-arm64` or `aarch64` r
 
 All state lives in:
 
-- `~/.openclaw/` — config, credentials, session data
-- `~/.openclaw/workspace/` — workspace (SOUL.md, memory, artifacts)
+- `~/.bustly/` — config, credentials, session data
+- `~/.bustly/workspace/` — workspace (SOUL.md, memory, artifacts)
 
 Back up periodically:
 
 ```bash
-tar -czvf openclaw-backup.tar.gz ~/.openclaw ~/.openclaw/workspace
+tar -czvf openclaw-backup.tar.gz ~/.bustly ~/.bustly/workspace
 ```
 
 ---

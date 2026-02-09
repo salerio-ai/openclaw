@@ -31,7 +31,7 @@ You can change the filename via hook config.
 
 ## Configuration
 
-Add this to your config (`~/.openclaw/openclaw.json`):
+Add this to your config (`~/.bustly/openclaw.json`):
 
 ```json
 {

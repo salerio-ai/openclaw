@@ -265,7 +265,7 @@ enum AgentWorkspace {
         - Timezone (optional)
         - Notes
 
-        3) ~/.openclaw/openclaw.json
+        3) ~/.bustly/openclaw.json
         Set identity.name, identity.theme, identity.emoji to match IDENTITY.md.
 
         ## Cleanup

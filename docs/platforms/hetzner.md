@@ -22,7 +22,7 @@ Hetzner pricing changes; pick the smallest Debian/Ubuntu VPS and scale up if you
 - Rent a small Linux server (Hetzner VPS)
 - Install Docker (isolated app runtime)
 - Start the OpenClaw Gateway in Docker
-- Persist `~/.openclaw` + `~/.openclaw/workspace` on the host (survives restarts/rebuilds)
+- Persist `~/.bustly` + `~/.bustly/workspace` on the host (survives restarts/rebuilds)
 - Access the Control UI from your laptop via an SSH tunnel
 
 The Gateway can be accessed via:
@@ -113,12 +113,12 @@ Docker containers are ephemeral.
 All long-lived state must live on the host.
 
 ```bash
-mkdir -p /root/.openclaw
-mkdir -p /root/.openclaw/workspace
+mkdir -p /root/.bustly
+mkdir -p /root/.bustly/workspace
 
 # Set ownership to the container user (uid 1000):
-chown -R 1000:1000 /root/.openclaw
-chown -R 1000:1000 /root/.openclaw/workspace
+chown -R 1000:1000 /root/.bustly
+chown -R 1000:1000 /root/.bustly/workspace
 ```
 
 ---
@@ -131,13 +131,13 @@ Create `.env` in the repository root.
 OPENCLAW_IMAGE=openclaw:latest
 OPENCLAW_GATEWAY_TOKEN=change-me-now
 OPENCLAW_GATEWAY_BIND=lan
-OPENCLAW_GATEWAY_PORT=18789
+OPENCLAW_GATEWAY_PORT=17999
 
-OPENCLAW_CONFIG_DIR=/root/.openclaw
-OPENCLAW_WORKSPACE_DIR=/root/.openclaw/workspace
+OPENCLAW_CONFIG_DIR=/root/.bustly
+OPENCLAW_WORKSPACE_DIR=/root/.bustly/workspace
 
 GOG_KEYRING_PASSWORD=change-me-now
-XDG_CONFIG_HOME=/home/node/.openclaw
+XDG_CONFIG_HOME=/home/node/.bustly
 ```
 
 Generate strong secrets:
@@ -173,12 +173,12 @@ services:
       - XDG_CONFIG_HOME=${XDG_CONFIG_HOME}
       - PATH=/home/linuxbrew/.linuxbrew/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     volumes:
-      - ${OPENCLAW_CONFIG_DIR}:/home/node/.openclaw
-      - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.openclaw/workspace
+      - ${OPENCLAW_CONFIG_DIR}:/home/node/.bustly
+      - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.bustly/workspace
     ports:
       # Recommended: keep the Gateway loopback-only on the VPS; access via SSH tunnel.
       # To expose it publicly, remove the `127.0.0.1:` prefix and firewall accordingly.
-      - "127.0.0.1:${OPENCLAW_GATEWAY_PORT}:18789"
+      - "127.0.0.1:${OPENCLAW_GATEWAY_PORT}:17999"
 
       # Optional: only if you run iOS/Android nodes against this VPS and need Canvas host.
       # If you expose this publicly, read /gateway/security and firewall accordingly.
@@ -294,18 +294,18 @@ docker compose logs -f openclaw-gateway
 Success:
 
 ```
-[gateway] listening on ws://0.0.0.0:18789
+[gateway] listening on ws://0.0.0.0:17999
 ```
 
 From your laptop:
 
 ```bash
-ssh -N -L 18789:127.0.0.1:18789 root@YOUR_VPS_IP
+ssh -N -L 17999:127.0.0.1:17999 root@YOUR_VPS_IP
 ```
 
 Open:
 
-`http://127.0.0.1:18789/`
+`http://127.0.0.1:17999/`
 
 Paste your gateway token.
 
@@ -318,12 +318,12 @@ All long-lived state must survive restarts, rebuilds, and reboots.
 
 | Component           | Location                          | Persistence mechanism  | Notes                            |
 | ------------------- | --------------------------------- | ---------------------- | -------------------------------- |
-| Gateway config      | `/home/node/.openclaw/`           | Host volume mount      | Includes `openclaw.json`, tokens |
-| Model auth profiles | `/home/node/.openclaw/`           | Host volume mount      | OAuth tokens, API keys           |
-| Skill configs       | `/home/node/.openclaw/skills/`    | Host volume mount      | Skill-level state                |
-| Agent workspace     | `/home/node/.openclaw/workspace/` | Host volume mount      | Code and agent artifacts         |
-| WhatsApp session    | `/home/node/.openclaw/`           | Host volume mount      | Preserves QR login               |
-| Gmail keyring       | `/home/node/.openclaw/`           | Host volume + password | Requires `GOG_KEYRING_PASSWORD`  |
+| Gateway config      | `/home/node/.bustly/`           | Host volume mount      | Includes `openclaw.json`, tokens |
+| Model auth profiles | `/home/node/.bustly/`           | Host volume mount      | OAuth tokens, API keys           |
+| Skill configs       | `/home/node/.bustly/skills/`    | Host volume mount      | Skill-level state                |
+| Agent workspace     | `/home/node/.bustly/workspace/` | Host volume mount      | Code and agent artifacts         |
+| WhatsApp session    | `/home/node/.bustly/`           | Host volume mount      | Preserves QR login               |
+| Gmail keyring       | `/home/node/.bustly/`           | Host volume + password | Requires `GOG_KEYRING_PASSWORD`  |
 | External binaries   | `/usr/local/bin/`                 | Docker image           | Must be baked at build time      |
 | Node runtime        | Container filesystem              | Docker image           | Rebuilt every image build        |
 | OS packages         | Container filesystem              | Docker image           | Do not install at runtime        |

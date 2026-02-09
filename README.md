@@ -63,7 +63,7 @@ Full beginner guide (auth, pairing, channels): [Getting started](https://docs.op
 ```bash
 openclaw onboard --install-daemon
 
-openclaw gateway --port 18789 --verbose
+openclaw gateway --port 17999 --verbose
 
 # Send a message
 openclaw message send --to +1234567890 --message "Hello from OpenClaw"
@@ -185,7 +185,7 @@ WhatsApp / Telegram / Slack / Discord / Google Chat / Signal / iMessage / BlueBu
 ┌───────────────────────────────┐
 │            Gateway            │
 │       (control plane)         │
-│     ws://127.0.0.1:18789      │
+│     ws://127.0.0.1:17999      │
 └──────────────┬────────────────┘
                │
                ├─ Pi agent (RPC)
@@ -305,13 +305,13 @@ Runbook: [iOS connect](https://docs.openclaw.ai/platforms/ios).
 
 ## Agent workspace + skills
 
-- Workspace root: `~/.openclaw/workspace` (configurable via `agents.defaults.workspace`).
+- Workspace root: `~/.bustly/workspace` (configurable via `agents.defaults.workspace`).
 - Injected prompt files: `AGENTS.md`, `SOUL.md`, `TOOLS.md`.
-- Skills: `~/.openclaw/workspace/skills/<skill>/SKILL.md`.
+- Skills: `~/.bustly/workspace/skills/<skill>/SKILL.md`.
 
 ## Configuration
 
-Minimal `~/.openclaw/openclaw.json` (model + defaults):
+Minimal `~/.bustly/openclaw.json` (model + defaults):
 
 ```json5
 {
@@ -333,7 +333,7 @@ Details: [Security guide](https://docs.openclaw.ai/gateway/security) · [Docker 
 
 ### [WhatsApp](https://docs.openclaw.ai/channels/whatsapp)
 
-- Link the device: `pnpm openclaw channels login` (stores creds in `~/.openclaw/credentials`).
+- Link the device: `pnpm openclaw channels login` (stores creds in `~/.bustly/credentials`).
 - Allowlist who can talk to the assistant via `channels.whatsapp.allowFrom`.
 - If `channels.whatsapp.groups` is set, it becomes a group allowlist; include `"*"` to allow all.
 
