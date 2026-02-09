@@ -73,7 +73,6 @@ async function insertViaRPC(
     }
 
     const data = await response.json()
-    console.log(`      RPC Response:`, JSON.stringify(data))
     totalInserted += data.inserted || 0
     totalFailed += data.failed || 0
   }

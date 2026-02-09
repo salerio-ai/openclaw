@@ -2,6 +2,8 @@
  * Analysis result types
  */
 
+import type { PlatformPatterns } from './patterns.js'
+
 export interface AnalysisReport {
   platform: string
   timestamp: Date
@@ -9,6 +11,7 @@ export interface AnalysisReport {
   distributions: Record<string, Distribution>
   associations?: AssociationMap
   funnels?: FunnelMetrics
+  patterns?: PlatformPatterns  // Real data patterns from analysis
 }
 
 export interface Distribution {

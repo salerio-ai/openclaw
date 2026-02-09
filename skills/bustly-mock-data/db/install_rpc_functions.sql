@@ -50,20 +50,24 @@ SET search_path = public
 AS $$
 DECLARE
   v_sql TEXT;
-  v_result JSONB;
+  v_row_count INT;
 BEGIN
   -- Build dynamic INSERT statement using jsonb_to_recordset
   v_sql := format(
-    'INSERT INTO data.%I SELECT * FROM jsonb_to_recordset(%L) AS data(%s) RETURNING count(*)',
+    'INSERT INTO data.%I SELECT * FROM jsonb_to_recordset(%L::jsonb) AS data(%s)',
     p_table_name,
     p_records,
     build_column_definition(p_table_name)
   );
 
-  EXECUTE v_sql INTO v_result;
+  -- Execute the INSERT
+  EXECUTE v_sql;
+
+  -- Get the number of rows affected
+  GET DIAGNOSTICS v_row_count = ROW_COUNT;
 
   RETURN jsonb_build_object(
-    'inserted', COALESCE((v_result->>0)::int, 0),
+    'inserted', v_row_count,
     'failed', 0
   );
 EXCEPTION WHEN OTHERS THEN

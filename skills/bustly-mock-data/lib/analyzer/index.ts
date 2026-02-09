@@ -4,6 +4,7 @@
 
 import { getPlatformScale, determineGenerationQuantity, clampQuantity } from './scale.js'
 import { analyzeDistribution } from './distribution.js'
+import { analyzePlatformPatterns, type PlatformPatterns, type TablePatterns } from './patterns.js'
 import type { AnalysisReport, Distribution } from './types.js'
 
 /**
@@ -19,15 +20,18 @@ export async function analyzePlatform(
   const scales = await getPlatformScale(tables)
   console.log(`  Scale: ${Object.values(scales).reduce((sum, v) => sum + v, 0)} total records`)
 
+  // Analyze field patterns from real data
+  const platformPatterns = await analyzePlatformPatterns(platform, tables)
+
   // Analyze key distributions
   const distributions: Record<string, Distribution> = {}
 
   if (platform === 'shopify' || platform === 'bigcommerce' || platform === 'woocommerce' || platform === 'magento') {
     // Analyze price distribution
-    const productsTable = `semantic.dm_products_${platform}`
+    const productsTable = `data.dm_products_${platform}`
     if (scales[productsTable] > 0) {
       try {
-        distributions['price'] = await analyzeDistribution(productsTable, 'price')
+        distributions['price'] = await analyzeDistribution(productsTable, 'min_price')
         console.log(`  Price: $${distributions['price'].median.toFixed(2)} median`)
       } catch (err) {
         console.warn(`  Warning: Could not analyze price distribution`)
@@ -39,7 +43,8 @@ export async function analyzePlatform(
     platform,
     timestamp: new Date(),
     scales,
-    distributions
+    distributions,
+    patterns: platformPatterns
   }
 }
 

@@ -59,13 +59,13 @@ async function generateShopify(tenantId: string, targetCount: number, analysis: 
   totalRecords += products.length
 
   // 2. Variants
-  const variants = ShopifyGenerator.generateShopifyVariants(products, tenantId)
+  const variants = ShopifyGenerator.generateShopifyVariants(products, tenantId, analysis)
   results.push({ table: 'data.dm_variants_shopify', count: variants.length, data: variants })
   totalRecords += variants.length
 
   // 3. Customers
   const customerCount = Math.ceil(targetCount * 0.4)
-  const customers = ShopifyGenerator.generateShopifyCustomers(customerCount, tenantId)
+  const customers = ShopifyGenerator.generateShopifyCustomers(customerCount, tenantId, analysis)
   results.push({ table: 'data.dm_customers_shopify', count: customers.length, data: customers })
   totalRecords += customers.length
 
@@ -75,12 +75,12 @@ async function generateShopify(tenantId: string, targetCount: number, analysis: 
   totalRecords += orders.length
 
   // 5. Order items
-  const orderItems = ShopifyGenerator.generateShopifyOrderItems(orders, variants, tenantId)
+  const orderItems = ShopifyGenerator.generateShopifyOrderItems(orders, variants, tenantId, analysis)
   results.push({ table: 'data.dm_order_items_shopify', count: orderItems.length, data: orderItems })
   totalRecords += orderItems.length
 
   // 6. Pixel events
-  const pixelEvents = ShopifyGenerator.generateShopifyPixelEvents(orders, tenantId)
+  const pixelEvents = ShopifyGenerator.generateShopifyPixelEvents(orders, tenantId, analysis)
   results.push({ table: 'data.dm_shopify_pixel_events', count: pixelEvents.length, data: pixelEvents })
   totalRecords += pixelEvents.length
 
