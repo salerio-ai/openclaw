@@ -2,7 +2,7 @@
  * Supabase Configuration
  *
  * This file loads configuration settings from:
- * 1. ~/.openclaw/bustlyOauth.json (Bustly OAuth login state - preferred)
+ * 1. $OPENCLAW_STATE_DIR/bustlyOauth.json (Bustly OAuth login state - preferred)
  * 2. OpenClaw-injected env vars (SKILL_NAME + PREFIX_*) - for OpenClaw sessions
  * 3. Environment variables (fallback)
  */
@@ -34,10 +34,30 @@ function findSkillEnvVars(prefix: string): Record<string, string> {
   return result;
 }
 
+function resolveUserPath(input: string, homeDir: string): string {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+  if (trimmed.startsWith('~')) {
+    return resolve(trimmed.replace(/^~(?=$|[\\/])/, homeDir));
+  }
+  return resolve(trimmed);
+}
+
+function resolveStateDir(): string {
+  const homeDir = homedir();
+  const override = process.env.OPENCLAW_STATE_DIR?.trim();
+  if (override) {
+    return resolveUserPath(override, homeDir);
+  }
+  return resolve(homeDir, '.bustly');
+}
+
 // First, try to read from bustlyOauth.json (Bustly OAuth login state)
 let configFromBustlyOAuth: Record<string, string> | null = null;
 try {
-  const bustlyOauthPath = resolve(homedir(), '.openclaw/bustlyOauth.json');
+  const bustlyOauthPath = resolve(resolveStateDir(), 'bustlyOauth.json');
   if (existsSync(bustlyOauthPath)) {
     const bustlyOauth = JSON.parse(readFileSync(bustlyOauthPath, 'utf-8'));
     if (bustlyOauth.bustlySearchData) {
@@ -47,7 +67,7 @@ try {
         SEARCH_DATA_SUPABASE_ACCESS_TOKEN: bustlyOauth.bustlySearchData.SEARCH_DATA_SUPABASE_ACCESS_TOKEN || '',
         SEARCH_DATA_WORKSPACE_ID: bustlyOauth.bustlySearchData.SEARCH_DATA_WORKSPACE_ID || '',
       };
-      console.log('Loaded configuration from ~/.openclaw/bustlyOauth.json');
+      console.log('Loaded configuration from $OPENCLAW_STATE_DIR/bustlyOauth.json');
     }
   }
 } catch (err) {
@@ -72,7 +92,7 @@ if (!configFromBustlyOAuth) {
 export const config = {
   supabaseUrl: configFromBustlyOAuth?.SEARCH_DATA_SUPABASE_URL || process.env.SEARCH_DATA_SUPABASE_URL || process.env.SUPABASE_URL,
   supabaseAnonKey: configFromBustlyOAuth?.SEARCH_DATA_SUPABASE_ANON_KEY || process.env.SEARCH_DATA_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY,
-  supabaseToken: configFromBustlyOAuth?.SEARCH_DATA_SUPABASE_ACCESS_TOKEN || process.env.SEARCH_DATA_SUPABASE_ACCESS_TOKEN || process.env.SUPABASE_TOKEN || process.env.SUPABASE_TOKEN,
+  supabaseToken: configFromBustlyOAuth?.SEARCH_DATA_SUPABASE_ACCESS_TOKEN || process.env.SEARCH_DATA_SUPABASE_ACCESS_TOKEN || process.env.SEARCH_DATA_TOKEN || process.env.SUPABASE_TOKEN,
   workspaceId: configFromBustlyOAuth?.SEARCH_DATA_WORKSPACE_ID || process.env.SEARCH_DATA_WORKSPACE_ID || process.env.WORKSPACE_ID,
 };
 

@@ -20,7 +20,7 @@ This skill uses **Supabase Edge Functions** to securely call AliExpress APIs wit
 ```
 Client App (this skill)
     │
-    ├─ Reads: ~/.openclaw/bustlyOauth.json
+    ├─ Reads: ~/.bustly/bustlyOauth.json
     │   - SEARCH_DATA_SUPABASE_URL
     │   - SEARCH_DATA_SUPABASE_ACCESS_TOKEN (JWT)
     │   - SEARCH_DATA_WORKSPACE_ID
@@ -78,7 +78,7 @@ npm run search:text -- "yoga mat"
 
 ## Configuration
 
-This skill reads configuration from `~/.openclaw/bustlyOauth.json` (automatically configured via Bustly OAuth login).
+This skill reads configuration from `~/.bustly/bustlyOauth.json` (automatically configured via Bustly OAuth login).
 
 No manual configuration is required. After logging in via Bustly OAuth in the desktop app, the skill will have access to:
 
