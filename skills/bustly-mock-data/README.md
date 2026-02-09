@@ -53,7 +53,9 @@ Run `db/install_rpc_functions.sql` in Supabase SQL Editor. This creates a secure
 
 1. Go to Supabase Dashboard → Database → API
 2. Find "Exposed schemas" section
-3. Add `semantic` to the list
+3. Add `data` to the list
+
+**Important:** Mock data is inserted into `data` schema tables (e.g., `data.dm_products_shopify`). The `semantic` schema contains views that reference the `data` tables.
 
 ## Configuration
 

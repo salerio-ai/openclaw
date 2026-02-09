@@ -3,7 +3,7 @@
 -- Run this in Supabase SQL Editor to enable mock data insertion
 --
 -- This function allows the mock data generator to insert records
--- into semantic schema tables via RPC calls.
+-- into data schema tables via RPC calls.
 
 -- Simplified insert function using jsonb_to_recordset
 CREATE OR REPLACE FUNCTION insert_mock_data(
@@ -21,7 +21,7 @@ DECLARE
 BEGIN
   -- Build dynamic INSERT statement using jsonb_to_recordset
   v_sql := format(
-    'INSERT INTO semantic.%I SELECT * FROM jsonb_to_recordset(%L) AS data(%s) RETURNING count(*)',
+    'INSERT INTO data.%I SELECT * FROM jsonb_to_recordset(%L) AS data(%s) RETURNING count(*)',
     p_table_name,
     p_records,
     build_column_definition(p_table_name)
@@ -64,7 +64,7 @@ BEGIN
   )
   INTO v_cols
   FROM information_schema.columns
-  WHERE table_schema = 'semantic'
+  WHERE table_schema = 'data'
     AND table_name = p_table_name
   ORDER BY ordinal_position;
 
@@ -80,4 +80,4 @@ GRANT EXECUTE ON FUNCTION insert_mock_data(TEXT, JSONB) TO authenticated;
 ALTER FUNCTION insert_mock_data(TEXT, JSONB) SECURITY DEFINER;
 
 COMMENT ON FUNCTION insert_mock_data(TEXT, JSONB) IS
-'Insert mock data into semantic schema tables. Used by bustly-mock-data skill.';
+'Insert mock data into data schema tables. Used by bustly-mock-data skill.';

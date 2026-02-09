@@ -10,7 +10,7 @@ export const magentoSchema: PlatformSchema = {
 
   tables: [
     {
-      name: 'semantic.dm_products_magento',
+      name: 'data.dm_products_magento',
       columns: {
         id: { type: 'text', nullable: false },
         tenant_id: { type: 'text', nullable: false },
@@ -26,7 +26,7 @@ export const magentoSchema: PlatformSchema = {
       requiredFields: ['id', 'tenant_id', 'name', 'price', 'created_at', 'updated_at']
     },
     {
-      name: 'semantic.dm_variants_magento',
+      name: 'data.dm_variants_magento',
       columns: {
         id: { type: 'text', nullable: false },
         tenant_id: { type: 'text', nullable: false },
@@ -38,12 +38,12 @@ export const magentoSchema: PlatformSchema = {
       },
       primaryKeys: ['id'],
       foreignKeys: [
-        { column: 'product_id', refTable: 'semantic.dm_products_magento', refColumn: 'id' }
+        { column: 'product_id', refTable: 'data.dm_products_magento', refColumn: 'id' }
       ],
       requiredFields: ['id', 'tenant_id', 'product_id', 'price', 'created_at']
     },
     {
-      name: 'semantic.dm_customers_magento',
+      name: 'data.dm_customers_magento',
       columns: {
         id: { type: 'text', nullable: false },
         tenant_id: { type: 'text', nullable: false },
@@ -60,7 +60,7 @@ export const magentoSchema: PlatformSchema = {
       requiredFields: ['id', 'tenant_id', 'email', 'created_at', 'updated_at']
     },
     {
-      name: 'semantic.dm_orders_magento',
+      name: 'data.dm_orders_magento',
       columns: {
         id: { type: 'text', nullable: false },
         tenant_id: { type: 'text', nullable: false },
@@ -73,12 +73,12 @@ export const magentoSchema: PlatformSchema = {
       },
       primaryKeys: ['id'],
       foreignKeys: [
-        { column: 'customer_id', refTable: 'semantic.dm_customers_magento', refColumn: 'id' }
+        { column: 'customer_id', refTable: 'data.dm_customers_magento', refColumn: 'id' }
       ],
       requiredFields: ['id', 'tenant_id', 'customer_id', 'status', 'grand_total', 'created_at', 'updated_at']
     },
     {
-      name: 'semantic.dm_order_items_magento',
+      name: 'data.dm_order_items_magento',
       columns: {
         id: { type: 'text', nullable: false },
         tenant_id: { type: 'text', nullable: false },
@@ -90,16 +90,16 @@ export const magentoSchema: PlatformSchema = {
       },
       primaryKeys: ['id'],
       foreignKeys: [
-        { column: 'order_id', refTable: 'semantic.dm_orders_magento', refColumn: 'id' },
-        { column: 'product_id', refTable: 'semantic.dm_products_magento', refColumn: 'id' }
+        { column: 'order_id', refTable: 'data.dm_orders_magento', refColumn: 'id' },
+        { column: 'product_id', refTable: 'data.dm_products_magento', refColumn: 'id' }
       ],
       requiredFields: ['id', 'tenant_id', 'order_id', 'product_id', 'qty_ordered', 'price', 'created_at']
     }
   ],
 
   dependencies: {
-    'semantic.dm_orders_magento': ['semantic.dm_products_magento', 'semantic.dm_customers_magento'],
-    'semantic.dm_order_items_magento': ['semantic.dm_orders_magento', 'semantic.dm_products_magento']
+    'data.dm_orders_magento': ['data.dm_products_magento', 'data.dm_customers_magento'],
+    'data.dm_order_items_magento': ['data.dm_orders_magento', 'data.dm_products_magento']
   },
 
   businessRules: [

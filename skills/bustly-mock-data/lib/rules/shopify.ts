@@ -10,7 +10,7 @@ export const shopifySchema: PlatformSchema = {
 
   tables: [
     {
-      name: 'semantic.dm_products_shopify',
+      name: 'data.dm_products_shopify',
       columns: {
         id: { type: 'text', nullable: false },
         tenant_id: { type: 'text', nullable: false },
@@ -26,7 +26,7 @@ export const shopifySchema: PlatformSchema = {
       requiredFields: ['id', 'tenant_id', 'title', 'status', 'created_at', 'updated_at']
     },
     {
-      name: 'semantic.dm_variants_shopify',
+      name: 'data.dm_variants_shopify',
       columns: {
         id: { type: 'text', nullable: false },
         tenant_id: { type: 'text', nullable: false },
@@ -39,12 +39,12 @@ export const shopifySchema: PlatformSchema = {
       },
       primaryKeys: ['id'],
       foreignKeys: [
-        { column: 'product_id', refTable: 'semantic.dm_products_shopify', refColumn: 'id' }
+        { column: 'product_id', refTable: 'data.dm_products_shopify', refColumn: 'id' }
       ],
       requiredFields: ['id', 'tenant_id', 'product_id', 'price', 'created_at', 'updated_at']
     },
     {
-      name: 'semantic.dm_customers_shopify',
+      name: 'data.dm_customers_shopify',
       columns: {
         id: { type: 'text', nullable: false },
         tenant_id: { type: 'text', nullable: false },
@@ -61,7 +61,7 @@ export const shopifySchema: PlatformSchema = {
       requiredFields: ['id', 'tenant_id', 'email', 'created_at', 'updated_at']
     },
     {
-      name: 'semantic.dm_orders_shopify',
+      name: 'data.dm_orders_shopify',
       columns: {
         id: { type: 'text', nullable: false },
         tenant_id: { type: 'text', nullable: false },
@@ -75,12 +75,12 @@ export const shopifySchema: PlatformSchema = {
       },
       primaryKeys: ['id'],
       foreignKeys: [
-        { column: 'customer_id', refTable: 'semantic.dm_customers_shopify', refColumn: 'id' }
+        { column: 'customer_id', refTable: 'data.dm_customers_shopify', refColumn: 'id' }
       ],
       requiredFields: ['id', 'tenant_id', 'customer_id', 'financial_status', 'total_price', 'created_at', 'updated_at']
     },
     {
-      name: 'semantic.dm_order_items_shopify',
+      name: 'data.dm_order_items_shopify',
       columns: {
         id: { type: 'text', nullable: false },
         tenant_id: { type: 'text', nullable: false },
@@ -93,14 +93,14 @@ export const shopifySchema: PlatformSchema = {
       },
       primaryKeys: ['id'],
       foreignKeys: [
-        { column: 'order_id', refTable: 'semantic.dm_orders_shopify', refColumn: 'id' },
-        { column: 'product_id', refTable: 'semantic.dm_products_shopify', refColumn: 'id' },
-        { column: 'variant_id', refTable: 'semantic.dm_variants_shopify', refColumn: 'id' }
+        { column: 'order_id', refTable: 'data.dm_orders_shopify', refColumn: 'id' },
+        { column: 'product_id', refTable: 'data.dm_products_shopify', refColumn: 'id' },
+        { column: 'variant_id', refTable: 'data.dm_variants_shopify', refColumn: 'id' }
       ],
       requiredFields: ['id', 'tenant_id', 'order_id', 'product_id', 'variant_id', 'quantity', 'price', 'created_at']
     },
     {
-      name: 'semantic.dm_shopify_pixel_events',
+      name: 'data.dm_shopify_pixel_events',
       columns: {
         id: { type: 'text', nullable: false },
         tenant_id: { type: 'text', nullable: false },
@@ -117,9 +117,9 @@ export const shopifySchema: PlatformSchema = {
   ],
 
   dependencies: {
-    'semantic.dm_orders_shopify': ['semantic.dm_products_shopify', 'semantic.dm_customers_shopify'],
-    'semantic.dm_order_items_shopify': ['semantic.dm_orders_shopify', 'semantic.dm_products_shopify', 'semantic.dm_variants_shopify'],
-    'semantic.dm_shopify_pixel_events': ['semantic.dm_orders_shopify']
+    'data.dm_orders_shopify': ['data.dm_products_shopify', 'data.dm_customers_shopify'],
+    'data.dm_order_items_shopify': ['data.dm_orders_shopify', 'data.dm_products_shopify', 'data.dm_variants_shopify'],
+    'data.dm_shopify_pixel_events': ['data.dm_orders_shopify']
   },
 
   businessRules: [

@@ -10,7 +10,7 @@ export const woocommerceSchema: PlatformSchema = {
 
   tables: [
     {
-      name: 'semantic.dm_products_woocommerce',
+      name: 'data.dm_products_woocommerce',
       columns: {
         id: { type: 'text', nullable: false },
         tenant_id: { type: 'text', nullable: false },
@@ -26,7 +26,7 @@ export const woocommerceSchema: PlatformSchema = {
       requiredFields: ['id', 'tenant_id', 'name', 'regular_price', 'date_created', 'date_modified']
     },
     {
-      name: 'semantic.dm_variants_woocommerce',
+      name: 'data.dm_variants_woocommerce',
       columns: {
         id: { type: 'text', nullable: false },
         tenant_id: { type: 'text', nullable: false },
@@ -38,12 +38,12 @@ export const woocommerceSchema: PlatformSchema = {
       },
       primaryKeys: ['id'],
       foreignKeys: [
-        { column: 'product_id', refTable: 'semantic.dm_products_woocommerce', refColumn: 'id' }
+        { column: 'product_id', refTable: 'data.dm_products_woocommerce', refColumn: 'id' }
       ],
       requiredFields: ['id', 'tenant_id', 'product_id', 'price', 'date_created']
     },
     {
-      name: 'semantic.dm_customers_woocommerce',
+      name: 'data.dm_customers_woocommerce',
       columns: {
         id: { type: 'text', nullable: false },
         tenant_id: { type: 'text', nullable: false },
@@ -60,7 +60,7 @@ export const woocommerceSchema: PlatformSchema = {
       requiredFields: ['id', 'tenant_id', 'email', 'date_created', 'date_modified']
     },
     {
-      name: 'semantic.dm_orders_woocommerce',
+      name: 'data.dm_orders_woocommerce',
       columns: {
         id: { type: 'text', nullable: false },
         tenant_id: { type: 'text', nullable: false },
@@ -73,12 +73,12 @@ export const woocommerceSchema: PlatformSchema = {
       },
       primaryKeys: ['id'],
       foreignKeys: [
-        { column: 'customer_id', refTable: 'semantic.dm_customers_woocommerce', refColumn: 'id' }
+        { column: 'customer_id', refTable: 'data.dm_customers_woocommerce', refColumn: 'id' }
       ],
       requiredFields: ['id', 'tenant_id', 'customer_id', 'status', 'total', 'date_created', 'date_modified']
     },
     {
-      name: 'semantic.dm_order_items_woocommerce',
+      name: 'data.dm_order_items_woocommerce',
       columns: {
         id: { type: 'text', nullable: false },
         tenant_id: { type: 'text', nullable: false },
@@ -90,16 +90,16 @@ export const woocommerceSchema: PlatformSchema = {
       },
       primaryKeys: ['id'],
       foreignKeys: [
-        { column: 'order_id', refTable: 'semantic.dm_orders_woocommerce', refColumn: 'id' },
-        { column: 'product_id', refTable: 'semantic.dm_products_woocommerce', refColumn: 'id' }
+        { column: 'order_id', refTable: 'data.dm_orders_woocommerce', refColumn: 'id' },
+        { column: 'product_id', refTable: 'data.dm_products_woocommerce', refColumn: 'id' }
       ],
       requiredFields: ['id', 'tenant_id', 'order_id', 'product_id', 'quantity', 'price', 'date_created']
     }
   ],
 
   dependencies: {
-    'semantic.dm_orders_woocommerce': ['semantic.dm_products_woocommerce', 'semantic.dm_customers_woocommerce'],
-    'semantic.dm_order_items_woocommerce': ['semantic.dm_orders_woocommerce', 'semantic.dm_products_woocommerce']
+    'data.dm_orders_woocommerce': ['data.dm_products_woocommerce', 'data.dm_customers_woocommerce'],
+    'data.dm_order_items_woocommerce': ['data.dm_orders_woocommerce', 'data.dm_products_woocommerce']
   },
 
   businessRules: [

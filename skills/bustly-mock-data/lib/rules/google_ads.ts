@@ -10,7 +10,7 @@ export const googleAdsSchema: PlatformSchema = {
 
   tables: [
     {
-      name: 'semantic.dm_ads_campaigns_google',
+      name: 'data.dm_ads_campaigns_google',
       columns: {
         id: { type: 'text', nullable: false },
         tenant_id: { type: 'text', nullable: false },
@@ -29,7 +29,7 @@ export const googleAdsSchema: PlatformSchema = {
       requiredFields: ['id', 'tenant_id', 'campaign_name', 'status', 'campaign_budget', 'date_created', 'date_modified']
     },
     {
-      name: 'semantic.dm_ads_products_google',
+      name: 'data.dm_ads_products_google',
       columns: {
         id: { type: 'text', nullable: false },
         tenant_id: { type: 'text', nullable: false },
@@ -46,7 +46,7 @@ export const googleAdsSchema: PlatformSchema = {
       requiredFields: ['id', 'tenant_id', 'product_id', 'date_created']
     },
     {
-      name: 'semantic.dm_ads_keywords_google',
+      name: 'data.dm_ads_keywords_google',
       columns: {
         id: { type: 'text', nullable: false },
         tenant_id: { type: 'text', nullable: false },
@@ -61,12 +61,12 @@ export const googleAdsSchema: PlatformSchema = {
       },
       primaryKeys: ['id'],
       foreignKeys: [
-        { column: 'campaign_id', refTable: 'semantic.dm_ads_campaigns_google', refColumn: 'id' }
+        { column: 'campaign_id', refTable: 'data.dm_ads_campaigns_google', refColumn: 'id' }
       ],
       requiredFields: ['id', 'tenant_id', 'campaign_id', 'keyword_text', 'match_type', 'date_created']
     },
     {
-      name: 'semantic.dm_ads_search_terms_google',
+      name: 'data.dm_ads_search_terms_google',
       columns: {
         id: { type: 'text', nullable: false },
         tenant_id: { type: 'text', nullable: false },
@@ -80,12 +80,12 @@ export const googleAdsSchema: PlatformSchema = {
       },
       primaryKeys: ['id'],
       foreignKeys: [
-        { column: 'keyword_id', refTable: 'semantic.dm_ads_keywords_google', refColumn: 'id' }
+        { column: 'keyword_id', refTable: 'data.dm_ads_keywords_google', refColumn: 'id' }
       ],
       requiredFields: ['id', 'tenant_id', 'keyword_id', 'search_term', 'date_created']
     },
     {
-      name: 'semantic.dm_ads_creatives_google',
+      name: 'data.dm_ads_creatives_google',
       columns: {
         id: { type: 'text', nullable: false },
         tenant_id: { type: 'text', nullable: false },
@@ -99,17 +99,17 @@ export const googleAdsSchema: PlatformSchema = {
       },
       primaryKeys: ['id'],
       foreignKeys: [
-        { column: 'campaign_id', refTable: 'semantic.dm_ads_campaigns_google', refColumn: 'id' }
+        { column: 'campaign_id', refTable: 'data.dm_ads_campaigns_google', refColumn: 'id' }
       ],
       requiredFields: ['id', 'tenant_id', 'campaign_id', 'creative_name', 'date_created']
     }
   ],
 
   dependencies: {
-    'semantic.dm_ads_products_google': [],
-    'semantic.dm_ads_keywords_google': ['semantic.dm_ads_campaigns_google'],
-    'semantic.dm_ads_search_terms_google': ['semantic.dm_ads_keywords_google'],
-    'semantic.dm_ads_creatives_google': ['semantic.dm_ads_campaigns_google']
+    'data.dm_ads_products_google': [],
+    'data.dm_ads_keywords_google': ['data.dm_ads_campaigns_google'],
+    'data.dm_ads_search_terms_google': ['data.dm_ads_keywords_google'],
+    'data.dm_ads_creatives_google': ['data.dm_ads_campaigns_google']
   },
 
   businessRules: [
