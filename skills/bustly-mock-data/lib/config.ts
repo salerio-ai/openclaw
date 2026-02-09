@@ -123,14 +123,13 @@ if (!envConfig || !envConfig.SUPABASE_SERVICE_ROLE_KEY) {
  */
 export const config = {
   // Base config (from bustlyOauth.json)
-  supabaseUrl: baseConfig.SEARCH_DATA_SUPABASE_URL,
+  supabaseUrl: envConfig.SUPABASE_URL || baseConfig.SEARCH_DATA_SUPABASE_URL,
   supabaseAnonKey: baseConfig.SEARCH_DATA_SUPABASE_ANON_KEY,
   supabaseToken: baseConfig.SEARCH_DATA_SUPABASE_ACCESS_TOKEN,
   workspaceId: baseConfig.SEARCH_DATA_WORKSPACE_ID,
 
   // Service role config (from config/supabase.json)
   serviceRoleKey: envConfig.SUPABASE_SERVICE_ROLE_KEY,
-  supabaseUrl: envConfig.SUPABASE_URL || baseConfig.SEARCH_DATA_SUPABASE_URL,
 
   // Current environment
   env: currentEnv,

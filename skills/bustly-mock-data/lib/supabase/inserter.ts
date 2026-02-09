@@ -1,5 +1,8 @@
 /**
- * Data Inserter - Batch insert with transaction safety
+ * Data Inserter - Batch insert via RPC functions
+ *
+ * Uses RPC instead of direct REST API because semantic schema tables
+ * are not exposed via the REST API by default.
  */
 
 import { config } from '../config.js'
@@ -7,7 +10,7 @@ import { config } from '../config.js'
 const BATCH_SIZE = 100
 
 /**
- * Insert batch of records
+ * Insert batch of records via RPC
  */
 export async function insertBatch(
   tableName: string,
@@ -17,8 +20,73 @@ export async function insertBatch(
     return { inserted: 0, failed: 0, errors: [] }
   }
 
-  const url = `${config.supabaseUrl}/rest/v1/${tableName}`
   const results: InsertResult = { inserted: 0, failed: 0, errors: [] }
+
+  // Try RPC insert first
+  try {
+    const result = await insertViaRPC(tableName, rows)
+    results.inserted = result.inserted
+    results.failed = result.failed
+    return results
+  } catch (rpcError) {
+    // Fall back to direct REST API if RPC fails
+    console.warn('RPC insert failed, trying direct REST API:', rpcError)
+    return await insertViaREST(tableName, rows, results)
+  }
+}
+
+/**
+ * Insert via RPC function (requires install_rpc_functions.sql)
+ */
+async function insertViaRPC(
+  tableName: string,
+  rows: any[]
+): Promise<{ inserted: number; failed: number }> {
+  const url = `${config.supabaseUrl}/rest/v1/rpc/insert_mock_data`
+
+  // Process in batches
+  let totalInserted = 0
+  let totalFailed = 0
+
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const batch = rows.slice(i, i + BATCH_SIZE)
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': config.serviceRoleKey,
+        'Authorization': `Bearer ${config.serviceRoleKey}`,
+      },
+      body: JSON.stringify({
+        p_table_name: tableName,
+        p_records: JSON.stringify(batch),
+        p_workspace_id: config.workspaceId
+      })
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`RPC insert failed: ${response.status} - ${errorText}`)
+    }
+
+    const data = await response.json()
+    totalInserted += data.inserted || 0
+    totalFailed += data.failed || 0
+  }
+
+  return { inserted: totalInserted, failed: totalFailed }
+}
+
+/**
+ * Insert via direct REST API (requires exposing semantic schema)
+ */
+async function insertViaREST(
+  tableName: string,
+  rows: any[],
+  results: InsertResult
+): Promise<InsertResult> {
+  const url = `${config.supabaseUrl}/rest/v1/${tableName}`
 
   // Process in batches
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
