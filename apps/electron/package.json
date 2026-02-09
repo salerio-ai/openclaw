@@ -61,6 +61,7 @@
   "build": {
     "appId": "bustly",
     "productName": "Bustly",
+    "icon": "build/icons/icon",
     "files": [
       "dist/**",
       "!dist/electron/**",
