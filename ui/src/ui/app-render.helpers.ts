@@ -79,6 +79,21 @@ export function renderChatControls(state: AppViewState) {
       <circle cx="12" cy="12" r="3"></circle>
     </svg>
   `;
+  const hideIcon = html`
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <path d="M21 12s-4 7-9 7-9-7-9-7 4-7 9-7 9 7 9 7"></path>
+      <line x1="3" y1="3" x2="21" y2="21"></line>
+    </svg>
+  `;
   return html`
     <div class="chat-controls">
       <label class="field chat-controls__session">
@@ -125,7 +140,53 @@ export function renderChatControls(state: AppViewState) {
       >
         ${refreshIcon}
       </button>
+      <button
+        class="btn btn--sm btn--icon"
+        @click=${() => {
+          state.applySettings({
+            ...state.settings,
+            chatControlsHidden: true,
+          });
+        }}
+        title="Hide chat controls"
+        aria-label="Hide chat controls"
+      >
+        ${hideIcon}
+      </button>
     </div>
+  `;
+}
+
+export function renderChatControlsToggle(state: AppViewState) {
+  const showIcon = html`
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7"></path>
+      <circle cx="12" cy="12" r="3"></circle>
+    </svg>
+  `;
+  return html`
+    <button
+      class="btn btn--sm btn--icon"
+      @click=${() => {
+        state.applySettings({
+          ...state.settings,
+          chatControlsHidden: false,
+        });
+      }}
+      title="Show chat controls"
+      aria-label="Show chat controls"
+    >
+      ${showIcon}
+    </button>
   `;
 }
 
