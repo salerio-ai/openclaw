@@ -1,11 +1,44 @@
+-- ============================================
 -- RPC Functions for Bustly Mock Data Skill
+-- ============================================
 --
 -- Run this in Supabase SQL Editor to enable mock data insertion
+-- https://supabase.com/dashboard/project/ttsjmrnfptxckmizffzt/sql/new
 --
 -- This function allows the mock data generator to insert records
 -- into data schema tables via RPC calls.
 
--- Simplified insert function using jsonb_to_recordset
+-- Helper function to build column definition for jsonb_to_recordset
+CREATE OR REPLACE FUNCTION build_column_definition(p_table_name TEXT)
+RETURNS TEXT
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_cols TEXT;
+BEGIN
+  SELECT string_agg(
+    column_name || ' ' ||
+    CASE
+      WHEN udt_name = 'json' OR udt_name = 'jsonb' THEN 'jsonb'
+      WHEN udt_name = 'timestamp' OR udt_name = 'timestamptz' THEN 'timestamptz'
+      WHEN udt_name IN ('int2', 'int4', 'int8') THEN 'int8'
+      WHEN udt_name = 'numeric' THEN 'numeric'
+      WHEN udt_name = 'bool' THEN 'bool'
+      ELSE 'text'
+    END,
+    ', '
+  )
+  INTO v_cols
+  FROM information_schema.columns
+  WHERE table_schema = 'data'
+    AND table_name = p_table_name
+  ORDER BY ordinal_position;
+
+  RETURN v_cols;
+END;
+$$;
+
+-- Main insert function using jsonb_to_recordset
 CREATE OR REPLACE FUNCTION insert_mock_data(
   p_table_name TEXT,
   p_records JSONB
@@ -42,42 +75,9 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 
--- Helper function to build column definition for jsonb_to_recordset
-CREATE OR REPLACE FUNCTION build_column_definition(p_table_name TEXT)
-RETURNS TEXT
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  v_cols TEXT;
-BEGIN
-  SELECT string_agg(
-    column_name || ' ' ||
-    CASE
-      WHEN udt_name = 'json' OR udt_name = 'jsonb' THEN 'jsonb'
-      WHEN udt_name = 'timestamp' OR udt_name = 'timestamptz' THEN 'timestamptz'
-      WHEN udt_name IN ('int2', 'int4', 'int8') THEN 'int8'
-      WHEN udt_name = 'numeric' THEN 'numeric'
-      WHEN udt_name = 'bool' THEN 'bool'
-      ELSE 'text'
-    END,
-    ', '
-  )
-  INTO v_cols
-  FROM information_schema.columns
-  WHERE table_schema = 'data'
-    AND table_name = p_table_name
-  ORDER BY ordinal_position;
-
-  RETURN v_cols;
-END;
-$$;
-
--- Grant permissions (service_role can bypass RLS)
+-- Grant permissions
 GRANT EXECUTE ON FUNCTION insert_mock_data(TEXT, JSONB) TO service_role;
 GRANT EXECUTE ON FUNCTION insert_mock_data(TEXT, JSONB) TO authenticated;
-
--- Allow function to bypass RLS
-ALTER FUNCTION insert_mock_data(TEXT, JSONB) SECURITY DEFINER;
 
 COMMENT ON FUNCTION insert_mock_data(TEXT, JSONB) IS
 'Insert mock data into data schema tables. Used by bustly-mock-data skill.';
