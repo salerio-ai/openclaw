@@ -1,8 +1,10 @@
 import { useEffect, useState, useCallback, useRef } from "react";
+import { HashRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 // Types are defined in electron.d.ts
 import Onboard from "./components/Onboard";
 import BustlyLoginPage from "./components/Onboard/BustlyLoginPage";
+import ProviderSetupPage from "./components/Onboard/ProviderSetupPage";
 import DevPanel from "./components/DevPanel";
 
 interface LogEntry {
@@ -12,7 +14,7 @@ interface LogEntry {
   timestamp: Date;
 }
 
-export default function App() {
+function AppShell() {
   const [gatewayStatus, setGatewayStatus] = useState<GatewayStatus | null>(null);
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -20,11 +22,13 @@ export default function App() {
   const [showOnboard, setShowOnboard] = useState(false);
   const [showOnboardLoading, setShowOnboardLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const location = useLocation();
+  const pathname = location.pathname || "/";
   const logIdRef = useRef(0);
   const controlUiRequestedRef = useRef(false);
-  const isDevPanelWindow = typeof window !== "undefined" && window.location.hash === "#devpanel";
-  const isBustlyLoginWindow =
-    typeof window !== "undefined" && window.location.hash === "#bustly-login";
+  const isDevPanelWindow = pathname === "/devpanel";
+  const isBustlyLoginWindow = pathname === "/bustly-login";
+  const isProviderSetupWindow = pathname === "/provider-setup";
 
   // Load initial data
   useEffect(() => {
@@ -49,7 +53,7 @@ export default function App() {
         // Show onboarding only when needed and not already initialized
         if (needsOnboard && !initialized) {
           setShowOnboard(true);
-        } else if (!isDevPanelWindow) {
+        } else if (!isDevPanelWindow && !isBustlyLoginWindow && !isProviderSetupWindow) {
           setShowOnboardLoading(true);
         }
       } catch (err) {
@@ -63,7 +67,12 @@ export default function App() {
 
   // When onboarding is complete, ensure the Control UI is loaded into the main window.
   useEffect(() => {
-    if (!showOnboardLoading || isDevPanelWindow || isBustlyLoginWindow) {
+    if (
+      !showOnboardLoading ||
+      isDevPanelWindow ||
+      isBustlyLoginWindow ||
+      isProviderSetupWindow
+    ) {
       return;
     }
     if (controlUiRequestedRef.current) {
@@ -71,11 +80,16 @@ export default function App() {
     }
     controlUiRequestedRef.current = true;
     void window.electronAPI?.onboardOpenControlUi?.();
-  }, [showOnboardLoading, isDevPanelWindow]);
+  }, [showOnboardLoading, isDevPanelWindow, isBustlyLoginWindow, isProviderSetupWindow]);
 
   // If gateway becomes ready after reopening, trigger Control UI load.
   useEffect(() => {
-    if (!showOnboardLoading || isDevPanelWindow || isBustlyLoginWindow) {
+    if (
+      !showOnboardLoading ||
+      isDevPanelWindow ||
+      isBustlyLoginWindow ||
+      isProviderSetupWindow
+    ) {
       return;
     }
     if (!gatewayStatus?.running) {
@@ -87,7 +101,13 @@ export default function App() {
     }
     controlUiRequestedRef.current = true;
     void window.electronAPI?.onboardOpenControlUi?.();
-  }, [gatewayStatus?.running, showOnboardLoading, isDevPanelWindow]);
+  }, [
+    gatewayStatus?.running,
+    showOnboardLoading,
+    isDevPanelWindow,
+    isBustlyLoginWindow,
+    isProviderSetupWindow,
+  ]);
 
   // Refresh gateway status periodically (handles auto-start and external changes)
   useEffect(() => {
@@ -231,55 +251,81 @@ export default function App() {
     setShowOnboardLoading(false);
   }, []);
 
-  if (isDevPanelWindow) {
-    return (
-      <DevPanel
-        appInfo={appInfo}
-        gatewayStatus={gatewayStatus}
-        logs={logs}
-        error={error}
-        onStartGateway={handleStartGateway}
-        onStopGateway={handleStopGateway}
-        onReOnboard={handleReOnboard}
-        onOpenControlUI={handleOpenControlUI}
-        onClearLogs={handleClearLogs}
-      />
-    );
-  }
-
-  if (isBustlyLoginWindow) {
-    return (
-      <BustlyLoginPage
-        onContinue={() => {
-          void window.electronAPI?.onboardOpenControlUi?.();
-        }}
-        autoContinue
-        showSignOut={false}
-        showContinueWhenLoggedIn={false}
-      />
-    );
-  }
-
-  // Show onboarding if needed
-  if (showOnboard) {
-    return <Onboard onComplete={handleOnboardComplete} onCancel={handleOnboardCancel} />;
-  }
-
-  if (showOnboardLoading) {
-    return (
-      <div className="onboard-loading">
-        <div className="onboard-loading-card">
-          <div className="onboard-loading-spinner" />
-          <p className="onboard-loading-title">Welcome to Bustly</p>
-          <p className="onboard-loading-subtitle">
-            Setting up the AI. This should only take a moment...
-          </p>
+  const renderDefault = () => {
+    if (showOnboard) {
+      return <Onboard onComplete={handleOnboardComplete} onCancel={handleOnboardCancel} />;
+    }
+    if (showOnboardLoading) {
+      return (
+        <div className="onboard-loading">
+          <div className="onboard-loading-card">
+            <div className="onboard-loading-spinner" />
+            <p className="onboard-loading-title">Welcome to Bustly</p>
+            <p className="onboard-loading-subtitle">
+              Setting up the AI. This should only take a moment...
+            </p>
+          </div>
         </div>
-      </div>
-    );
-  }
+      );
+    }
+    return <></>;
+  };
 
   return (
-    <></>
+    <Routes>
+      <Route
+        path="/devpanel"
+        element={
+          <DevPanel
+            appInfo={appInfo}
+            gatewayStatus={gatewayStatus}
+            logs={logs}
+            error={error}
+            onStartGateway={handleStartGateway}
+            onStopGateway={handleStopGateway}
+            onReOnboard={handleReOnboard}
+            onOpenControlUI={handleOpenControlUI}
+            onClearLogs={handleClearLogs}
+          />
+        }
+      />
+      <Route
+        path="/bustly-login"
+        element={
+          <BustlyLoginPage
+            onContinue={() => {
+              void window.electronAPI?.onboardOpenControlUi?.();
+            }}
+            autoContinue
+            showSignOut={false}
+            showContinueWhenLoggedIn={false}
+          />
+        }
+      />
+      <Route
+        path="/provider-setup"
+        element={
+          <ProviderSetupPage
+            onDone={() => {
+              void window.electronAPI?.onboardOpenControlUi?.();
+            }}
+          />
+        }
+      />
+      <Route
+        path="/onboard"
+        element={<Onboard onComplete={handleOnboardComplete} onCancel={handleOnboardCancel} />}
+      />
+      <Route path="/" element={renderDefault()} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
+
+export default function App() {
+  return (
+    <HashRouter>
+      <AppShell />
+    </HashRouter>
   );
 }

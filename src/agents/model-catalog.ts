@@ -1,6 +1,5 @@
-import { type OpenClawConfig, loadConfig } from "../config/config.js";
+import { type OpenClawConfig } from "../config/config.js";
 import { resolveOpenClawAgentDir } from "./agent-paths.js";
-import { ensureOpenClawModelsJson } from "./models-config.js";
 
 export type ModelCatalogEntry = {
   id: string;
@@ -60,8 +59,6 @@ export async function loadModelCatalog(params?: {
         return a.name.localeCompare(b.name);
       });
     try {
-      const cfg = params?.config ?? loadConfig();
-      await ensureOpenClawModelsJson(cfg);
       // IMPORTANT: keep the dynamic import *inside* the try/catch.
       // If this fails once (e.g. during a pnpm install that temporarily swaps node_modules),
       // we must not poison the cache with a rejected promise (otherwise all channel handlers
@@ -70,7 +67,8 @@ export async function loadModelCatalog(params?: {
       const agentDir = resolveOpenClawAgentDir();
       const { join } = await import("node:path");
       const authStorage = new piSdk.AuthStorage(join(agentDir, "auth.json"));
-      const registry = new piSdk.ModelRegistry(authStorage, join(agentDir, "models.json")) as
+      // Use the built-in model registry catalog (ignore models.json) so we always see the full list.
+      const registry = new piSdk.ModelRegistry(authStorage, "") as
         | {
             getAll: () => Array<DiscoveredModel>;
           }

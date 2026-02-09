@@ -388,7 +388,7 @@ const PROVIDERS = {
     authMethods: [
       { id: "oauth", label: "Browser Login (OAuth)", kind: "oauth" as AuthMethodKind },
     ],
-    defaultModel: "google-antigravity/claude-opus-4-5-thinking",
+    defaultModel: "google-antigravity/gemini-3-pro-high",
     envKey: "GOOGLE_OAUTH",
   },
   openrouter: {
@@ -625,7 +625,7 @@ export async function authenticateWithOAuth(params: {
           provider: "google-antigravity",
           ...creds,
         },
-        defaultModel: "google-antigravity/claude-opus-4-5-thinking",
+        defaultModel: "google-antigravity/gemini-3-pro-high",
       };
     } catch (error) {
       return {

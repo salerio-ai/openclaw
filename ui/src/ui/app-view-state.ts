@@ -165,6 +165,7 @@ export type AppViewState = {
   handleExecApprovalDecision: (decision: "allow-once" | "allow-always" | "deny") => Promise<void>;
   handleGatewayUrlConfirm: () => void;
   handleGatewayUrlCancel: () => void;
+  handleConfigureAiOpen: () => void;
   handleConfigLoad: () => Promise<void>;
   handleConfigSave: () => Promise<void>;
   handleConfigApply: () => Promise<void>;

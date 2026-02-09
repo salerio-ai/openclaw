@@ -107,7 +107,7 @@ export default function BustlyLoginPage({
       <div className="mb-10">
         <img src={bustlyLogo} alt="Bustly AI" className="h-20 mx-auto mb-2" />
         <h1 className="text-4xl font-bold text-[#1A162F] mb-2">Bustly AI</h1>
-        <p className="text-lg text-[#6C6F86]">Your data speaks for your business</p>
+        <p className="text-lg text-[#6C6F86]">The 24/7 brain for your business</p>
       </div>
 
       {error && (
@@ -126,12 +126,12 @@ export default function BustlyLoginPage({
             {loading ? (
               <>
                 <span className="inline-flex h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                <span>{isLoggedIn ? "Loading..." : "Logging in..."}</span>
+                <span>{"Waiting"}</span>
               </>
             ) : isLoggedIn ? (
               "Continue"
             ) : (
-              "Log In"
+              "Sign in or Sign up"
             )}
           </button>
         ) : null}

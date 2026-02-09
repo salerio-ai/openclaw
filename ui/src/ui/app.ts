@@ -694,6 +694,20 @@ export class OpenClawApp extends LitElement {
     this.bustlyUserMenuOpen = !this.bustlyUserMenuOpen;
   }
 
+  handleConfigureAiOpen() {
+    this.bustlyUserMenuOpen = false;
+    const electronAPI = (window as unknown as {
+      electronAPI?: { bustlyOpenProviderSetup?: () => Promise<{ success: boolean; error?: string }> };
+    }).electronAPI;
+    if (electronAPI?.bustlyOpenProviderSetup) {
+      void electronAPI.bustlyOpenProviderSetup();
+      return;
+    }
+    this.setTab("config");
+    this.configActiveSection = "models";
+    this.configActiveSubsection = null;
+  }
+
   handleBustlyOpenSettings() {
     const electronAPI = (window as unknown as {
       electronAPI?: { bustlyOpenSettings?: () => Promise<{ success: boolean; error?: string }> };

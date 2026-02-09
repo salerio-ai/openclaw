@@ -87,8 +87,9 @@ type WhatsAppConfigRequest =
 
 // Gateway configuration
 const GATEWAY_HOST = "127.0.0.1";
-const DEV_PANEL_HASH = "devpanel";
-const BUSTLY_LOGIN_HASH = "bustly-login";
+const DEV_PANEL_HASH = "/devpanel";
+const BUSTLY_LOGIN_HASH = "/bustly-login";
+const PROVIDER_SETUP_HASH = "/provider-setup";
 const DEV_PANEL_SHORTCUT = "CommandOrControl+Shift+Alt+D";
 const DASHBOARD_CHANNEL_PLUGIN_IDS = ["whatsapp"] as const;
 const PRELOAD_PATH = process.env.NODE_ENV === "development"
@@ -659,6 +660,14 @@ function openBustlyLoginInMainWindow(): void {
   loadRendererWindow(mainWindow, { hash: BUSTLY_LOGIN_HASH });
 }
 
+function openProviderSetupInMainWindow(): void {
+  writeMainLog("[Provider Setup] Opening provider setup in main window");
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  loadRendererWindow(mainWindow, { hash: PROVIDER_SETUP_HASH });
+}
+
 function resolveOpenClawConfigPath(): string {
   return getConfigPath() ?? resolveElectronConfigPath();
 }
@@ -1074,15 +1083,28 @@ function setupIpcHandlers(): void {
 
   ipcMain.handle("bustly-open-settings", async () => {
     try {
-      const baseUrl = process.env.OPENCLAW_WEB_BASE_URL;
+      const baseUrl = process.env.BUSTLY_WEB_BASE_URL;
       if (!baseUrl) {
-        throw new Error("Missing OPENCLAW_WEB_BASE_URL");
+        throw new Error("Missing BUSTLY_WEB_BASE_URL");
       }
       const url = `${baseUrl.replace(/\/+$/, "")}/admin?setting_modal=profile`;
       await shell.openExternal(url);
       return { success: true };
     } catch (error) {
       console.error("[Bustly Settings] Error:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  });
+
+  ipcMain.handle("bustly-open-provider-setup", async () => {
+    try {
+      openProviderSetupInMainWindow();
+      return { success: true };
+    } catch (error) {
+      console.error("[Provider Setup] Error:", error);
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error),
@@ -1167,16 +1189,31 @@ function setupIpcHandlers(): void {
       const cfg = loadConfig();
       const catalog = await loadModelCatalog({ config: cfg, useCache: false });
       const aliasIndex = buildModelAliasIndex({ cfg, defaultProvider: DEFAULT_PROVIDER });
-      const { allowedCatalog } = buildAllowedModelSet({
-        cfg,
-        catalog,
-        defaultProvider: DEFAULT_PROVIDER,
-      });
-      const filteredCatalog = allowedCatalog.length > 0 ? allowedCatalog : catalog;
+      const filteredCatalog = catalog;
       const normalizedProvider = normalizeProviderId(provider);
       const hiddenKeys = new Set(["openrouter/auto"]);
-      return filteredCatalog
-        .filter((entry) => normalizeProviderId(entry.provider) === normalizedProvider)
+      const directMatches = filteredCatalog.filter(
+        (entry) => normalizeProviderId(entry.provider) === normalizedProvider,
+      );
+      const mappedCatalog =
+        directMatches.length > 0
+          ? directMatches
+          : normalizedProvider === "google-antigravity"
+            ? filteredCatalog
+                .filter((entry) => normalizeProviderId(entry.provider) === "google")
+                .map((entry) => ({
+                  ...entry,
+                  provider: "google-antigravity",
+                }))
+            : normalizedProvider === "openai-codex"
+              ? filteredCatalog
+                  .filter((entry) => normalizeProviderId(entry.provider) === "openai")
+                  .map((entry) => ({
+                    ...entry,
+                    provider: "openai-codex",
+                  }))
+              : [];
+      return mappedCatalog
         .filter((entry) => !hiddenKeys.has(modelKey(entry.provider, entry.id)))
         .map((entry) => ({
           ...entry,
