@@ -6,6 +6,8 @@ metadata: {"openclaw":{"always":true,"requires":{"env":["SEARCH_DATA_SUPABASE_UR
 
 This skill provides e-commerce SaaS data query capabilities, reading business data from platforms like Shopify, Google Ads, BigCommerce, WooCommerce, and Magento via a Supabase data warehouse.
 
+**IMPORTANT: Always use preset functions from lib/presets.ts instead of writing raw SQL.** The preset functions handle multi-platform schema differences automatically through real-time DDL detection.
+
 **Multi-Platform Support**: This skill automatically detects which platforms are connected and queries across all available data sources. When users ask general questions like "show me my shop data" or "what are my recent orders", the skill intelligently aggregates data from all connected platforms (Shopify, BigCommerce, WooCommerce, Magento, etc.) without requiring the user to specify which platform.
 
 ## When to Use This Skill
@@ -80,6 +82,17 @@ npm run ads:campaigns
 ### View All Available Tables
 ```bash
 npm run catalog
+```
+
+### Annual Summary (2025)
+```bash
+tsx -e "import { getAnnualSummary } from \"./lib/presets\"; getAnnualSummary(2025).then(r => console.log(JSON.stringify(r, null, 2)))"
+```
+
+```typescript
+// Annual summary via programming API
+const summary = await getAnnualSummary(2025)
+// Returns: { year, totalRevenue, totalOrders, avgOrderValue, uniqueCustomers, topProducts, platforms }
 ```
 
 ## Configuration

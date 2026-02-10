@@ -163,8 +163,9 @@ export async function runSelectQuery(query: string): Promise<any[]> {
   }
 
   const normalizedQuery = query.trim().toUpperCase()
-  if (!normalizedQuery.startsWith('SELECT')) {
-    throw new Error('Only SELECT queries are allowed for security reasons')
+  // Allow SELECT queries and CTEs (WITH clauses)
+  if (!normalizedQuery.startsWith('SELECT') && !normalizedQuery.startsWith('WITH')) {
+    throw new Error('Only SELECT queries (including CTEs with WITH) are allowed for security reasons')
   }
 
   const displayQuery = query.length > 200 ? query.substring(0, 200) + '...' : query

@@ -616,6 +616,104 @@ export function clearSchemaCache() {
   clearDynamicSchemaCache()
 }
 
+/**
+ * Get comprehensive annual summary across all platforms
+ * Returns key metrics for a specific year
+ */
+export async function getAnnualSummary(year: number = new Date().getFullYear()): Promise<{
+  year: number
+  totalRevenue: number
+  totalOrders: number
+  avgOrderValue: number
+  uniqueCustomers: number
+  topProducts: any[]
+  platforms: string[]
+}> {
+  const startDate = `${year}-01-01`
+  const endDate = `${year + 1}-01-01`
+
+  const platforms = await detectAvailablePlatforms()
+  const platformNames: string[] = []
+  const unionQueries: string[] = []
+
+  // Build union query for all platforms
+  for (const platform of platforms) {
+    if (platform.tables.orders) {
+      try {
+        const tableName = platform.tables.orders
+        const schema = await getTableSchemaCached(tableName)
+
+        // Find required columns dynamically
+        const dateCol = findColumnByPattern(schema, COLUMN_PATTERNS.createdAt)
+        const priceCol = findColumnByPattern(schema, COLUMN_PATTERNS.totalPrice)
+        const statusCol = findColumnByPattern(schema, COLUMN_PATTERNS.financialStatus)
+        const customerId = findColumnByPattern(schema, COLUMN_PATTERNS.customerId)
+        const customerEmail = findColumnByPattern(schema, COLUMN_PATTERNS.email)
+
+        if (!dateCol || !priceCol) {
+          console.warn(`Skipping ${platform.name}: missing required columns`)
+          continue
+        }
+
+        const statusMatch = statusCol
+          ? `${statusCol.actualColumn} IN ('paid', 'completed', 'success')`
+          : '1=1'
+
+        const customerExpr = customerId
+          ? `COALESCE(${customerId.actualColumn}::text, '')`
+          : (customerEmail ? `COALESCE(${customerEmail.actualColumn}, '')` : `''`)
+
+        unionQueries.push(`
+          SELECT
+            ${dateCol.actualColumn} as created_at,
+            ${priceCol.actualColumn} as total_price,
+            ${customerExpr} as customer_id,
+            '${platform.name}' as platform
+          FROM ${tableName}
+          WHERE ${dateCol.actualColumn} >= '${startDate}'
+            AND ${dateCol.actualColumn} < '${endDate}'
+            AND ${statusMatch}
+        `)
+        platformNames.push(platform.name)
+      } catch (err) {
+        console.warn(`Failed to query ${platform.name}:`, err)
+      }
+    }
+  }
+
+  if (unionQueries.length === 0) {
+    throw new Error('No sales data available for the specified year')
+  }
+
+  const query = `
+    WITH all_sales AS (
+      ${unionQueries.join('\n      UNION ALL\n')}
+    )
+    SELECT
+      COUNT(*) as total_orders,
+      COALESCE(SUM(total_price), 0) as total_revenue,
+      COALESCE(AVG(total_price), 0) as avg_order_value,
+      COUNT(DISTINCT customer_id) as unique_customers
+    FROM all_sales
+  `
+
+  const summary = await runSelectQuery(query)
+  const metrics = summary[0] || { total_orders: 0, total_revenue: 0, avg_order_value: 0, unique_customers: 0 }
+
+  // Get top products for the year
+  const topProducts = await getTopProductsByRevenue(10, 365 * (year === new Date().getFullYear() ? 1 : 0))
+
+  return {
+    year,
+    totalRevenue: parseFloat(metrics.total_revenue) || 0,
+    totalOrders: parseInt(metrics.total_orders) || 0,
+    avgOrderValue: parseFloat(metrics.avg_order_value) || 0,
+    uniqueCustomers: parseInt(metrics.unique_customers) || 0,
+    topProducts,
+    platforms: [...new Set(platformNames)]
+  }
+}
+
 // Export all presets as an object
 export const presets = {
   getShopInfo,
@@ -629,6 +727,7 @@ export const presets = {
   getRevenueByCategory,
   getDataCatalog,
   getConnectedPlatformsSummary,
+  getAnnualSummary,
   clearSchemaCache,
   formatCurrency,
   formatDate
