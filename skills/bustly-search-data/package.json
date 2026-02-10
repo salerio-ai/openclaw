@@ -1,21 +1,14 @@
 {
   "name": "bustly-search-data",
-  "version": "0.4.0",
-  "description": "Bustly multi-platform e-commerce data query skill with intelligent schema adaptation - Shopify, Google Ads, BigCommerce, WooCommerce, Magento",
+  "version": "0.5.0",
+  "description": "Bustly multi-platform e-commerce data query skill with real-time DDL schema detection and Text2SQL capabilities - Shopify, Google Ads, BigCommerce, WooCommerce, Magento",
   "type": "module",
   "scripts": {
     "get_tables": "tsx scripts/get_tables.ts",
     "get_schema": "tsx scripts/get_schema.ts",
     "query": "tsx scripts/query_data.ts",
-    "shop:info": "tsx -e 'import { getShopInfo } from \"./lib/presets\"; getShopInfo().then(r => console.log(JSON.stringify(r, null, 2)))'",
-    "orders:recent": "tsx -e 'import { getRecentOrders } from \"./lib/presets\"; getRecentOrders(10).then(r => console.log(JSON.stringify(r, null, 2)))'",
-    "orders:summary": "tsx -e 'import { getDailySalesSummary } from \"./lib/presets\"; getDailySalesSummary(30).then(r => console.log(JSON.stringify(r, null, 2)))'",
-    "products:top": "tsx -e 'import { getTopProductsByRevenue } from \"./lib/presets\"; getTopProductsByRevenue(10, 30).then(r => console.log(JSON.stringify(r, null, 2)))'",
-    "customers:top": "tsx -e 'import { getTopCustomers } from \"./lib/presets\"; getTopCustomers(10).then(r => console.log(JSON.stringify(r, null, 2)))'",
-    "ads:campaigns": "tsx -e 'import { getGoogleAdsCampaigns } from \"./lib/presets\"; getGoogleAdsCampaigns(10).then(r => console.log(JSON.stringify(r, null, 2)))'",
     "catalog": "tsx -e 'import { getDataCatalog } from \"./lib/presets\"; getDataCatalog().then(r => console.log(JSON.stringify(r, null, 2)))'",
-    "platforms:summary": "tsx -e 'import { getConnectedPlatformsSummary } from \"./lib/presets\"; getConnectedPlatformsSummary().then(r => console.log(JSON.stringify(r, null, 2)))'",
-    "annual:summary": "tsx -e 'import { getAnnualSummary } from \"./lib/presets\"; getAnnualSummary(2025).then(r => console.log(JSON.stringify(r, null, 2)))'",
+    "platforms": "tsx -e 'import { getConnectedPlatformsSummary } from \"./lib/presets\"; getConnectedPlatformsSummary().then(r => console.log(JSON.stringify(r, null, 2)))'",
     "test": "npm run get_tables"
   },
   "dependencies": {

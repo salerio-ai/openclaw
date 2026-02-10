@@ -4,11 +4,9 @@ description: Query e-commerce business data from Shopify, Google Ads, BigCommerc
 metadata: {"openclaw":{"always":true,"requires":{"env":["SEARCH_DATA_SUPABASE_URL","SEARCH_DATA_SUPABASE_ANON_KEY","SEARCH_DATA_SUPABASE_ACCESS_TOKEN","SEARCH_DATA_WORKSPACE_ID"]}}}
 ---
 
-This skill provides e-commerce SaaS data query capabilities, reading business data from platforms like Shopify, Google Ads, BigCommerce, WooCommerce, and Magento via a Supabase data warehouse.
+This skill provides e-commerce SaaS data query capabilities, reading business data from platforms like Shopify, BigCommerce, WooCommerce, Magento, and Google Ads via a Supabase data warehouse.
 
-**IMPORTANT: Always use preset functions from lib/presets.ts instead of writing raw SQL.** The preset functions handle multi-platform schema differences automatically through real-time DDL detection.
-
-**Multi-Platform Support**: This skill automatically detects which platforms are connected and queries across all available data sources. When users ask general questions like "show me my shop data" or "what are my recent orders", the skill intelligently aggregates data from all connected platforms (Shopify, BigCommerce, WooCommerce, Magento, etc.) without requiring the user to specify which platform.
+**Text2SQL Approach**: This skill provides real-time DDL schema detection and SQL execution capabilities. Use your text-to-SQL capabilities to generate queries dynamically based on actual table structures. **Do not rely on preset query functions - always write SQL based on discovered schema.**
 
 ## When to Use This Skill
 
@@ -21,199 +19,178 @@ This skill provides e-commerce SaaS data query capabilities, reading business da
 - Any queries about e-commerce business operations or metrics
 - Time-based reports (daily, weekly, monthly, yearly summaries)
 
-**Common user queries that should trigger this skill:**
+**Common user queries:**
 - "How is my shop doing?" / "What are my business metrics?"
 - "Give me a 2025 summary" / "Shop performance for 2025"
 - "How are my recent orders?" / "What's the sales data?"
 - "Which products are selling best?" / "Top customers"
 - "How are my ads performing?" / "Google Ads data"
 
-If the user is asking about their e-commerce business, store performance, or wants any kind of business data summary/report, **use this skill**.
+## Core Workflow
 
-## Quick Start
+### 1. Discover Available Platforms
+```bash
+npm run platforms
+```
 
-### View Available Tables
+Shows which e-commerce and advertising platforms have data.
+
+### 2. Discover Available Tables
 ```bash
 npm run get_tables
 ```
 
-### View Table Schema
+Returns all accessible tables across platforms.
+
+### 3. Inspect Table Schema
 ```bash
 npm run get_schema -- semantic.dm_orders_shopify
 ```
 
-### Execute SQL Query
+**CRITICAL**: Always inspect schema before writing queries. Different platforms use different column names:
+- Shopify: `total_price`, `shop_name`
+- BigCommerce: `total_inc_tax`, `store_name`
+- WooCommerce: `total`, `site_name`
+- Magento: `total_inc_tax`, `store_name`
+
+### 4. Execute SQL Query
 ```bash
-npm run query -- "SELECT * FROM semantic.dm_orders_shopify LIMIT 10"
+npm run query -- "SELECT * FROM semantic.dm_orders_shopify WHERE created_at >= '2025-01-01' LIMIT 10"
 ```
 
-## Common Query Commands (Presets)
+Supports CTEs (WITH), JOINs, UNIONs, aggregates, etc.
 
-### Shop Information
-```bash
-npm run shop:info
-```
+## Platform Types
 
-### Recent Orders
-```bash
-npm run orders:recent
-```
+### E-commerce Platforms
+- **Shopify**: Orders, products, customers, variants
+- **BigCommerce**: Orders, products, customers, variants
+- **WooCommerce**: Orders, products, customers, variants
+- **Magento**: Orders, products, customers, variants
 
-### Daily Sales Summary (Last 30 Days)
-```bash
-npm run orders:summary
-```
+### Advertising Platforms
+- **Google Ads**: Campaigns, keywords, search terms, creatives
 
-### Top Selling Products (Top 10)
-```bash
-npm run products:top
-```
+## Data Tables
 
-### Top Customers (Top 10)
-```bash
-npm run customers:top
-```
+### E-commerce (Shopify, BigCommerce, WooCommerce, Magento)
 
-### Google Ads Performance
-```bash
-npm run ads:campaigns
-```
+**Shop Info**:
+- `semantic.dm_shop_info_<platform>` - Store settings, currency, timezone
 
-### View All Available Tables
-```bash
-npm run catalog
-```
+**Orders**:
+- `semantic.dm_orders_<platform>` - Order records with totals, dates, status
+- `semantic.dm_order_items_<platform>` - Line items with products, quantities, prices
 
-### Annual Summary (2025)
-```bash
-tsx -e "import { getAnnualSummary } from \"./lib/presets\"; getAnnualSummary(2025).then(r => console.log(JSON.stringify(r, null, 2)))"
-```
+**Catalog**:
+- `semantic.dm_products_<platform>` - Product catalog
+- `semantic.dm_variants_<platform>` - Product variants (SKU, inventory, pricing)
 
-```typescript
-// Annual summary via programming API
-const summary = await getAnnualSummary(2025)
-// Returns: { year, totalRevenue, totalOrders, avgOrderValue, uniqueCustomers, topProducts, platforms }
-```
+**Customers**:
+- `semantic.dm_customers_<platform>` - Customer records with email, orders count, lifetime value
 
-## Configuration
+### Advertising (Google Ads)
 
-This skill reads configuration from `~/.bustly/bustlyOauth.json` (automatically configured via Bustly OAuth login).
-
-No manual configuration is required. After logging in via Bustly OAuth in the desktop app, the skill will have access to:
-
-- `SEARCH_DATA_SUPABASE_URL` - Supabase API URL
-- `SEARCH_DATA_SUPABASE_ANON_KEY` - Supabase anonymous key
-- `SEARCH_DATA_SUPABASE_ACCESS_TOKEN` - Supabase session access token
-- `SEARCH_DATA_WORKSPACE_ID` - Workspace identifier
-
-## Available Data Tables
-
-### Shopify
-- `semantic.dm_shop_info_shopify` - Shop information
-- `semantic.dm_orders_shopify` - Order data
-- `semantic.dm_order_items_shopify` - Order line items
-- `semantic.dm_products_shopify` - Product information
-- `semantic.dm_variants_shopify` - Product variants
-- `semantic.dm_customers_shopify` - Customer information
-- `semantic.dm_shopify_pixel_events` - Pixel tracking events
-
-### Google Ads
-- `semantic.dm_ads_campaigns_google` - Campaign performance
-- `semantic.dm_ads_products_google` - Product-level data
+- `semantic.dm_ads_campaigns_google` - Campaign performance (impressions, clicks, cost, conversions)
+- `semantic.dm_ads_products_google` - Product-level metrics
 - `semantic.dm_ads_keywords_google` - Keyword performance
-- `semantic.dm_ads_search_terms_google` - Search term reports
+- `semantic.dm_search_terms_google` - Search term reports
 - `semantic.dm_ads_creatives_google` - Creative performance
 
-### BigCommerce
-- `semantic.dm_shop_info_bigcommerce` - Shop information
-- `semantic.dm_products_bigcommerce` - Product information
-- `semantic.dm_variants_bigcommerce` - Product variants
-- `semantic.dm_customers_bigcommerce` - Customer information
-- `semantic.dm_orders_bigcommerce` - Order data
-- `semantic.dm_order_items_bigcommerce` - Order line items
-
-### WooCommerce
-- `semantic.dm_shop_info_woocommerce` - Shop information
-- `semantic.dm_products_woocommerce` - Product information
-- `semantic.dm_variants_woocommerce` - Product variants
-- `semantic.dm_customers_woocommerce` - Customer information
-- `semantic.dm_orders_woocommerce` - Order data
-- `semantic.dm_order_items_woocommerce` - Order line items
-
-### Magento
-- `semantic.dm_shop_info_magento` - Shop information
-- `semantic.dm_products_magento` - Product information
-- `semantic.dm_variants_magento` - Product variants
-- `semantic.dm_customers_magento` - Customer information
-- `semantic.dm_orders_magento` - Order data
-- `semantic.dm_order_items_magento` - Order line items
-
-## Output Formats
-
-Control output format using the `FORMAT` environment variable:
-
-```bash
-# JSON output (default)
-FORMAT=json npm run query -- "SELECT * FROM orders LIMIT 5"
-
-# ASCII table
-FORMAT=table npm run query -- "SELECT * FROM orders LIMIT 5"
-
-# CSV format
-FORMAT=csv npm run query -- "SELECT * FROM orders LIMIT 5"
-```
-
-## Programming API (Lib)
-
-You can use presets directly in code:
+## Programming API
 
 ```typescript
 import {
-  getShopInfo,
-  getRecentOrders,
-  getDailySalesSummary,
-  getTopProductsByRevenue,
-  getTopCustomers,
-  formatCurrency,
-  formatDate
+  // Core API
+  getAvailableTables,
+  getTableSchema,
+  runSelectQuery,
+
+  // Platform detection
+  detectAvailablePlatforms,
+  getEcommercePlatforms,
+  getAdvertisingPlatforms,
+
+  // Schema helpers (handle platform differences)
+  COLUMN_PATTERNS,
+  findColumnByPattern
 } from './lib/presets'
 
-// Get shop information
-const shop = await getShopInfo()
+// Step 1: Detect platforms
+const platforms = await detectAvailablePlatforms()
 
-// Get recent 10 orders
-const orders = await getRecentOrders(10)
+// Step 2: Get schema for a table
+const schema = await getTableSchema('semantic.dm_orders_shopify')
+// Returns: [{ column_name, data_type, is_nullable, description }, ...]
 
-// Get daily sales summary
-const summary = await getDailySalesSummary(30)
+// Step 3: Find columns by pattern (handles platform differences)
+const priceCol = findColumnByPattern(schema, COLUMN_PATTERNS.totalPrice)
+// Automatically finds: total_price, total_inc_tax, grand_total, amount, etc.
 
-// Top selling products
-const products = await getTopProductsByRevenue(10, 30)
+// Step 4: Execute SQL
+const results = await runSelectQuery('SELECT * FROM semantic.dm_orders_shopify LIMIT 10')
+```
 
-// Top customers
-const customers = await getTopCustomers(10)
+## Cross-Platform Query Patterns
 
-// Format currency
-formatCurrency(123.45) // "$123.45"
+### 1. Single Platform Query
+```sql
+SELECT
+  DATE(created_at) as date,
+  COUNT(*) as orders,
+  SUM(total_price) as revenue
+FROM semantic.dm_orders_shopify
+WHERE created_at >= '2025-01-01'
+GROUP BY DATE(created_at)
+ORDER BY date DESC
+```
 
-// Format date
-formatDate('2026-03-25T15:10:00Z') // "Mar 25, 2026, 03:10 PM"
+### 2. Multi-Platform UNION
+```sql
+WITH all_orders AS (
+  SELECT 'Shopify' as platform, created_at, total_price
+  FROM semantic.dm_orders_shopify
+  WHERE created_at >= '2025-01-01'
+
+  UNION ALL
+
+  SELECT 'BigCommerce' as platform, created_at, total_inc_tax as total_price
+  FROM semantic.dm_orders_bigcommerce
+  WHERE created_at >= '2025-01-01'
+)
+SELECT
+  platform,
+  COUNT(*) as orders,
+  SUM(total_price) as revenue
+FROM all_orders
+GROUP BY platform
+```
+
+### 3. Handle Different Column Names
+```typescript
+// Use COLUMN_PATTERNS to find equivalent columns
+import { COLUMN_PATTERNS, findColumnByPattern, getTableSchema } from './lib/presets'
+
+const schema = await getTableSchema('semantic.dm_orders_bigcommerce')
+const priceCol = findColumnByPattern(schema, COLUMN_PATTERNS.totalPrice)
+// Returns: { actualColumn: 'total_inc_tax', dataType: 'numeric' }
 ```
 
 ## Technical Features
 
+- ✅ Real-time DDL schema detection
+- ✅ Platform type detection (ecommerce vs advertising)
+- ✅ Pattern-based column matching for cross-platform queries
 - ✅ Automatic retry (exponential backoff, max 3 attempts)
 - ✅ Request timeout control (30 seconds)
-- ✅ Multiple output formats (JSON/table/CSV)
-- ✅ Common query templates (Presets)
-- ✅ TypeScript type support
-- ✅ Detailed logging
+- ✅ CTEs (WITH), JOINs, UNIONs supported
 - ✅ Security: Only SELECT queries allowed
 
 ## Important Notes
 
-1. All queries are **read-only** (SELECT) to ensure data safety
-2. Pay attention to **currency field** handling (different shops may have different currencies)
-3. Consider **timezone conversion** (use `iana_timezone` field)
-4. Use **LIMIT** and pagination for large datasets to avoid performance issues
-5. Re-authentication may be required when token expires
+1. **Always inspect schema first** - Different platforms use different column names
+2. **Use pattern matching** - COLUMN_PATTERNS helps find equivalent columns across platforms
+3. **Handle missing columns** - Use COALESCE or skip when columns don't exist
+4. **Query with date ranges** - Use WHERE clauses on created_at/date columns for performance
+5. **All queries are read-only** - Only SELECT queries allowed for data safety
+6. **Platform types matter** - E-commerce tables are different from advertising tables
