@@ -1,10 +1,30 @@
 ---
 name: bustly-search-data
-description: E-commerce data query skill for Shopify, Google Ads, BigCommerce, WooCommerce, Magento, and other platforms. Supports common query templates, automatic retry, and multiple output formats.
+description: Query e-commerce business data from Shopify, Google Ads, BigCommerce, WooCommerce, and Magento via Supabase data warehouse. Use when users ask about shop performance, sales data, orders, customers, products, revenue summaries, business reports, annual summaries, or any questions about their e-commerce store data or business metrics.
 metadata: {"openclaw":{"always":true,"requires":{"env":["SEARCH_DATA_SUPABASE_URL","SEARCH_DATA_SUPABASE_ANON_KEY","SEARCH_DATA_SUPABASE_ACCESS_TOKEN","SEARCH_DATA_WORKSPACE_ID"]}}}
 ---
 
 This skill provides e-commerce SaaS data query capabilities, reading business data from platforms like Shopify, Google Ads, BigCommerce, WooCommerce, and Magento via a Supabase data warehouse.
+
+## When to Use This Skill
+
+**Always use this skill when users ask questions related to:**
+
+- Shop/store performance, data, or metrics
+- Sales summaries, revenue reports, or business analytics
+- Orders, customers, products, or inventory information
+- Google Ads performance, campaigns, or advertising data
+- Any queries about e-commerce business operations or metrics
+- Time-based reports (daily, weekly, monthly, yearly summaries)
+
+**Common user queries that should trigger this skill:**
+- "How is my shop doing?" / "What are my business metrics?"
+- "Give me a 2025 summary" / "Shop performance for 2025"
+- "How are my recent orders?" / "What's the sales data?"
+- "Which products are selling best?" / "Top customers"
+- "How are my ads performing?" / "Google Ads data"
+
+If the user is asking about their e-commerce business, store performance, or wants any kind of business data summary/report, **use this skill**.
 
 ## Quick Start
 
