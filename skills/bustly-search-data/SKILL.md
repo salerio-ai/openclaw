@@ -6,6 +6,8 @@ metadata: {"openclaw":{"always":true,"requires":{"env":["SEARCH_DATA_SUPABASE_UR
 
 This skill provides e-commerce SaaS data query capabilities, reading business data from platforms like Shopify, Google Ads, BigCommerce, WooCommerce, and Magento via a Supabase data warehouse.
 
+**Multi-Platform Support**: This skill automatically detects which platforms are connected and queries across all available data sources. When users ask general questions like "show me my shop data" or "what are my recent orders", the skill intelligently aggregates data from all connected platforms (Shopify, BigCommerce, WooCommerce, Magento, etc.) without requiring the user to specify which platform.
+
 ## When to Use This Skill
 
 **Always use this skill when users ask questions related to:**

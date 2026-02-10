@@ -1,20 +1,22 @@
 {
   "name": "bustly-search-data",
-  "version": "0.2.0",
-  "description": "Bustly e-commerce data query skill for OpenClaw - Shopify, Google Ads, BigCommerce",
+  "version": "0.3.0",
+  "description": "Bustly multi-platform e-commerce data query skill for OpenClaw - Shopify, Google Ads, BigCommerce, WooCommerce, Magento",
   "type": "module",
   "scripts": {
     "get_tables": "tsx scripts/get_tables.ts",
     "get_schema": "tsx scripts/get_schema.ts",
     "query": "tsx scripts/query_data.ts",
-    "shop:info": "tsx -e 'import { getShopInfo } from \"./lib/presets\"; getShopInfo().then(r => console.log(JSON.stringify(r, null, 2)))'",
-    "orders:recent": "tsx -e 'import { getRecentOrders } from \"./lib/presets\"; getRecentOrders(10).then(r => console.log(JSON.stringify(r, null, 2)))'",
-    "orders:summary": "tsx -e 'import { getDailySalesSummary } from \"./lib/presets\"; getDailySalesSummary(30).then(r => console.log(JSON.stringify(r, null, 2)))'",
-    "products:top": "tsx -e 'import { getTopProductsByRevenue } from \"./lib/presets\"; getTopProductsByRevenue(10, 30).then(r => console.log(JSON.stringify(r, null, 2)))'",
-    "customers:top": "tsx -e 'import { getTopCustomers } from \"./lib/presets\"; getTopCustomers(10).then(r => console.log(JSON.stringify(r, null, 2)))'",
-    "ads:campaigns": "tsx -e 'import { getGoogleAdsCampaigns } from \"./lib/presets\"; getGoogleAdsCampaigns(10).then(r => console.log(JSON.stringify(r, null, 2)))'",
-    "catalog": "tsx -e 'import { getDataCatalog } from \"./lib/presets\"; console.log(JSON.stringify(getDataCatalog(), null, 2))'",
-    "test": "npm run get_tables"
+    "test:platforms": "tsx scripts/test-platform-detection.ts",
+    "shop:info": "tsx -e 'import { getShopInfo } from \"./lib/presets-v2\"; getShopInfo().then(r => console.log(JSON.stringify(r, null, 2)))'",
+    "orders:recent": "tsx -e 'import { getRecentOrders } from \"./lib/presets-v2\"; getRecentOrders(10).then(r => console.log(JSON.stringify(r, null, 2)))'",
+    "orders:summary": "tsx -e 'import { getDailySalesSummary } from \"./lib/presets-v2\"; getDailySalesSummary(30).then(r => console.log(JSON.stringify(r, null, 2)))'",
+    "products:top": "tsx -e 'import { getTopProductsByRevenue } from \"./lib/presets-v2\"; getTopProductsByRevenue(10, 30).then(r => console.log(JSON.stringify(r, null, 2)))'",
+    "customers:top": "tsx -e 'import { getTopCustomers } from \"./lib/presets-v2\"; getTopCustomers(10).then(r => console.log(JSON.stringify(r, null, 2)))'",
+    "ads:campaigns": "tsx -e 'import { getGoogleAdsCampaigns } from \"./lib/presets-v2\"; getGoogleAdsCampaigns(10).then(r => console.log(JSON.stringify(r, null, 2)))'",
+    "catalog": "tsx -e 'import { getDataCatalog } from \"./lib/presets-v2\"; getDataCatalog().then(r => console.log(JSON.stringify(r, null, 2)))'",
+    "platforms:summary": "tsx -e 'import { getConnectedPlatformsSummary } from \"./lib/presets-v2\"; getConnectedPlatformsSummary().then(r => console.log(JSON.stringify(r, null, 2)))'",
+    "test": "npm run test:platforms"
   },
   "dependencies": {
     "dotenv": "^17.2.3"
