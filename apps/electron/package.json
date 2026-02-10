@@ -1,6 +1,6 @@
 {
-  "name": "openclaw-electron",
-  "version": "1.0.0",
+  "name": "bustly",
+  "version": "0.0.1",
   "description": "OpenClaw Electron Desktop Client",
   "main": "dist/main/index.js",
   "private": true,
@@ -9,8 +9,8 @@
     "dev": "pnpm run build:preload && pnpm run build:main-dev && pnpm exec concurrently \"pnpm run dev:renderer\" \"pnpm run wait:renderer && pnpm run dev:main\"",
     "dev:renderer": "vite",
     "wait:renderer": "sleep 2",
-    "dev:main": "NODE_ENV=development pnpm exec electron dist/main-dev.js",
-    "dev:prod": "pnpm run build && NODE_ENV=production pnpm exec electron .",
+    "dev:main": "OPENCLAW_RAW_STREAM=1 OPENCLAW_PAYLOAD_LOG=1 OPENCLAW_PAYLOAD_LOG_PROVIDERS=google-antigravity,openai-codex NODE_ENV=development pnpm exec electron dist/main-dev.js",
+    "dev:prod": "pnpm run build && OPENCLAW_RAW_STREAM=1 OPENCLAW_PAYLOAD_LOG=1 OPENCLAW_PAYLOAD_LOG_PROVIDERS=google-antigravity,openai-codex NODE_ENV=production pnpm exec electron .",
     "build": "pnpm run build:preload && pnpm run build:main && pnpm run build:renderer",
     "build:preload": "pnpm exec esbuild src/main/preload.ts --bundle --platform=node --target=node22 --outfile=dist/main/preload.js --external:electron --format=cjs",
     "build:main-dev": "pnpm exec esbuild src/main/index.ts --bundle --platform=node --target=node22 --outfile=dist/main-dev.js --packages=external --format=esm",
@@ -83,7 +83,9 @@
       "entitlementsInherit": "build/entitlements.mac.inherit.plist"
     },
     "dmg": {
-      "size": "4g"
+      "size": "4g",
+      "background": null,
+      "icon": null
     },
     "extraResources": [
       {

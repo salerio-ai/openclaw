@@ -136,6 +136,7 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
+  filter: invert(1) brightness(1.1) contrast(1.05);
 }
 
 .brand-text {
@@ -588,6 +589,14 @@
 
 .nav-item.active .nav-item__icon {
   opacity: 1;
+  color: var(--accent-foreground);
+}
+
+:root[data-theme="light"] .brand-logo img {
+  filter: none;
+}
+
+:root[data-theme="light"] .nav-item.active .nav-item__icon {
   color: var(--accent);
 }
 

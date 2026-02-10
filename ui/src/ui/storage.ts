@@ -29,7 +29,7 @@ export function loadSettings(): UiSettings {
     lastActiveSessionKey: "main",
     theme: "system",
     chatFocusMode: false,
-    chatShowThinking: true,
+    chatShowThinking: false,
     chatControlsHidden: false,
     splitRatio: 0.6,
     navCollapsed: false,

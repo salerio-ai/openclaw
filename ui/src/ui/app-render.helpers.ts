@@ -45,6 +45,8 @@ export function renderChatControls(state: AppViewState) {
     state.sessionsResult,
     mainSessionKey,
   );
+  const disableThinkingToggle = state.onboarding;
+  const showThinking = state.onboarding ? false : state.settings.chatShowThinking;
   // Refresh icon
   const refreshIcon = html`
     <svg
@@ -77,21 +79,6 @@ export function renderChatControls(state: AppViewState) {
       <path d="M4 17v3h3"></path>
       <path d="M20 17v3h-3"></path>
       <circle cx="12" cy="12" r="3"></circle>
-    </svg>
-  `;
-  const hideIcon = html`
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    >
-      <path d="M21 12s-4 7-9 7-9-7-9-7 4-7 9-7 9 7 9 7"></path>
-      <line x1="3" y1="3" x2="21" y2="21"></line>
     </svg>
   `;
   return html`
@@ -140,53 +127,29 @@ export function renderChatControls(state: AppViewState) {
       >
         ${refreshIcon}
       </button>
+      <span class="chat-controls__separator">|</span>
       <button
-        class="btn btn--sm btn--icon"
+        class="btn btn--sm btn--icon ${showThinking ? "active" : ""}"
+        ?disabled=${disableThinkingToggle}
         @click=${() => {
+          if (disableThinkingToggle) {
+            return;
+          }
           state.applySettings({
             ...state.settings,
-            chatControlsHidden: true,
+            chatShowThinking: !state.settings.chatShowThinking,
           });
         }}
-        title="Hide chat controls"
-        aria-label="Hide chat controls"
+        aria-pressed=${showThinking}
+        title=${
+          disableThinkingToggle
+            ? "Disabled during onboarding"
+            : "Toggle assistant thinking/working output"
+        }
       >
-        ${hideIcon}
+        ${icons.brain}
       </button>
     </div>
-  `;
-}
-
-export function renderChatControlsToggle(state: AppViewState) {
-  const showIcon = html`
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    >
-      <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7"></path>
-      <circle cx="12" cy="12" r="3"></circle>
-    </svg>
-  `;
-  return html`
-    <button
-      class="btn btn--sm btn--icon"
-      @click=${() => {
-        state.applySettings({
-          ...state.settings,
-          chatControlsHidden: false,
-        });
-      }}
-      title="Show chat controls"
-      aria-label="Show chat controls"
-    >
-      ${showIcon}
-    </button>
   `;
 }
 

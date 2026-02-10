@@ -60,18 +60,20 @@ export function handleAutoCompactionEnd(
 
 export function handleAgentEnd(ctx: EmbeddedPiSubscribeContext) {
   ctx.log.debug(`embedded run agent end: runId=${ctx.params.runId}`);
-  emitAgentEvent({
-    runId: ctx.params.runId,
-    stream: "lifecycle",
-    data: {
-      phase: "end",
-      endedAt: Date.now(),
-    },
-  });
-  void ctx.params.onAgentEvent?.({
-    stream: "lifecycle",
-    data: { phase: "end" },
-  });
+  if (!ctx.state.lifecycleErrorEmitted) {
+    emitAgentEvent({
+      runId: ctx.params.runId,
+      stream: "lifecycle",
+      data: {
+        phase: "end",
+        endedAt: Date.now(),
+      },
+    });
+    void ctx.params.onAgentEvent?.({
+      stream: "lifecycle",
+      data: { phase: "end" },
+    });
+  }
 
   if (ctx.params.onBlockReply) {
     if (ctx.blockChunker?.hasBuffered()) {

@@ -199,6 +199,26 @@ export function handleMessageEnd(
   const assistantMessage = msg;
   promoteThinkingTagsToBlocks(assistantMessage);
 
+  const stopReason = (assistantMessage as { stopReason?: string }).stopReason;
+  const errorMessage = (assistantMessage as { errorMessage?: string }).errorMessage?.trim();
+  if (stopReason === "error" && !ctx.state.lifecycleErrorEmitted) {
+    ctx.state.lifecycleErrorEmitted = true;
+    const errorText = errorMessage || "LLM request failed with an unknown error.";
+    emitAgentEvent({
+      runId: ctx.params.runId,
+      stream: "lifecycle",
+      data: {
+        phase: "error",
+        endedAt: Date.now(),
+        error: errorText,
+      },
+    });
+    void ctx.params.onAgentEvent?.({
+      stream: "lifecycle",
+      data: { phase: "error", error: errorText },
+    });
+  }
+
   const rawText = extractAssistantText(assistantMessage);
   appendRawStream({
     ts: Date.now(),

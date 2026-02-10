@@ -2,12 +2,7 @@ import { html, nothing } from "lit";
 import type { AppViewState } from "./app-view-state";
 import { parseAgentSessionKey } from "../../../src/routing/session-key.js";
 import { refreshChatAvatar } from "./app-chat";
-import {
-  renderChatControls,
-  renderChatControlsToggle,
-  renderTab,
-  renderThemeToggle,
-} from "./app-render.helpers";
+import { renderChatControls, renderTab, renderThemeToggle } from "./app-render.helpers";
 import { loadChannels } from "./controllers/channels";
 import { loadChatHistory } from "./controllers/chat";
 import {
@@ -175,7 +170,7 @@ export function renderApp(state: AppViewState) {
   const cronNext = state.cronStatus?.nextWakeAtMs ?? null;
   const chatDisabledReason = state.connected ? null : "Disconnected from gateway.";
   const isChat = state.tab === "chat";
-  const showChatControls = isChat && !state.settings.chatControlsHidden;
+  const showChatControls = isChat;
   const chatFocus = isChat && (state.settings.chatFocusMode || state.onboarding);
   const showThinking = state.onboarding ? false : state.settings.chatShowThinking;
   const assistantAvatarUrl = resolveAssistantAvatarUrl(state);
@@ -252,12 +247,7 @@ export function renderApp(state: AppViewState) {
             <div class="page-sub">${subtitleForTab(state.tab)}</div>
           </div>
           <div class="page-meta">
-            ${state.lastError ? html`<div class="pill danger">${state.lastError}</div>` : nothing}
-            ${isChat
-              ? showChatControls
-                ? renderChatControls(state)
-                : renderChatControlsToggle(state)
-              : nothing}
+            ${showChatControls ? renderChatControls(state) : nothing}
           </div>
         </section>
 

@@ -314,7 +314,8 @@
   align-items: center;
   justify-content: center;
   border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--bg-elevated);
+  color: var(--text);
 }
 
 /* Controls separator */
@@ -330,22 +331,36 @@
 }
 
 .btn--icon:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--bg-hover);
+  border-color: var(--border-hover);
 }
 
 /* Light theme icon button overrides */
 :root[data-theme="light"] .btn--icon {
-  background: #ffffff;
+  background: var(--bg-elevated);
   border-color: var(--border);
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
-  color: var(--muted);
+  color: var(--muted-strong);
 }
 
 :root[data-theme="light"] .btn--icon:hover {
-  background: #ffffff;
+  background: var(--bg-hover);
   border-color: var(--border-strong);
   color: var(--text);
+}
+
+.btn.btn--icon.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-foreground);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+:root[data-theme="light"] .btn.btn--icon.active {
+  background: var(--accent-subtle);
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(26, 22, 47, 0.1);
 }
 
 .btn--icon svg {
