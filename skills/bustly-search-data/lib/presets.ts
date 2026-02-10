@@ -1,27 +1,28 @@
 /**
- * Dynamic Query Presets (Multi-Platform with Schema Support)
+ * Dynamic Query Presets with Real-time Schema Detection
  *
- * Pre-built query templates that automatically adapt to available data sources.
- * Supports Shopify, BigCommerce, WooCommerce, Magento, and Google Ads.
+ * This version queries DDL schema from Supabase in real-time,
+ * then builds queries dynamically based on actual table structure.
  *
- * Uses platform-schemas.ts to handle column name differences across platforms.
+ * No hardcoded platform assumptions - works with any schema.
  */
 
 import { runSelectQuery } from './supabase_api'
+import { detectAvailablePlatforms } from './data-source-detector'
 import {
-  detectAvailablePlatforms,
-  getPrimaryPlatform,
-  getOrderPlatforms
-} from './data-source-detector'
-import { buildSelectClause, getPlatformSchema } from './platform-schemas'
+  getTableSchemaCached,
+  buildDynamicSelect,
+  COLUMN_PATTERNS,
+  clearSchemaCache as clearDynamicSchemaCache
+} from './schema-manager'
 
 // ============================================
-// Platform-Agnostic Query Functions
+// Dynamic Query Functions
 // ============================================
 
 /**
  * Get shop information from all available platforms
- * Handles column name differences across platforms
+ * Uses real-time schema detection for each platform
  */
 export async function getShopInfo() {
   const platforms = await detectAvailablePlatforms()
@@ -30,35 +31,24 @@ export async function getShopInfo() {
   for (const platform of platforms) {
     if (platform.tables.shopInfo) {
       try {
-        const schema = getPlatformSchema(platform.name)
         const tableName = platform.tables.shopInfo
+        const schema = await getTableSchemaCached(tableName)
 
-        // Build platform-specific SELECT clause
-        const selectClause = buildSelectClause(platform.name, 'shopInfo', [
-          'shopName',
-          'shopDomain',
-          'currency',
-          'timezone',
-          'hasStorefront'
-        ])
-
-        // Add optional columns that exist for Shopify but not others
-        const optionalCols: string[] = []
-        if (schema.shopInfo.planName) {
-          optionalCols.push(`${schema.shopInfo.planName} as planName`)
-        }
-        if (schema.shopInfo.moneyFormat) {
-          optionalCols.push(`money_with_currency_format as moneyFormat`)
-        }
-
-        const finalSelect = optionalCols.length > 0
-          ? `${selectClause},\n    ${optionalCols.join(',\n    ')}`
-          : selectClause
+        // Build SELECT dynamically based on actual columns
+        const { selectClause } = buildDynamicSelect(tableName, {
+          shopName: COLUMN_PATTERNS.shopName,
+          shopDomain: COLUMN_PATTERNS.shopDomain,
+          currency: COLUMN_PATTERNS.currency,
+          timezone: COLUMN_PATTERNS.timezone,
+          hasStorefront: COLUMN_PATTERNS.hasStorefront,
+          // Add optional columns if they exist
+          planName: COLUMN_PATTERNS.planName
+        }, schema)
 
         const data = await runSelectQuery(`
           SELECT
             '${platform.name}' as platform,
-    ${finalSelect}
+    ${selectClause}
   FROM ${tableName}
   LIMIT 1
 `)
@@ -76,36 +66,46 @@ export async function getShopInfo() {
  * Get recent orders from all available platforms
  */
 export async function getRecentOrders(limit: number = 10) {
-  const platforms = await getOrderPlatforms()
+  const platforms = await detectAvailablePlatforms()
 
   if (platforms.length === 0) {
     throw new Error('No order tables found in any connected platform')
   }
 
-  // Build platform-specific SELECT clauses
-  const unionQueries = await Promise.all(
-    platforms.map(async (platform) => {
-      const schema = getPlatformSchema(platform.name)
-      const tableName = platform.tables.orders!
+  // Build dynamic queries for each platform
+  const unionQueries: string[] = []
 
-      const selectClause = buildSelectClause(platform.name, 'orders', [
-        'orderId',
-        'orderNumber',
-        'totalPrice',
-        'currency',
-        'financialStatus',
-        'fulfillmentStatus',
-        'createdAt'
-      ])
+  for (const platform of platforms) {
+    if (platform.tables.orders) {
+      try {
+        const tableName = platform.tables.orders
+        const schema = await getTableSchemaCached(tableName)
 
-      return `
-        SELECT
-          '${platform.name}' as platform,
+        const { selectClause } = buildDynamicSelect(tableName, {
+          orderId: COLUMN_PATTERNS.orderId,
+          orderNumber: COLUMN_PATTERNS.orderNumber,
+          totalPrice: COLUMN_PATTERNS.totalPrice,
+          currency: COLUMN_PATTERNS.currency,
+          financialStatus: COLUMN_PATTERNS.financialStatus,
+          fulfillmentStatus: COLUMN_PATTERNS.fulfillmentStatus,
+          createdAt: COLUMN_PATTERNS.createdAt
+        }, schema)
+
+        unionQueries.push(`
+          SELECT
+            '${platform.name}' as platform,
     ${selectClause}
   FROM ${tableName}
-`
-    })
-  )
+`)
+      } catch (err) {
+        console.warn(`Failed to query orders for ${platform.name}:`, err)
+      }
+    }
+  }
+
+  if (unionQueries.length === 0) {
+    throw new Error('No order data available')
+  }
 
   const query = `
     WITH all_orders AS (
@@ -124,33 +124,53 @@ export async function getRecentOrders(limit: number = 10) {
  * Get daily sales summary across all platforms
  */
 export async function getDailySalesSummary(days: number = 30) {
-  const platforms = await getOrderPlatforms()
+  const platforms = await detectAvailablePlatforms()
 
   if (platforms.length === 0) {
     throw new Error('No order tables found in any connected platform')
   }
 
-  // Build UNION query for all platforms
-  const unionQueries = platforms.map(platform => {
-    const schema = getPlatformSchema(platform.name)
-    const tableName = platform.tables.orders!
+  const unionQueries: string[] = []
 
-    // Use platform-specific column names
-    const priceCol = schema.orders.totalPrice
-    const statusCol = schema.orders.financialStatus || 'status'
-    const dateCol = schema.orders.createdAt
+  for (const platform of platforms) {
+    if (platform.tables.orders) {
+      try {
+        const tableName = platform.tables.orders
+        const schema = await getTableSchemaCached(tableName)
 
-    return `
-      SELECT
-        ${dateCol} as created_at,
-        ${priceCol} as total_price,
-        currency,
-        '${platform.name}' as platform
-      FROM ${tableName}
-      WHERE ${dateCol} >= NOW() - INTERVAL '${days} days'
-        AND ${statusCol} IN ('paid', 'completed')
-    `
-  })
+        // Find required columns dynamically
+        const dateCol = findColumnByPattern(schema, COLUMN_PATTERNS.createdAt)
+        const priceCol = findColumnByPattern(schema, COLUMN_PATTERNS.totalPrice)
+        const statusCol = findColumnByPattern(schema, COLUMN_PATTERNS.financialStatus)
+
+        if (!dateCol || !priceCol) {
+          console.warn(`Skipping ${platform.name}: missing required columns`)
+          continue
+        }
+
+        const statusMatch = statusCol
+          ? `${statusCol.actualColumn} IN ('paid', 'completed', 'success')`
+          : '1=1'  // No status column, get all
+
+        unionQueries.push(`
+          SELECT
+            ${dateCol.actualColumn} as created_at,
+            ${priceCol.actualColumn} as total_price,
+            currency,
+            '${platform.name}' as platform
+          FROM ${tableName}
+          WHERE ${dateCol.actualColumn} >= NOW() - INTERVAL '${days} days
+            AND ${statusMatch}
+        `)
+      } catch (err) {
+        console.warn(`Failed to query sales for ${platform.name}:`, err)
+      }
+    }
+  }
+
+  if (unionQueries.length === 0) {
+    throw new Error('No sales data available')
+  }
 
   const query = `
     WITH all_sales AS (
@@ -173,46 +193,68 @@ export async function getDailySalesSummary(days: number = 30) {
  * Get top products by revenue across all platforms
  */
 export async function getTopProductsByRevenue(limit: number = 10, days: number = 30) {
-  const platforms = await getOrderPlatforms()
-
-  if (platforms.length === 0) {
-    throw new Error('No order tables found in any connected platform')
-  }
+  const platforms = await detectAvailablePlatforms()
 
   const queries: string[] = []
 
   for (const platform of platforms) {
+    // Try to use order_items if available
     if (platform.tables.orderItems && platform.tables.orders) {
-      // Platform has order_items table (preferred)
-      const orderSchema = getPlatformSchema(platform.name)
-      const itemSchema = orderSchema.orderItems
+      try {
+        const itemSchema = await getTableSchemaCached(platform.tables.orderItems)
+        const orderSchema = await getTableSchemaCached(platform.tables.orders)
 
-      const priceCol = itemSchema.price || 'price'
-      const qtyCol = itemSchema.quantity || 'quantity'
-      const discountCol = itemSchema.totalDiscount
-      const nameCol = itemSchema.productName || 'name'
-      const skuCol = itemSchema.sku || 'sku'
+        // Find required columns
+        const productName = findColumnByPattern(itemSchema, COLUMN_PATTERNS.productName)
+        const sku = findColumnByPattern(itemSchema, COLUMN_PATTERNS.sku)
+        const qty = findColumnByPattern(itemSchema, COLUMN_PATTERNS.quantity)
+        const price = findColumnByPattern(itemSchema, COLUMN_PATTERNS.price)
 
-      const optionalCols = []
-      if (discountCol) {
-        optionalCols.push(`SUM(${discountCol}) as total_discount`)
+        if (!productName || !qty || !price) {
+          console.warn(`Skipping ${platform.name}: missing required columns`)
+          continue
+        }
+
+        // Find JOIN columns
+        const itemOrderId = findColumnByPattern(itemSchema, COLUMN_PATTERNS.orderId)
+        const orderOrderId = findColumnByPattern(orderSchema, COLUMN_PATTERNS.orderId)
+        const orderCreatedAt = findColumnByPattern(orderSchema, COLUMN_PATTERNS.createdAt)
+        const orderStatus = findColumnByPattern(orderSchema, COLUMN_PATTERNS.financialStatus)
+
+        if (!itemOrderId || !orderOrderId || !orderCreatedAt) {
+          console.warn(`Skipping ${platform.name}: missing JOIN columns`)
+          continue
+        }
+
+        const dateMatch = orderStatus
+          ? `${orderStatus.actualColumn} IN ('paid', 'completed', 'success')`
+          : '1=1'
+
+        const selectParts = [
+          `'${platform.name}' as platform`,
+          `${productName.actualColumn} as product_title`,
+          sku ? `${sku.actualColumn} as sku` : `'N/A' as sku`,
+          'COUNT(*) as times_ordered',
+          `${qty.actualColumn} as total_quantity`
+        ]
+
+        // Add optional columns
+        const priceCol = price.actualColumn
+        selectParts.push(`SUM(${priceCol} * ${qty.actualColumn}) as total_revenue`)
+
+        const query = `
+          SELECT
+    ${selectParts.join(',\n    ')}
+  FROM ${platform.tables.orderItems} oi
+  JOIN ${platform.tables.orders} o ON oi.${itemOrderId.actualColumn} = o.${orderOrderId.actualColumn}
+  WHERE o.${orderCreatedAt.actualColumn} >= NOW() - INTERVAL '${days} days'
+    AND ${dateMatch}
+  GROUP BY ${productName.actualColumn}
+        `
+        queries.push(query)
+      } catch (err) {
+        console.warn(`Failed to query products for ${platform.name}:`, err)
       }
-
-      const query = `
-        SELECT
-          '${platform.name}' as platform,
-          ${nameCol} as product_title,
-          ${skuCol} as sku,
-          COUNT(*) as times_ordered,
-          SUM(${qtyCol}) as total_quantity
-          ${optionalCols.length > 0 ? ',\n    ' + optionalCols.join(',\n    ') : ''}
-        FROM ${platform.tables.orderItems} oi
-        JOIN ${platform.tables.orders} o ON oi.${orderSchema.orderItems.orderId} = o.${orderSchema.orders.orderId}
-        WHERE o.${orderSchema.orders.createdAt} >= NOW() - INTERVAL '${days} days'
-          AND o.${orderSchema.orders.financialStatus || 'status'} IN ('paid', 'completed')
-        GROUP BY ${nameCol}, ${skuCol}
-      `
-      queries.push(query)
     }
   }
 
@@ -230,16 +272,7 @@ export async function getTopProductsByRevenue(limit: number = 10, days: number =
       SUM(times_ordered) as times_ordered,
       SUM(total_quantity) as total_quantity,
       SUM(total_revenue) as total_revenue
-    FROM (
-      SELECT
-        product_title,
-        sku,
-        times_ordered,
-        total_quantity,
-        ${queries.length > 0 ? 'COALESCE(total_discount, 0)' : '0'} as total_discount,
-        (CASE WHEN total_discount IS NOT NULL THEN (price * quantity - total_discount) ELSE (price * quantity) END) as total_revenue
-      FROM all_products
-    ) grouped
+    FROM all_products
     GROUP BY product_title, sku
     ORDER BY total_revenue DESC
     LIMIT ${Number(limit)}
@@ -258,21 +291,28 @@ export async function getTopCustomers(limit: number = 10) {
   for (const platform of platforms) {
     if (platform.tables.customers) {
       try {
-        const schema = getPlatformSchema(platform.name)
         const tableName = platform.tables.customers
+        const schema = await getTableSchemaCached(tableName)
 
-        const selectClause = buildSelectClause(platform.name, 'customers', [
-          'customerId',
-          'email',
-          'ordersCount',
-          'totalSpent'
-        ])
+        const { selectClause } = buildDynamicSelect(tableName, {
+          customerId: COLUMN_PATTERNS.customerId,
+          email: COLUMN_PATTERNS.email,
+          ordersCount: COLUMN_PATTERNS.ordersCount,
+          totalSpent: COLUMN_PATTERNS.totalSpent
+        }, schema)
 
         // Handle name fields (may have first_name/last_name or just name)
-        const hasFirstLast = schema.customers.firstName && schema.customers.lastName
-        const nameExpr = hasFirstLast
-          ? `COALESCE(${schema.customers.firstName} || ' ' || ${schema.customers.lastName}, ${schema.customers.firstName}, ${schema.customers.lastName}, 'Unknown') as name`
-          : `'Unknown' as name`
+        const hasFirst = findColumnByPattern(schema, COLUMN_PATTERNS.firstName)
+        const hasLast = findColumnByPattern(schema, COLUMN_PATTERNS.lastName)
+
+        let nameExpr = `'Unknown' as name`
+        if (hasFirst && hasLast) {
+          nameExpr = `COALESCE(${hasFirst.actualColumn} || ' ' || ${hasLast.actualColumn}, ${hasFirst.actualColumn}, ${hasLast.actualColumn})`
+        } else if (hasFirst) {
+          nameExpr = hasFirst.actualColumn
+        } else if (hasLast) {
+          nameExpr = hasLast.actualColumn
+        }
 
         const data = await runSelectQuery(`
           SELECT
@@ -280,8 +320,8 @@ export async function getTopCustomers(limit: number = 10) {
     ${selectClause},
     ${nameExpr}
   FROM ${tableName}
-  WHERE ${schema.customers.ordersCount || '0'} > 0
-  ORDER BY ${schema.customers.totalSpent || '0'} DESC
+  WHERE ${COLUMN_PATTERNS.ordersCount[0]} > 0
+  ORDER BY ${COLUMN_PATTERNS.totalSpent[0]} DESC
   LIMIT ${Math.ceil(Number(limit) / platforms.length)}
 `)
         results.push(...data)
@@ -291,7 +331,6 @@ export async function getTopCustomers(limit: number = 10) {
     }
   }
 
-  // Sort by total_spent and limit
   return results
     .sort((a, b) => (b.totalSpent || 0) - (a.totalSpent || 0))
     .slice(0, Number(limit))
@@ -307,28 +346,38 @@ export async function getInventoryStatus(limit: number = 20) {
   for (const platform of platforms) {
     if (platform.tables.variants && platform.tables.products) {
       try {
-        const schema = getPlatformSchema(platform.name)
-        const variantSchema = schema.variants
-        const productSchema = schema.products
+        const variantSchema = await getTableSchemaCached(platform.tables.variants)
+        const productSchema = await getTableSchemaCached(platform.tables.products)
 
-        const selectClause = buildSelectClause(platform.name, 'variants', [
-          'sku',
-          'price',
-          'title'
-        ])
+        // Build SELECT clause dynamically
+        const variantSelect = buildDynamicSelect(platform.tables.variants, {
+          sku: COLUMN_PATTERNS.sku,
+          price: COLUMN_PATTERNS.price,
+          title: COLUMN_PATTERNS.variantTitle
+        }, variantSchema)
 
-        const qtyCol = variantSchema.inventoryQuantity
+        // Find inventory column
+        const invCol = findColumnByPattern(variantSchema, COLUMN_PATTERNS.inventoryQuantity)
+
+        const selectParts = [
+          `'${platform.name}' as platform`,
+          variantSelect.selectClause,
+          `${productSchema.title?.actualColumn || 'name'} as product_title`,
+          productSchema.productType?.actualColumn || 'NULL' as product_type
+        ]
+
+        if (invCol) {
+          selectParts.push(`${invCol.actualColumn} as inventory_quantity`)
+        } else {
+          selectParts.push('0 as inventory_quantity')
+        }
 
         const data = await runSelectQuery(`
           SELECT
-            '${platform.name}' as platform,
-    ${selectClause},
-    ${productSchema.title} as product_title,
-    ${productSchema.productType || 'NULL'} as product_type,
-    ${qtyCol} as inventory_quantity
+    ${selectParts.join(',\n    ')}
   FROM ${platform.tables.variants} v
-  JOIN ${platform.tables.products} p ON v.${variantSchema.productId} = p.${productSchema.productId}
-  ORDER BY ${qtyCol || '0'} ASC
+  JOIN ${platform.tables.products} p ON v.${variantSchema.productId?.actualColumn || 'product_id'} = p.${productSchema.productId?.actualColumn || 'id'}
+  ORDER BY ${invCol?.actualColumn || '0'} ASC
   LIMIT ${Math.ceil(Number(limit) / platforms.length)}
 `)
         results.push(...data)
@@ -365,29 +414,32 @@ export async function getGoogleAdsCampaigns(limit: number = 10) {
 
 /**
  * Get order items by order ID
- * Auto-detects platform from order ID
  */
 export async function getOrderItems(orderId: string) {
-  const platforms = await getOrderPlatforms()
+  const platforms = await detectAvailablePlatforms()
 
-  // Try to find order items in each platform
   for (const platform of platforms) {
     if (platform.tables.orderItems) {
       try {
-        const schema = getPlatformSchema(platform.name)
+        const schema = await getTableSchemaCached(platform.tables.orderItems)
+
+        // Build SELECT dynamically
+        const { selectClause } = buildDynamicSelect(platform.tables.orderItems, {
+          orderId: COLUMN_PATTERNS.orderId,
+          productName: COLUMN_PATTERNS.productName,
+          variantTitle: COLUMN_PATTERNS.variantTitle,
+          sku: COLUMN_PATTERNS.sku,
+          quantity: COLUMN_PATTERNS.quantity,
+          price: COLUMN_PATTERNS.price,
+          totalDiscount: COLUMN_PATTERNS.totalDiscount
+        }, schema)
 
         const data = await runSelectQuery(`
           SELECT
             '${platform.name}' as platform,
-            ${schema.orderItems.orderId} as order_id,
-            ${schema.orderItems.productName || 'name'} as product_title,
-            ${schema.orderItems.variantTitle || 'title'} as variant_title,
-            ${schema.orderItems.sku} as sku,
-            ${schema.orderItems.quantity} as quantity,
-            ${schema.orderItems.price} as price,
-            ${schema.orderItems.totalDiscount || '0'} as total_discount
-          FROM ${platform.tables.orderItems}
-          WHERE ${schema.orderItems.orderId} = '${orderId}'
+    ${selectClause}
+  FROM ${platform.tables.orderItems}
+  WHERE ${COLUMN_PATTERNS.orderId[0]} = '${orderId}'
         `)
 
         if (data && data.length > 0) {
@@ -404,34 +456,51 @@ export async function getOrderItems(orderId: string) {
 }
 
 /**
- * Get revenue by product category across all platforms
+ * Get revenue by category across all platforms
  */
 export async function getRevenueByCategory(days: number = 30) {
-  const platforms = await getOrderPlatforms()
+  const platforms = await detectAvailablePlatforms()
   const results: any[] = []
 
   for (const platform of platforms) {
     if (platform.tables.orderItems && platform.tables.orders && platform.tables.products) {
       try {
-        const schema = getPlatformSchema(platform.name)
+        const itemSchema = await getTableSchemaCached(platform.tables.orderItems)
+        const productSchema = await getTableSchemaCached(platform.tables.products)
+        const orderSchema = await getTableSchemaCached(platform.tables.orders)
 
-        const priceCol = schema.orderItems.price
-        const qtyCol = schema.orderItems.quantity
-        const typeCol = schema.products.productType
+        // Find required columns
+        const productId = findColumnByPattern(itemSchema, COLUMN_PATTERNS.productId)
+        const productType = productSchema.productType?.actualColumn
+        const qty = findColumnByPattern(itemSchema, COLUMN_PATTERNS.quantity)
+        const price = findColumnByPattern(itemSchema, COLUMN_PATTERNS.price)
+        const itemOrderId = findColumnByPattern(itemSchema, COLUMN_PATTERNS.orderId)
+        const orderOrderId = findColumnByPattern(orderSchema, COLUMN_PATTERNS.orderId)
+        const orderCreatedAt = findColumnByPattern(orderSchema, COLUMN_PATTERNS.createdAt)
+        const orderStatus = findColumnByPattern(orderSchema, COLUMN_PATTERNS.financialStatus)
+
+        if (!productId || !qty || !price || !itemOrderId || !orderOrderId || !orderCreatedAt) {
+          console.warn(`Skipping ${platform.name}: missing required columns`)
+          continue
+        }
+
+        const dateMatch = orderStatus
+          ? `${orderStatus.actualColumn} IN ('paid', 'completed', 'success')`
+          : '1=1'
 
         const data = await runSelectQuery(`
           SELECT
             '${platform.name}' as platform,
-            ${typeCol || 'NULL'} as product_type,
-            COUNT(DISTINCT oi.${schema.orderItems.orderId}) as order_count,
-            SUM(${qtyCol}) as total_quantity,
-            SUM(${priceCol} * ${qtyCol}) as total_revenue
+            ${productType || 'NULL'} as product_type,
+            COUNT(DISTINCT oi.${itemOrderId.actualColumn}) as order_count,
+            SUM(${qty.actualColumn}) as total_quantity,
+            SUM(${price.actualColumn} * ${qty.actualColumn}) as total_revenue
           FROM ${platform.tables.orderItems} oi
-          JOIN ${platform.tables.orders} o ON oi.${schema.orderItems.orderId} = o.${schema.orders.orderId}
-          JOIN ${platform.tables.products} p ON oi.${schema.orderItems.productId} = p.${schema.products.productId}
-          WHERE o.${schema.orders.createdAt} >= NOW() - INTERVAL '${days} days'
-            AND o.${schema.orders.financialStatus || 'status'} IN ('paid', 'completed')
-          GROUP BY ${typeCol || 'NULL'}
+          JOIN ${platform.tables.orders} o ON oi.${itemOrderId.actualColumn} = o.${orderOrderId.actualColumn}
+          JOIN ${platform.tables.products} p ON oi.${productId.actualColumn} = p.${productSchema.productId?.actualColumn || 'id'}
+          WHERE o.${orderCreatedAt.actualColumn} >= NOW() - INTERVAL '${days} days'
+            AND ${dateMatch}
+          GROUP BY ${productType || 'NULL'}
         `)
         results.push(...data)
       } catch (err) {
@@ -540,6 +609,13 @@ export function formatDate(dateString: string): string {
   })
 }
 
+/**
+ * Clear schema cache (useful for testing or when schema changes)
+ */
+export function clearSchemaCache() {
+  clearDynamicSchemaCache()
+}
+
 // Export all presets as an object
 export const presets = {
   getShopInfo,
@@ -553,6 +629,7 @@ export const presets = {
   getRevenueByCategory,
   getDataCatalog,
   getConnectedPlatformsSummary,
+  clearSchemaCache,
   formatCurrency,
   formatDate
 }
