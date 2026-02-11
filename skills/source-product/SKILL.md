@@ -48,14 +48,22 @@ npm run get:accounts
 npm run search:text -- "wireless earbuds"
 ```
 
-### Search Products by Image URL
+### Search Products by Image
+
+**By Image URL:**
 ```bash
 npm run search:image -- "https://example.com/product-image.jpg"
 ```
 
-### Search Products by Local Image Path
+**By Local Image Path:**
 ```bash
 npm run search:image -- "/path/to/product-image.jpg"
+```
+
+**By Base64 String:**
+```bash
+npm run search:image -- --base64 "data:image/jpeg;base64,..."
+npm run search:image -- --base64 "iVBORw0KGgoAAAANS..."
 ```
 
 ## Common Use Cases
@@ -68,6 +76,12 @@ npm run search:text -- "iPhone case"
 
 # Image search with URL
 npm run search:image -- "https://example.com/iphone-case.jpg"
+
+# Image search with local file
+npm run search:image -- "./product-photo.jpg"
+
+# Image search with base64 (e.g., from chat upload)
+npm run search:image -- --base64 "data:image/jpeg;base64,..."
 ```
 
 ### Supplier Discovery
@@ -100,7 +114,7 @@ The skill uses the `workspace_id` to:
 
 | NPM Script | Description |
 |------------|-------------|
-| `search:image` | Search products by image (URL or local path) |
+| `search:image` | Search products by image (URL, local path, or base64) |
 | `search:text` | Search products by text query |
 | `get:accounts` | List AliExpress accounts for current workspace |
 | `test:token` | Test if access token is valid |
@@ -115,11 +129,14 @@ Searches AliExpress products by keyword. Accepts:
 - Optional: `country_code`, `category_id`, `sort_by`, `page_size`, etc.
 
 ### aliexpress-image-search
-Searches AliExpress products by image URL. Accepts:
+Searches AliExpress products by image. Accepts:
 - `workspace_id`: Workspace UUID (from config)
 - `access_token`: JWT token (from config)
-- `image_url`: Public URL of product image
+- `image_url`: Public URL of product image (optional)
+- `image_base64`: Base64 encoded image string, with or without data URI prefix (optional)
 - Optional: `ship_to`, `sort_type`, `currency`, `search_type`
+
+**Note:** Either `image_url` OR `image_base64` is required.
 
 ## Database Tables Used
 
@@ -157,7 +174,10 @@ Searches AliExpress products by image URL. Accepts:
 
 1. AliExpress tokens expire and must be refreshed via OAuth flow
 2. Rate limiting applies to API calls
-3. Image search requires publicly accessible image URLs
+3. Image search supports:
+   - Publicly accessible image URLs (JPEG, PNG, GIF, WebP, AVIF)
+   - Local image files (automatically converted to base64)
+   - Base64 encoded images (with or without data URI prefix)
 4. Workspace must have AliExpress integration enabled
 5. Multiple AliExpress accounts per workspace are supported
 6. Users can only READ AliExpress account mappings (RLS enforced)

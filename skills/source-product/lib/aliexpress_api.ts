@@ -38,7 +38,8 @@ export interface SearchTextParams {
 }
 
 export interface SearchImageParams {
-  image_url: string;
+  image_url?: string;
+  image_base64?: string;
   ship_to?: string;
   sort_type?: string;
   sort_order?: string;
@@ -215,15 +216,18 @@ export async function searchTextProducts(
  * 1. Validates JWT token
  * 2. Verifies workspace membership
  * 3. Gets AliExpress account for workspace
- * 4. Downloads image and converts to base64
+ * 4. Processes image (from URL or base64)
  * 5. Calls AliExpress image search API
  * 6. Returns formatted products with similarity scores
+ *
+ * @param params - Search parameters, either image_url or image_base64 is required
  */
 export async function searchImageProducts(
   params: SearchImageParams
 ): Promise<AliExpressProduct[]> {
   const {
     image_url,
+    image_base64,
     ship_to = 'US',
     sort_type = 'orders',
     sort_order = 'desc',
@@ -231,21 +235,30 @@ export async function searchImageProducts(
     search_type = 'similar',
   } = params;
 
-  if (!image_url || !image_url.trim()) {
-    throw new Error('Image URL parameter is required');
+  // Validate that either image_url or image_base64 is provided
+  if ((!image_url || !image_url.trim()) && (!image_base64 || !image_base64.trim())) {
+    throw new Error('Either image_url or image_base64 parameter is required');
   }
 
   try {
+    const body: Record<string, any> = {
+      ship_to,
+      sort_type,
+      sort_order,
+      currency,
+      search_type,
+    };
+
+    // Add either image_url or image_base64 to request body
+    if (image_base64 && image_base64.trim()) {
+      body.image_base64 = image_base64;
+    } else if (image_url && image_url.trim()) {
+      body.image_url = image_url;
+    }
+
     const result = await callEdgeFunction<EdgeFunctionResponse>(
       'aliexpress-image-search',
-      {
-        image_url,
-        ship_to,
-        sort_type,
-        sort_order,
-        currency,
-        search_type,
-      }
+      body
     );
 
     console.log(
