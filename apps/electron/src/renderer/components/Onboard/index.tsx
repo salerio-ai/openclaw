@@ -67,6 +67,7 @@ export default function Onboard({ onComplete, onCancel }: OnboardProps) {
         onModelContinue={providerSetup.handleModelContinue}
         onSelect={providerSetup.handleProviderSelect}
         onBack={handleBack}
+        showClose={false}
       />
     );
   }

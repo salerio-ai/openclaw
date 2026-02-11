@@ -4,6 +4,7 @@ import type { OpenClawConfig } from "../config/config.js";
 import type { MsgContext } from "./templating.js";
 import { getChannelDock, listChannelDocks } from "../channels/dock.js";
 import { normalizeAnyChannelId } from "../channels/registry.js";
+import { isInternalMessageChannel } from "../utils/message-channel.js";
 
 export type CommandAuthorization = {
   providerId?: ChannelId;
@@ -15,6 +16,13 @@ export type CommandAuthorization = {
 };
 
 function resolveProviderFromContext(ctx: MsgContext, cfg: OpenClawConfig): ChannelId | undefined {
+  if (
+    isInternalMessageChannel(ctx.Provider) ||
+    isInternalMessageChannel(ctx.Surface) ||
+    isInternalMessageChannel(ctx.OriginatingChannel)
+  ) {
+    return undefined;
+  }
   const direct =
     normalizeAnyChannelId(ctx.Provider) ??
     normalizeAnyChannelId(ctx.Surface) ??

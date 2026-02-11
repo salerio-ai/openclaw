@@ -42,6 +42,7 @@ export default function ProviderSetupPage({ onDone }: ProviderSetupPageProps) {
       onModelContinue={providerSetup.handleModelContinue}
       onSelect={providerSetup.handleProviderSelect}
       onBack={handleReturn}
+      showClose
     />
   );
 }

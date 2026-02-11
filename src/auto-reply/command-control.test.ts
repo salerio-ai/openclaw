@@ -18,6 +18,27 @@ afterEach(() => {
 });
 
 describe("resolveCommandAuthorization", () => {
+  it("does not infer channel ownership for webchat", () => {
+    const cfg = {
+      channels: { whatsapp: { allowFrom: ["+123"] } },
+    } as OpenClawConfig;
+
+    const ctx = {
+      Provider: "webchat",
+      Surface: "webchat",
+      SenderId: "web-ui",
+    } as MsgContext;
+
+    const auth = resolveCommandAuthorization({
+      ctx,
+      cfg,
+      commandAuthorized: true,
+    });
+
+    expect(auth.isAuthorizedSender).toBe(true);
+    expect(auth.providerId).toBeUndefined();
+  });
+
   it("falls back from empty SenderId to SenderE164", () => {
     const cfg = {
       channels: { whatsapp: { allowFrom: ["+123"] } },
