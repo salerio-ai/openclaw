@@ -75,7 +75,7 @@ describe("pw-ai", () => {
 
     const mod = await importModule();
     const res = await mod.snapshotAiViaPlaywright({
-      cdpUrl: "http://127.0.0.1:18792",
+      cdpUrl: "http://127.0.0.1:18002",
       targetId: "T2",
     });
 
@@ -94,7 +94,7 @@ describe("pw-ai", () => {
 
     const mod = await importModule();
     const res = await mod.snapshotAiViaPlaywright({
-      cdpUrl: "http://127.0.0.1:18792",
+      cdpUrl: "http://127.0.0.1:18002",
       targetId: "T1",
     });
 
@@ -104,7 +104,7 @@ describe("pw-ai", () => {
     });
 
     await mod.clickViaPlaywright({
-      cdpUrl: "http://127.0.0.1:18792",
+      cdpUrl: "http://127.0.0.1:18002",
       targetId: "T1",
       ref: "e1",
     });
@@ -123,7 +123,7 @@ describe("pw-ai", () => {
 
     const mod = await importModule();
     const res = await mod.snapshotAiViaPlaywright({
-      cdpUrl: "http://127.0.0.1:18792",
+      cdpUrl: "http://127.0.0.1:18002",
       targetId: "T1",
       maxChars: 10,
     });
@@ -141,7 +141,7 @@ describe("pw-ai", () => {
 
     const mod = await importModule();
     await mod.clickViaPlaywright({
-      cdpUrl: "http://127.0.0.1:18792",
+      cdpUrl: "http://127.0.0.1:18002",
       targetId: "T1",
       ref: "76",
     });
@@ -159,7 +159,7 @@ describe("pw-ai", () => {
     const mod = await importModule();
     await expect(
       mod.snapshotAiViaPlaywright({
-        cdpUrl: "http://127.0.0.1:18792",
+        cdpUrl: "http://127.0.0.1:18002",
         targetId: "T1",
       }),
     ).rejects.toThrow(/_snapshotForAI/i);
@@ -174,11 +174,11 @@ describe("pw-ai", () => {
 
     const mod = await importModule();
     await mod.snapshotAiViaPlaywright({
-      cdpUrl: "http://127.0.0.1:18792",
+      cdpUrl: "http://127.0.0.1:18002",
       targetId: "T1",
     });
     await mod.clickViaPlaywright({
-      cdpUrl: "http://127.0.0.1:18792",
+      cdpUrl: "http://127.0.0.1:18002",
       targetId: "T1",
       ref: "1",
     });

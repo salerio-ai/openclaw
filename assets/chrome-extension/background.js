@@ -1,4 +1,4 @@
-const DEFAULT_PORT = 18792
+const DEFAULT_PORT = 18002
 
 const BADGE = {
   on: { text: 'ON', color: '#FF5A36' },

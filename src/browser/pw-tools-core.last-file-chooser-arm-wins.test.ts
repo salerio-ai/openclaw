@@ -77,11 +77,11 @@ describe("pw-tools-core", () => {
 
     const mod = await importModule();
     await mod.armFileUploadViaPlaywright({
-      cdpUrl: "http://127.0.0.1:18792",
+      cdpUrl: "http://127.0.0.1:18002",
       paths: ["/tmp/1"],
     });
     await mod.armFileUploadViaPlaywright({
-      cdpUrl: "http://127.0.0.1:18792",
+      cdpUrl: "http://127.0.0.1:18002",
       paths: ["/tmp/2"],
     });
 
@@ -103,7 +103,7 @@ describe("pw-tools-core", () => {
 
     const mod = await importModule();
     await mod.armDialogViaPlaywright({
-      cdpUrl: "http://127.0.0.1:18792",
+      cdpUrl: "http://127.0.0.1:18002",
       accept: true,
       promptText: "x",
     });
@@ -118,7 +118,7 @@ describe("pw-tools-core", () => {
     waitForEvent.mockClear();
 
     await mod.armDialogViaPlaywright({
-      cdpUrl: "http://127.0.0.1:18792",
+      cdpUrl: "http://127.0.0.1:18002",
       accept: false,
     });
     await Promise.resolve();
@@ -147,7 +147,7 @@ describe("pw-tools-core", () => {
 
     const mod = await importModule();
     await mod.waitForViaPlaywright({
-      cdpUrl: "http://127.0.0.1:18792",
+      cdpUrl: "http://127.0.0.1:18002",
       selector: "#main",
       url: "**/dash",
       loadState: "networkidle",

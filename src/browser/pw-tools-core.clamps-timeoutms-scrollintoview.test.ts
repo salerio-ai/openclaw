@@ -55,7 +55,7 @@ describe("pw-tools-core", () => {
 
     const mod = await importModule();
     await mod.scrollIntoViewViaPlaywright({
-      cdpUrl: "http://127.0.0.1:18792",
+      cdpUrl: "http://127.0.0.1:18002",
       targetId: "T1",
       ref: "1",
       timeoutMs: 50,
@@ -73,7 +73,7 @@ describe("pw-tools-core", () => {
     const mod = await importModule();
     await expect(
       mod.scrollIntoViewViaPlaywright({
-        cdpUrl: "http://127.0.0.1:18792",
+        cdpUrl: "http://127.0.0.1:18002",
         targetId: "T1",
         ref: "1",
       }),
@@ -89,7 +89,7 @@ describe("pw-tools-core", () => {
     const mod = await importModule();
     await expect(
       mod.scrollIntoViewViaPlaywright({
-        cdpUrl: "http://127.0.0.1:18792",
+        cdpUrl: "http://127.0.0.1:18002",
         targetId: "T1",
         ref: "1",
       }),
@@ -105,7 +105,7 @@ describe("pw-tools-core", () => {
     const mod = await importModule();
     await expect(
       mod.clickViaPlaywright({
-        cdpUrl: "http://127.0.0.1:18792",
+        cdpUrl: "http://127.0.0.1:18002",
         targetId: "T1",
         ref: "1",
       }),
@@ -121,7 +121,7 @@ describe("pw-tools-core", () => {
     const mod = await importModule();
     await expect(
       mod.clickViaPlaywright({
-        cdpUrl: "http://127.0.0.1:18792",
+        cdpUrl: "http://127.0.0.1:18002",
         targetId: "T1",
         ref: "1",
       }),
@@ -139,7 +139,7 @@ describe("pw-tools-core", () => {
     const mod = await importModule();
     await expect(
       mod.clickViaPlaywright({
-        cdpUrl: "http://127.0.0.1:18792",
+        cdpUrl: "http://127.0.0.1:18002",
         targetId: "T1",
         ref: "1",
       }),

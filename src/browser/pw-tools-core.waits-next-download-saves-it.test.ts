@@ -70,7 +70,7 @@ describe("pw-tools-core", () => {
     const mod = await importModule();
     const targetPath = path.resolve("/tmp/file.bin");
     const p = mod.waitForDownloadViaPlaywright({
-      cdpUrl: "http://127.0.0.1:18792",
+      cdpUrl: "http://127.0.0.1:18002",
       targetId: "T1",
       path: targetPath,
       timeoutMs: 1000,
@@ -108,7 +108,7 @@ describe("pw-tools-core", () => {
     const mod = await importModule();
     const targetPath = path.resolve("/tmp/report.pdf");
     const p = mod.downloadViaPlaywright({
-      cdpUrl: "http://127.0.0.1:18792",
+      cdpUrl: "http://127.0.0.1:18002",
       targetId: "T1",
       ref: "e12",
       path: targetPath,
@@ -144,7 +144,7 @@ describe("pw-tools-core", () => {
 
     const mod = await importModule();
     const p = mod.responseBodyViaPlaywright({
-      cdpUrl: "http://127.0.0.1:18792",
+      cdpUrl: "http://127.0.0.1:18002",
       targetId: "T1",
       url: "**/api/data",
       timeoutMs: 1000,
@@ -168,7 +168,7 @@ describe("pw-tools-core", () => {
 
     const mod = await importModule();
     await mod.scrollIntoViewViaPlaywright({
-      cdpUrl: "http://127.0.0.1:18792",
+      cdpUrl: "http://127.0.0.1:18002",
       targetId: "T1",
       ref: "1",
     });
@@ -183,7 +183,7 @@ describe("pw-tools-core", () => {
     const mod = await importModule();
     await expect(
       mod.scrollIntoViewViaPlaywright({
-        cdpUrl: "http://127.0.0.1:18792",
+        cdpUrl: "http://127.0.0.1:18002",
         targetId: "T1",
         ref: "   ",
       }),

@@ -221,8 +221,8 @@ describe("browser client", () => {
             enabled: true,
             running: true,
             pid: 1,
-            cdpPort: 18792,
-            cdpUrl: "http://127.0.0.1:18792",
+            cdpPort: 18002,
+            cdpUrl: "http://127.0.0.1:18002",
             chosenBrowser: "chrome",
             userDataDir: "/tmp",
             color: "#FF4500",
@@ -237,7 +237,7 @@ describe("browser client", () => {
 
     await expect(browserStatus("http://127.0.0.1:18791")).resolves.toMatchObject({
       running: true,
-      cdpPort: 18792,
+      cdpPort: 18002,
     });
 
     await expect(browserTabs("http://127.0.0.1:18791")).resolves.toHaveLength(1);

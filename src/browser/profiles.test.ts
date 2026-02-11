@@ -108,12 +108,12 @@ describe("getUsedPorts", () => {
 
   it("extracts ports from profile configs", () => {
     const profiles = {
-      openclaw: { cdpPort: 18792 },
+      openclaw: { cdpPort: 18002 },
       work: { cdpPort: 18793 },
       personal: { cdpPort: 18795 },
     };
     const used = getUsedPorts(profiles);
-    expect(used).toEqual(new Set([18792, 18793, 18795]));
+    expect(used).toEqual(new Set([18002, 18793, 18795]));
   });
 
   it("extracts ports from cdpUrl when cdpPort is missing", () => {

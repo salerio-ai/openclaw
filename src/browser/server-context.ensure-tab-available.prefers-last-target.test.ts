@@ -72,8 +72,8 @@ describe("browser server-context ensureTabAvailable", () => {
         profiles: {
           chrome: {
             driver: "extension",
-            cdpUrl: "http://127.0.0.1:18792",
-            cdpPort: 18792,
+            cdpUrl: "http://127.0.0.1:18002",
+            cdpPort: 18002,
             color: "#00AA00",
           },
           openclaw: { cdpPort: 18800, color: "#FF4500" },
@@ -132,8 +132,8 @@ describe("browser server-context ensureTabAvailable", () => {
         profiles: {
           chrome: {
             driver: "extension",
-            cdpUrl: "http://127.0.0.1:18792",
-            cdpPort: 18792,
+            cdpUrl: "http://127.0.0.1:18002",
+            cdpPort: 18002,
             color: "#00AA00",
           },
           openclaw: { cdpPort: 18800, color: "#FF4500" },
@@ -183,8 +183,8 @@ describe("browser server-context ensureTabAvailable", () => {
         profiles: {
           chrome: {
             driver: "extension",
-            cdpUrl: "http://127.0.0.1:18792",
-            cdpPort: 18792,
+            cdpUrl: "http://127.0.0.1:18002",
+            cdpPort: 18002,
             color: "#00AA00",
           },
           openclaw: { cdpPort: 18800, color: "#FF4500" },

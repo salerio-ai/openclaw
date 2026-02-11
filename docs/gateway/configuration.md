@@ -2877,7 +2877,7 @@ Defaults:
 - enabled: `true`
 - evaluateEnabled: `true` (set `false` to disable `act:evaluate` and `wait --fn`)
 - control service: loopback only (port derived from `gateway.port`, default `18791`)
-- CDP URL: `http://127.0.0.1:18792` (control service + 1, legacy single-profile)
+- CDP URL: `http://127.0.0.1:18002` (control service + 1, legacy single-profile)
 - profile color: `#FF4500` (lobster-orange)
 - Note: the control server is started by the running gateway (OpenClaw.app menubar, or `openclaw gateway`).
 - Auto-detect order: default browser if Chromium-based; otherwise Chrome → Brave → Edge → Chromium → Chrome Canary.
@@ -2887,7 +2887,7 @@ Defaults:
   browser: {
     enabled: true,
     evaluateEnabled: true,
-    // cdpUrl: "http://127.0.0.1:18792", // legacy single-profile override
+    // cdpUrl: "http://127.0.0.1:18002", // legacy single-profile override
     defaultProfile: "chrome",
     profiles: {
       openclaw: { cdpPort: 18800, color: "#FF4500" },
@@ -3224,7 +3224,7 @@ If you need the backend to receive the prefixed path, set
 The Gateway serves a directory of HTML/CSS/JS over HTTP so iOS/Android nodes can simply `canvas.navigate` to it.
 
 Default root: `~/.bustly/workspace/canvas`  
-Default port: `18793` (chosen to avoid the openclaw browser CDP port `18792`)  
+Default port: `18793` (chosen to avoid the openclaw browser CDP port `18002`)  
 The server listens on the **gateway bind host** (LAN or Tailnet) so nodes can reach it.
 
 The server:

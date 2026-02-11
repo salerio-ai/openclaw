@@ -43,7 +43,7 @@ describe("pw-session getPageForTargetId", () => {
 
     const mod = await import("./pw-session.js");
     const resolved = await mod.getPageForTargetId({
-      cdpUrl: "http://127.0.0.1:18792",
+      cdpUrl: "http://127.0.0.1:18002",
       targetId: "NOT_A_TAB",
     });
     expect(resolved).toBe(page);
