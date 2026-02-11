@@ -70,6 +70,27 @@ let needsOnboardAtLaunch = false;
 let gatewayPort: number = 17999;
 let gatewayBind: string = "loopback";
 let gatewayToken: string | null = null;
+
+const EXTERNAL_NAV_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+
+function shouldOpenExternal(url: string): boolean {
+  if (!url) {
+    return false;
+  }
+  if (url.startsWith("about:") || url.startsWith("file:")) {
+    return false;
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return false;
+  }
+  return !EXTERNAL_NAV_HOSTS.has(parsed.hostname.toLowerCase());
+}
 let initResult: InitializationResult | null = null;
 let mainLogPath: string | null = null;
 
@@ -1519,6 +1540,22 @@ app.whenReady().then(async () => {
     }
   };
   loadDotEnv();
+
+  app.on("web-contents-created", (_event, contents) => {
+    contents.setWindowOpenHandler(({ url }) => {
+      if (shouldOpenExternal(url)) {
+        void shell.openExternal(url);
+        return { action: "deny" };
+      }
+      return { action: "allow" };
+    });
+    contents.on("will-navigate", (event, url) => {
+      if (shouldOpenExternal(url)) {
+        event.preventDefault();
+        void shell.openExternal(url);
+      }
+    });
+  });
 
   // If no Bustly OAuth state exists, remove the config/state directory.
   const stateDir = resolveElectronStateDir();
