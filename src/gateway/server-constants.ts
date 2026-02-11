@@ -1,4 +1,5 @@
-export const MAX_PAYLOAD_BYTES = 512 * 1024; // cap incoming frame size
+// Allow chat attachments (~5MB raw, ~6.7MB base64 + JSON overhead).
+export const MAX_PAYLOAD_BYTES = 8 * 1024 * 1024; // cap incoming frame size
 export const MAX_BUFFERED_BYTES = 1.5 * 1024 * 1024; // per-connection send buffer limit
 
 const DEFAULT_MAX_CHAT_HISTORY_MESSAGES_BYTES = 6 * 1024 * 1024; // keep history responses comfortably under client WS limits
