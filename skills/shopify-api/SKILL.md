@@ -1,7 +1,7 @@
 ---
 name: shopify-api
 description: Call Shopify Admin GraphQL via the shopify-api edge function. Use for write operations (mutations) or admin actions that must go through Shopify Admin GraphQL. For read-only analytics or reporting, use bustly-search-data instead.
-metadata: {"openclaw":{"always":true,"requires":{"env":["SEARCH_DATA_SUPABASE_URL","SEARCH_DATA_SUPABASE_ANON_KEY","SEARCH_DATA_SUPABASE_ACCESS_TOKEN","SEARCH_DATA_WORKSPACE_ID"]}}}
+metadata: {"openclaw":{"always":true}}
 ---
 
 This skill provides a thin client for Shopify Admin GraphQL calls through the Supabase Edge Function `/functions/v1/shopify-api`.

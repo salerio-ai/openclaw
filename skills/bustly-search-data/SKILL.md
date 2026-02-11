@@ -1,7 +1,7 @@
 ---
 name: bustly-search-data
 description: Query e-commerce business data from Shopify, Google Ads, BigCommerce, WooCommerce, and Magento via Supabase data warehouse. Use when users ask about shop performance, sales data, orders, customers, products, revenue summaries, business reports, annual summaries, or any questions about their e-commerce store data or business metrics.
-metadata: {"openclaw":{"always":true,"requires":{"env":["SEARCH_DATA_SUPABASE_URL","SEARCH_DATA_SUPABASE_ANON_KEY","SEARCH_DATA_SUPABASE_ACCESS_TOKEN","SEARCH_DATA_WORKSPACE_ID"]}}}
+metadata: {"openclaw":{"always":true}}
 ---
 
 This skill provides e-commerce SaaS data query capabilities, reading business data from platforms like Shopify, BigCommerce, WooCommerce, Magento, and Google Ads via a Supabase data warehouse.

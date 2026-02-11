@@ -1,7 +1,7 @@
 ---
 name: source-product
 description: AliExpress product sourcing skill - search products by image or text, find suppliers, and get product details for dropshipping and e-commerce.
-metadata: {"openclaw":{"always":true,"requires":{"env":["SEARCH_DATA_SUPABASE_URL","SEARCH_DATA_SUPABASE_ANON_KEY","SEARCH_DATA_SUPABASE_ACCESS_TOKEN","SEARCH_DATA_WORKSPACE_ID"]}}}
+metadata: {"openclaw":{"always":true}}
 ---
 
 This skill provides AliExpress product sourcing capabilities, helping you find suppliers and products through image search or text search.

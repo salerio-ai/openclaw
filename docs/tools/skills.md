@@ -14,7 +14,7 @@ OpenClaw uses **[AgentSkills](https://agentskills.io)-compatible** skill folders
 
 Skills are loaded from **three** places:
 
-1. **Bundled skills**: shipped with the install (npm package or OpenClaw.app)
+1. **Bundled skills**: shipped with the install (Bustly.app)
 2. **Managed/local skills**: `~/.bustly/skills`
 3. **Workspace skills**: `<workspace>/skills`
 
