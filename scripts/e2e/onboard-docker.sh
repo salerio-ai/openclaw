@@ -10,9 +10,20 @@ docker build -t "$IMAGE_NAME" -f "$ROOT_DIR/scripts/e2e/Dockerfile" "$ROOT_DIR"
 echo "Running onboarding E2E..."
 docker run --rm -t "$IMAGE_NAME" bash -lc '
   set -euo pipefail
-  trap "" PIPE
-  export TERM=xterm-256color
-  ONBOARD_FLAGS="--flow quickstart --auth-choice skip --skip-channels --skip-skills --skip-daemon --skip-ui"
+	  trap "" PIPE
+	  export TERM=xterm-256color
+	  ONBOARD_FLAGS="--flow quickstart --auth-choice skip --skip-channels --skip-skills --skip-daemon --skip-ui"
+	  # tsdown may emit dist/index.js or dist/index.mjs depending on runtime/bundler.
+	  if [ -f dist/index.mjs ]; then
+	    OPENCLAW_ENTRY="dist/index.mjs"
+	  elif [ -f dist/index.js ]; then
+	    OPENCLAW_ENTRY="dist/index.js"
+	  else
+	    echo "Missing dist/index.(m)js (build output):"
+	    ls -la dist || true
+	    exit 1
+	  fi
+	  export OPENCLAW_ENTRY
 
   # Provide a minimal trash shim to avoid noisy "missing trash" logs in containers.
   export PATH="/tmp/openclaw-bin:$PATH"
@@ -82,16 +93,16 @@ TRASH
     done
   }
 
-  start_gateway() {
-    node dist/index.js gateway --port 17999 --bind loopback --allow-unconfigured > /tmp/gateway-e2e.log 2>&1 &
-    GATEWAY_PID="$!"
-  }
+	  start_gateway() {
+	    node "$OPENCLAW_ENTRY" gateway --port 18789 --bind loopback --allow-unconfigured > /tmp/gateway-e2e.log 2>&1 &
+	    GATEWAY_PID="$!"
+	  }
 
   wait_for_gateway() {
     for _ in $(seq 1 20); do
       if node --input-type=module -e "
         import net from 'node:net';
-        const socket = net.createConnection({ host: '127.0.0.1', port: 17999 });
+        const socket = net.createConnection({ host: '127.0.0.1', port: 18789 });
         const timeout = setTimeout(() => {
           socket.destroy();
           process.exit(1);
@@ -108,7 +119,7 @@ TRASH
       " >/dev/null 2>&1; then
         return 0
       fi
-      if [ -f /tmp/gateway-e2e.log ] && grep -E -q "listening on ws://[^ ]+:17999" /tmp/gateway-e2e.log; then
+      if [ -f /tmp/gateway-e2e.log ] && grep -E -q "listening on ws://[^ ]+:18789" /tmp/gateway-e2e.log; then
         if [ -n "${GATEWAY_PID:-}" ] && kill -0 "$GATEWAY_PID" 2>/dev/null; then
           return 0
         fi
@@ -184,9 +195,9 @@ TRASH
     local send_fn="$3"
     local validate_fn="${4:-}"
 
-    # Default onboarding command wrapper.
-    run_wizard_cmd "$case_name" "$home_dir" "node dist/index.js onboard $ONBOARD_FLAGS" "$send_fn" true "$validate_fn"
-  }
+	    # Default onboarding command wrapper.
+	    run_wizard_cmd "$case_name" "$home_dir" "node \"$OPENCLAW_ENTRY\" onboard $ONBOARD_FLAGS" "$send_fn" true "$validate_fn"
+	  }
 
   make_home() {
     mktemp -d "/tmp/openclaw-e2e-$1.XXXXXX"
@@ -263,14 +274,14 @@ TRASH
     send "" 1.0
   }
 
-  run_case_local_basic() {
-    local home_dir
-    home_dir="$(make_home local-basic)"
-    export HOME="$home_dir"
-    mkdir -p "$HOME"
-    node dist/index.js onboard \
-      --non-interactive \
-      --accept-risk \
+	  run_case_local_basic() {
+	    local home_dir
+	    home_dir="$(make_home local-basic)"
+	    export HOME="$home_dir"
+	    mkdir -p "$HOME"
+	    node "$OPENCLAW_ENTRY" onboard \
+	      --non-interactive \
+	      --accept-risk \
       --flow quickstart \
       --mode local \
       --skip-channels \
@@ -280,9 +291,9 @@ TRASH
       --skip-health
 
     # Assert config + workspace scaffolding.
-    workspace_dir="$HOME/openclaw"
-    config_path="$HOME/.bustly/openclaw.json"
-    sessions_dir="$HOME/.bustly/agents/main/sessions"
+    workspace_dir="$HOME/.openclaw/workspace"
+    config_path="$HOME/.openclaw/openclaw.json"
+    sessions_dir="$HOME/.openclaw/agents/main/sessions"
 
     assert_file "$config_path"
     assert_dir "$sessions_dir"
@@ -343,16 +354,16 @@ NODE
     local home_dir
     home_dir="$(make_home remote-non-interactive)"
     export HOME="$home_dir"
-    mkdir -p "$HOME"
-    # Smoke test non-interactive remote config write.
-    node dist/index.js onboard --non-interactive --accept-risk \
-      --mode remote \
-      --remote-url ws://gateway.local:17999 \
+	    mkdir -p "$HOME"
+	    # Smoke test non-interactive remote config write.
+	    node "$OPENCLAW_ENTRY" onboard --non-interactive --accept-risk \
+	      --mode remote \
+	      --remote-url ws://gateway.local:18789 \
       --remote-token remote-token \
       --skip-skills \
       --skip-health
 
-    config_path="$HOME/.bustly/openclaw.json"
+    config_path="$HOME/.openclaw/openclaw.json"
     assert_file "$config_path"
 
     CONFIG_PATH="$config_path" node --input-type=module - <<'"'"'NODE'"'"'
@@ -365,7 +376,7 @@ const errors = [];
 if (cfg?.gateway?.mode !== "remote") {
   errors.push(`gateway.mode mismatch (got ${cfg?.gateway?.mode ?? "unset"})`);
 }
-if (cfg?.gateway?.remote?.url !== "ws://gateway.local:17999") {
+if (cfg?.gateway?.remote?.url !== "ws://gateway.local:18789") {
   errors.push(`gateway.remote.url mismatch (got ${cfg?.gateway?.remote?.url ?? "unset"})`);
 }
 if (cfg?.gateway?.remote?.token !== "remote-token") {
@@ -386,21 +397,21 @@ NODE
     local home_dir
     home_dir="$(make_home reset-config)"
     export HOME="$home_dir"
-    mkdir -p "$HOME/.bustly"
+    mkdir -p "$HOME/.openclaw"
     # Seed a remote config to exercise reset path.
-    cat > "$HOME/.bustly/openclaw.json" <<'"'"'JSON'"'"'
+	    cat > "$HOME/.openclaw/openclaw.json" <<'"'"'JSON'"'"'
 {
   "agents": { "defaults": { "workspace": "/root/old" } },
   "gateway": {
     "mode": "remote",
-    "remote": { "url": "ws://old.example:17999", "token": "old-token" }
+    "remote": { "url": "ws://old.example:18789", "token": "old-token" }
   }
 }
 JSON
 
-    node dist/index.js onboard \
-      --non-interactive \
-      --accept-risk \
+	    node "$OPENCLAW_ENTRY" onboard \
+	      --non-interactive \
+	      --accept-risk \
       --flow quickstart \
       --mode local \
       --reset \
@@ -410,7 +421,7 @@ JSON
       --skip-ui \
       --skip-health
 
-    config_path="$HOME/.bustly/openclaw.json"
+    config_path="$HOME/.openclaw/openclaw.json"
     assert_file "$config_path"
 
     CONFIG_PATH="$config_path" node --input-type=module - <<'"'"'NODE'"'"'
@@ -438,12 +449,12 @@ NODE
   }
 
   run_case_channels() {
-    local home_dir
-    home_dir="$(make_home channels)"
-    # Channels-only configure flow.
-    run_wizard_cmd channels "$home_dir" "node dist/index.js configure --section channels" send_channels_flow
+	    local home_dir
+	    home_dir="$(make_home channels)"
+	    # Channels-only configure flow.
+	    run_wizard_cmd channels "$home_dir" "node \"$OPENCLAW_ENTRY\" configure --section channels" send_channels_flow
 
-    config_path="$HOME/.bustly/openclaw.json"
+    config_path="$HOME/.openclaw/openclaw.json"
     assert_file "$config_path"
 
     CONFIG_PATH="$config_path" node --input-type=module - <<'"'"'NODE'"'"'
@@ -481,9 +492,9 @@ NODE
     local home_dir
     home_dir="$(make_home skills)"
     export HOME="$home_dir"
-    mkdir -p "$HOME/.bustly"
+    mkdir -p "$HOME/.openclaw"
     # Seed skills config to ensure it survives the wizard.
-    cat > "$HOME/.bustly/openclaw.json" <<'"'"'JSON'"'"'
+	    cat > "$HOME/.openclaw/openclaw.json" <<'"'"'JSON'"'"'
 {
   "skills": {
     "allowBundled": ["__none__"],
@@ -492,9 +503,9 @@ NODE
 }
 JSON
 
-    run_wizard_cmd skills "$home_dir" "node dist/index.js configure --section skills" send_skills_flow
+	    run_wizard_cmd skills "$home_dir" "node \"$OPENCLAW_ENTRY\" configure --section skills" send_skills_flow
 
-    config_path="$HOME/.bustly/openclaw.json"
+    config_path="$HOME/.openclaw/openclaw.json"
     assert_file "$config_path"
 
     CONFIG_PATH="$config_path" node --input-type=module - <<'"'"'NODE'"'"'

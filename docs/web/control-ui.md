@@ -10,7 +10,7 @@ title: "Control UI"
 
 The Control UI is a small **Vite + Lit** single-page app served by the Gateway:
 
-- default: `http://<host>:17999/`
+- default: `http://<host>:18789/`
 - optional prefix: set `gateway.controlUi.basePath` (e.g. `/openclaw`)
 
 It speaks **directly to the Gateway WebSocket** on the same port.
@@ -19,7 +19,7 @@ It speaks **directly to the Gateway WebSocket** on the same port.
 
 If the Gateway is running on the same computer, open:
 
-- http://127.0.0.1:17999/ (or http://localhost:17999/)
+- [http://127.0.0.1:18789/](http://127.0.0.1:18789/) (or [http://localhost:18789/](http://localhost:18789/))
 
 If the page fails to load, start the Gateway first: `openclaw gateway`.
 
@@ -71,13 +71,18 @@ you revoke it with `openclaw devices revoke --device <id> --role <role>`. See
 - Skills: status, enable/disable, install, API key updates (`skills.*`)
 - Nodes: list + caps (`node.list`)
 - Exec approvals: edit gateway or node allowlists + ask policy for `exec host=gateway/node` (`exec.approvals.*`)
-- Config: view/edit `~/.bustly/openclaw.json` (`config.get`, `config.set`)
+- Config: view/edit `~/.openclaw/openclaw.json` (`config.get`, `config.set`)
 - Config: apply + restart with validation (`config.apply`) and wake the last active session
 - Config writes include a base-hash guard to prevent clobbering concurrent edits
 - Config schema + form rendering (`config.schema`, including plugin + channel schemas); Raw JSON editor remains available
 - Debug: status/health/models snapshots + event log + manual RPC calls (`status`, `health`, `models.list`)
 - Logs: live tail of gateway file logs with filter/export (`logs.tail`)
 - Update: run a package/git update + restart (`update.run`) with a restart report
+
+Cron jobs panel notes:
+
+- For isolated jobs, delivery defaults to announce summary. You can switch to none if you want internal-only runs.
+- Channel/target fields appear when announce is selected.
 
 ## Chat behavior
 
@@ -119,7 +124,7 @@ openclaw gateway --bind tailnet --token "$(openssl rand -hex 32)"
 
 Then open:
 
-- `http://<tailscale-ip>:17999/` (or your configured `gateway.controlUi.basePath`)
+- `http://<tailscale-ip>:18789/` (or your configured `gateway.controlUi.basePath`)
 
 Paste the token into the UI settings (sent as `connect.params.auth.token`).
 
@@ -132,7 +137,7 @@ OpenClaw **blocks** Control UI connections without device identity.
 **Recommended fix:** use HTTPS (Tailscale Serve) or open the UI locally:
 
 - `https://<magicdns>/` (Serve)
-- `http://127.0.0.1:17999/` (on the gateway host)
+- `http://127.0.0.1:18789/` (on the gateway host)
 
 **Downgrade example (token-only over HTTP):**
 
@@ -171,7 +176,7 @@ For local development (separate dev server):
 pnpm ui:dev # auto-installs UI deps on first run
 ```
 
-Then point the UI at your Gateway WS URL (e.g. `ws://127.0.0.1:17999`).
+Then point the UI at your Gateway WS URL (e.g. `ws://127.0.0.1:18789`).
 
 ## Debugging/testing: dev server + remote Gateway
 
@@ -183,19 +188,36 @@ locally but the Gateway runs elsewhere.
 2. Open a URL like:
 
 ```text
-http://localhost:5173/?gatewayUrl=ws://<gateway-host>:17999
+http://localhost:5173/?gatewayUrl=ws://<gateway-host>:18789
 ```
 
 Optional one-time auth (if needed):
 
 ```text
-http://localhost:5173/?gatewayUrl=wss://<gateway-host>:17999&token=<gateway-token>
+http://localhost:5173/?gatewayUrl=wss://<gateway-host>:18789&token=<gateway-token>
 ```
 
 Notes:
 
 - `gatewayUrl` is stored in localStorage after load and removed from the URL.
 - `token` is stored in localStorage; `password` is kept in memory only.
+- When `gatewayUrl` is set, the UI does not fall back to config or environment credentials.
+  Provide `token` (or `password`) explicitly. Missing explicit credentials is an error.
 - Use `wss://` when the Gateway is behind TLS (Tailscale Serve, HTTPS proxy, etc.).
+- `gatewayUrl` is only accepted in a top-level window (not embedded) to prevent clickjacking.
+- For cross-origin dev setups (e.g. `pnpm ui:dev` to a remote Gateway), add the UI
+  origin to `gateway.controlUi.allowedOrigins`.
+
+Example:
+
+```json5
+{
+  gateway: {
+    controlUi: {
+      allowedOrigins: ["http://localhost:5173"],
+    },
+  },
+}
+```
 
 Remote access setup details: [Remote access](/gateway/remote).

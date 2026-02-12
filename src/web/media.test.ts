@@ -2,7 +2,8 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import sharp from "sharp";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as ssrf from "../infra/net/ssrf.js";
 import { optimizeImageToPng } from "../media/image-ops.js";
 import { loadWebMedia, loadWebMediaRaw, optimizeImageToJpeg } from "./media.js";
 
@@ -31,9 +32,22 @@ function buildDeterministicBytes(length: number): Buffer {
 afterEach(async () => {
   await Promise.all(tmpFiles.map((file) => fs.rm(file, { force: true })));
   tmpFiles.length = 0;
+  vi.restoreAllMocks();
 });
 
 describe("web media loading", () => {
+  beforeEach(() => {
+    vi.spyOn(ssrf, "resolvePinnedHostname").mockImplementation(async (hostname) => {
+      const normalized = hostname.trim().toLowerCase().replace(/\.$/, "");
+      const addresses = ["93.184.216.34"];
+      return {
+        hostname: normalized,
+        addresses,
+        lookup: ssrf.createPinnedLookup({ hostname: normalized, addresses }),
+      };
+    });
+  });
+
   it("compresses large local images under the provided cap", async () => {
     const buffer = await sharp({
       create: {
@@ -276,5 +290,45 @@ describe("web media loading", () => {
     expect(result.kind).toBe("image");
     expect(result.contentType).toBe("image/jpeg");
     expect(result.buffer.length).toBeLessThanOrEqual(cap);
+  });
+});
+
+describe("local media root guard", () => {
+  it("rejects local paths outside allowed roots", async () => {
+    const pngBuffer = await sharp({
+      create: { width: 10, height: 10, channels: 3, background: "#00ff00" },
+    })
+      .png()
+      .toBuffer();
+    const file = await writeTempFile(pngBuffer, ".png");
+
+    // Explicit roots that don't contain the temp file.
+    await expect(
+      loadWebMedia(file, 1024 * 1024, { localRoots: ["/nonexistent-root"] }),
+    ).rejects.toThrow(/not under an allowed directory/i);
+  });
+
+  it("allows local paths under an explicit root", async () => {
+    const pngBuffer = await sharp({
+      create: { width: 10, height: 10, channels: 3, background: "#00ff00" },
+    })
+      .png()
+      .toBuffer();
+    const file = await writeTempFile(pngBuffer, ".png");
+
+    const result = await loadWebMedia(file, 1024 * 1024, { localRoots: [os.tmpdir()] });
+    expect(result.kind).toBe("image");
+  });
+
+  it("allows any path when localRoots is 'any'", async () => {
+    const pngBuffer = await sharp({
+      create: { width: 10, height: 10, channels: 3, background: "#00ff00" },
+    })
+      .png()
+      .toBuffer();
+    const file = await writeTempFile(pngBuffer, ".png");
+
+    const result = await loadWebMedia(file, 1024 * 1024, { localRoots: "any" });
+    expect(result.kind).toBe("image");
   });
 });
