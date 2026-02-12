@@ -6,7 +6,7 @@
  *   npm run search:image -- "https://example.com/product-image.jpg"
  *   npm run search:image -- "/path/to/local/image.jpg"
  *   npm run search:image -- --base64 "data:image/jpeg;base64,..."
- *   npm run search:image -- "https://example.com/product.jpg" --sortType "same"
+ *   npm run search:image -- "https://example.com/product.jpg" --sort-type "same"
  */
 
 import { readFileSync } from 'fs';
@@ -84,7 +84,7 @@ async function main() {
     console.error('  npm run search:image -- "https://example.com/product.jpg"');
     console.error('  npm run search:image -- "./product.jpg"');
     console.error('  npm run search:image -- --base64 "data:image/jpeg;base64,..."');
-    console.error('  npm run search:image -- "https://example.com/product.jpg" --sortType "same"');
+    console.error('  npm run search:image -- "https://example.com/product.jpg" --sort-type "same"');
     process.exit(1);
   }
 
@@ -109,33 +109,54 @@ async function main() {
       continue;
     }
 
-    // Check for optional parameters
-    if (arg.startsWith('--')) {
+    // Check for optional parameters (kebab-case)
+    if (arg?.startsWith('--')) {
       const key = arg.replace(/^--/, '');
       const value = args[i + 1];
 
-      if (!value) {
-        console.error(`Error: ${arg} requires a value`);
-        process.exit(1);
+      // Skip if no value provided or value is another flag
+      if (!value || value.startsWith('--')) {
+        console.warn(`Warning: ${arg} requires a value, skipping`);
+        i++;
+        continue;
       }
 
       switch (key) {
-        case 'shipTo':
+        case 'ship-to':
           params.ship_to = value;
+          i += 2;
           break;
-        case 'sortType':
+        case 'sort-type':
           params.sort_type = value;
+          i += 2;
           break;
-        case 'sortOrder':
+        case 'sort-order':
           params.sort_order = value;
+          i += 2;
           break;
-        case 'searchType':
+        case 'search-type':
           params.search_type = value;
+          i += 2;
           break;
         default:
-          console.error(`Warning: Unknown parameter ${key}`);
+          // Not a recognized parameter, might be the input (URL or file path)
+          if (!inputSource) {
+            const input = arg;
+            if (isUrl(input)) {
+              params.image_url = input;
+              inputSource = 'URL';
+            } else if (isFilePath(input)) {
+              params.image_base64 = fileToBase64(input);
+              inputSource = `file: ${input}`;
+            } else {
+              // Assume it's a base64 string without the flag
+              params.image_base64 = input;
+              inputSource = 'base64';
+            }
+          }
+          i++;
+          break;
       }
-      i += 2;
       continue;
     }
 
