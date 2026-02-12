@@ -50,7 +50,7 @@ export function resolveMessagePrefix(
     return "";
   }
 
-  return resolveIdentityNamePrefix(cfg, agentId) ?? opts?.fallback ?? "[openclaw]";
+  return resolveIdentityNamePrefix(cfg, agentId) ?? opts?.fallback ?? "[bustly]";
 }
 
 export function resolveResponsePrefix(cfg: OpenClawConfig, agentId: string): string | undefined {

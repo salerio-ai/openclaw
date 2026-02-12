@@ -163,7 +163,7 @@ describe("config identity defaults", () => {
         JSON.stringify(
           {
             messages: {
-              messagePrefix: "[openclaw]",
+              messagePrefix: "[bustly]",
               responsePrefix: "🦞",
             },
             channels: {

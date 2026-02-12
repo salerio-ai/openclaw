@@ -22,7 +22,7 @@ Examples:
 
 ```
 /debug show
-/debug set messages.responsePrefix="[openclaw]"
+/debug set messages.responsePrefix="[bustly]"
 /debug unset messages.responsePrefix
 /debug reset
 ```

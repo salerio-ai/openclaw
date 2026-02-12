@@ -97,7 +97,7 @@ When the wizard asks for your personal WhatsApp number, enter the phone you will
 }
 ```
 
-Self-chat replies default to `[{identity.name}]` when set (otherwise `[openclaw]`)
+Self-chat replies default to `[{identity.name}]` when set (otherwise `[bustly]`)
 if `messages.responsePrefix` is unset. Set it explicitly to customize or disable
 the prefix (use `""` to remove it).
 

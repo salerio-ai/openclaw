@@ -97,7 +97,7 @@ Save to `~/.bustly/openclaw.json` and you can DM the bot from that number.
 
   // Message formatting
   messages: {
-    messagePrefix: "[openclaw]",
+    messagePrefix: "[bustly]",
     responsePrefix: ">",
     ackReaction: "👀",
     ackReactionScope: "group-mentions",

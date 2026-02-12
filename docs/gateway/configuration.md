@@ -1519,7 +1519,7 @@ streaming, final replies) across channels unless already present.
 
 If `messages.responsePrefix` is unset, no prefix is applied by default. WhatsApp self-chat
 replies are the exception: they default to `[{identity.name}]` when set, otherwise
-`[openclaw]`, so same-phone conversations stay legible.
+`[bustly]`, so same-phone conversations stay legible.
 Set it to `"auto"` to derive `[{identity.name}]` for the routed agent (when set).
 
 #### Template variables
@@ -1548,9 +1548,9 @@ Unresolved variables remain as literal text.
 Example output: `[claude-opus-4-5 | think:high] Here's my response...`
 
 WhatsApp inbound prefix is configured via `channels.whatsapp.messagePrefix` (deprecated:
-`messages.messagePrefix`). Default stays **unchanged**: `"[openclaw]"` when
+`messages.messagePrefix`). Default stays **unchanged**: `"[bustly]"` when
 `channels.whatsapp.allowFrom` is empty, otherwise `""` (no prefix). When using
-`"[openclaw]"`, OpenClaw will instead use `[{identity.name}]` when the routed
+`"[bustly]"`, OpenClaw will instead use `[{identity.name}]` when the routed
 agent has `identity.name` set.
 
 `ackReaction` sends a best-effort emoji reaction to acknowledge inbound messages
