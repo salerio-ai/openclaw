@@ -30,6 +30,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // App info
   getAppInfo: () => ipcRenderer.invoke("get-app-info"),
+  updaterCheck: () => ipcRenderer.invoke("updater-check"),
+  updaterInstall: () => ipcRenderer.invoke("updater-install"),
 
   // Onboarding
   bustlyLogin: () => ipcRenderer.invoke("bustly-login"),
@@ -81,6 +83,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     const listener = (_event: any, data: any) => callback(data);
     ipcRenderer.on("main-log", listener);
     return () => ipcRenderer.removeListener("main-log", listener);
+  },
+  onUpdateStatus: (callback: any) => {
+    const listener = (_event: any, data: any) => callback(data);
+    ipcRenderer.on("update-status", listener);
+    return () => ipcRenderer.removeListener("update-status", listener);
   },
   onBustlyLoginRefresh: (callback: () => void) => {
     const listener = () => callback();

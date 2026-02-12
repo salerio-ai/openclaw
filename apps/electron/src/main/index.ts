@@ -13,6 +13,7 @@ import {
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { Socket } from "node:net";
+import updater from "electron-updater";
 import {
   initializeOpenClaw,
   getConfigPath,
@@ -62,6 +63,7 @@ import { startWebLoginWithQr, waitForWebLogin } from "../../../../src/web/login-
 import { webAuthExists } from "../../../../src/web/session";
 
 const __dirname = resolve(fileURLToPath(import.meta.url), "..");
+const autoUpdater = updater.autoUpdater;
 
 let gatewayProcess: ChildProcess | null = null;
 let mainWindow: BrowserWindow | null = null;
@@ -116,6 +118,7 @@ const DASHBOARD_CHANNEL_PLUGIN_IDS = ["whatsapp"] as const;
 const PRELOAD_PATH = process.env.NODE_ENV === "development"
   ? resolve(__dirname, "main/preload.js")
   : resolve(__dirname, "preload.js");
+const UPDATE_STATUS_CHANNEL = "update-status";
 
 function resolveUserPath(input: string, homeDir: string): string {
   const trimmed = input.trim();
@@ -166,6 +169,12 @@ function writeMainLog(message: string) {
   }
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("main-log", { message });
+  }
+}
+
+function sendUpdateStatus(event: string, payload?: Record<string, unknown>) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(UPDATE_STATUS_CHANNEL, { event, ...payload });
   }
 }
 
@@ -853,6 +862,92 @@ function createWindow(): void {
   });
 }
 
+function setupAutoUpdater(): void {
+  if (!app.isPackaged) {
+    writeMainLog("[Updater] Development mode: auto-updates enabled");
+  }
+
+  const updateUrl =
+    process.env.BUSTLY_UPDATE_URL?.trim();
+  const updateBaseUrl =
+    process.env.BUSTLY_UPDATE_BASE_URL?.trim();
+
+  const platformKey =
+    process.platform === "darwin"
+      ? "macos"
+      : process.platform === "win32"
+        ? "windows"
+        : "linux";
+  const normalizeBase = (input: string) => input.replace(/\/+$/, "");
+  const buildPlatformUrl = (base: string) => `${normalizeBase(base)}/${platformKey}/`;
+  const resolvedUpdateUrl = updateUrl || (updateBaseUrl ? buildPlatformUrl(updateBaseUrl) : "");
+
+  const appVersion = app.getVersion();
+  const prerelease = appVersion.includes("-") ? appVersion.split("-")[1] ?? "" : "";
+  const inferredChannel = prerelease ? prerelease.split(".")[0] ?? "latest" : "latest";
+  autoUpdater.channel = inferredChannel;
+  const channel = autoUpdater.channel ?? inferredChannel;
+  const metadataFile =
+    process.platform === "darwin"
+      ? (channel === "latest" ? "latest-mac.yml" : `${channel}-mac.yml`)
+      : channel === "latest"
+        ? "latest.yml"
+        : `${channel}.yml`;
+
+  writeMainLog(`[Updater] App version: ${appVersion}`);
+  writeMainLog(`[Updater] Channel: ${channel} metadata: ${metadataFile}`);
+
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  if (resolvedUpdateUrl) {
+    try {
+      autoUpdater.setFeedURL({ provider: "generic", url: resolvedUpdateUrl });
+      writeMainLog(`[Updater] Feed URL set: ${resolvedUpdateUrl}`);
+    } catch (error) {
+      writeMainLog(`[Updater] Failed to set feed URL: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  } else {
+    writeMainLog("[Updater] No update URL configured; using electron-builder publish config");
+  }
+
+  autoUpdater.on("checking-for-update", () => {
+    writeMainLog("[Updater] Checking for updates...");
+    sendUpdateStatus("checking");
+  });
+
+  autoUpdater.on("update-available", (info) => {
+    writeMainLog(`[Updater] Update available: ${info.version}`);
+    sendUpdateStatus("available", { info });
+  });
+
+  autoUpdater.on("update-not-available", (info) => {
+    writeMainLog(`[Updater] No updates available (current: ${info.version})`);
+    sendUpdateStatus("not-available", { info });
+  });
+
+  autoUpdater.on("error", (error) => {
+    writeMainLog(`[Updater] Error: ${error instanceof Error ? error.message : String(error)}`);
+    sendUpdateStatus("error", { error: error instanceof Error ? error.message : String(error) });
+  });
+
+  autoUpdater.on("download-progress", (progress) => {
+    sendUpdateStatus("download-progress", {
+      percent: progress.percent,
+      transferred: progress.transferred,
+      total: progress.total,
+      bytesPerSecond: progress.bytesPerSecond,
+    });
+  });
+
+  autoUpdater.on("update-downloaded", (info) => {
+    writeMainLog(`[Updater] Update downloaded: ${info.version}`);
+    sendUpdateStatus("downloaded", { info });
+  });
+
+  void autoUpdater.checkForUpdates();
+}
+
 function ensureWindow(): void {
   if (app.isReady()) {
     createWindow();
@@ -980,6 +1075,24 @@ function setupIpcHandlers(): void {
       electronVersion: process.versions.electron,
       nodeVersion: process.versions.node,
     };
+  });
+
+  ipcMain.handle("updater-check", async () => {
+    try {
+      await autoUpdater.checkForUpdates();
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle("updater-install", () => {
+    try {
+      autoUpdater.quitAndInstall();
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
   });
 
   // === Onboarding handlers ===
@@ -1543,6 +1656,7 @@ app.whenReady().then(async () => {
     }
   };
   loadDotEnv();
+  setupAutoUpdater();
 
   app.on("web-contents-created", (_event, contents) => {
     contents.setWindowOpenHandler(({ url }) => {
