@@ -17,6 +17,58 @@ type ImageBlock = {
   alt?: string;
 };
 
+/**
+ * Extract image URLs from [media attached: ...] text format.
+ * Handles both single file and multi-file formats:
+ * - [media attached: /path/to/file.png (image/png) | /path/to/file.png]
+ * - [media attached: /path/to/file.png | https://example.com/url]
+ * - [media attached N/M: /path/to/file.png | url]
+ */
+function extractMediaAttachedImages(text: string): ImageBlock[] {
+  const images: ImageBlock[] = [];
+  // Match [media attached: ...] or [media attached N/M: ...]
+  // Format: [media attached: localPath (mimeType) | urlOrPath] or [media attached: localPath | urlOrPath]
+  const pattern = /\[media attached(?:\s+\d+\/\d+)?:\s*([^\]]+)\]/gi;
+  let match;
+  while ((match = pattern.exec(text)) !== null) {
+    const inner = match[1].trim();
+    // Skip header lines like "[media attached: 3 files]"
+    if (/^\d+\s+files?$/i.test(inner)) {
+      continue;
+    }
+    // Extract path and optional URL - format: "path (type) | url" or "path | url"
+    // The url/path after | is what we can actually use
+    const pipeIndex = inner.lastIndexOf("|");
+    if (pipeIndex !== -1) {
+      const urlPart = inner.slice(pipeIndex + 1).trim();
+      if (urlPart) {
+        // Check if it's a usable URL (http/https or local path we can serve)
+        if (/^https?:\/\//i.test(urlPart)) {
+          images.push({ url: urlPart });
+        } else {
+          // It's a local path - serve via gateway media endpoint
+          // The path is typically like /Users/.../media/inbound/xxx.png
+          // We need to serve it via /api/media?path=...
+          images.push({ url: `/api/media?path=${encodeURIComponent(urlPart)}` });
+        }
+      }
+    } else {
+      // No pipe - try to use the whole thing as a path
+      // Format might be just "path (type)"
+      const pathMatch = inner.match(/^(.+?)\s*(?:\([^)]+\))?$/);
+      if (pathMatch?.[1]) {
+        const path = pathMatch[1].trim();
+        if (/^https?:\/\//i.test(path)) {
+          images.push({ url: path });
+        } else {
+          images.push({ url: `/api/media?path=${encodeURIComponent(path)}` });
+        }
+      }
+    }
+  }
+  return images;
+}
+
 function extractImages(message: unknown): ImageBlock[] {
   const m = message as Record<string, unknown>;
   const content = m.content;
@@ -47,8 +99,16 @@ function extractImages(message: unknown): ImageBlock[] {
         if (typeof imageUrl?.url === "string") {
           images.push({ url: imageUrl.url });
         }
+      } else if (b.type === "text" && typeof b.text === "string") {
+        // Extract images from [media attached: ...] text blocks
+        const mediaImages = extractMediaAttachedImages(b.text);
+        images.push(...mediaImages);
       }
     }
+  } else if (typeof content === "string") {
+    // Handle string content - extract [media attached: ...] patterns
+    const mediaImages = extractMediaAttachedImages(content);
+    images.push(...mediaImages);
   }
 
   return images;
