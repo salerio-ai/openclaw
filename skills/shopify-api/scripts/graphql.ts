@@ -3,8 +3,9 @@
  * Call Shopify Admin GraphQL via edge function
  *
  * Usage:
- *   npm run graphql -- "https://your-store.myshopify.com/admin/api/2025-01/graphql.json" "query { shop { name } }"
- *   npm run graphql -- "https://.../graphql.json" --file ./query.graphql --vars '{"first":10}'
+ *   npm run graphql -- "query { shop { name } }"
+ *   npm run graphql -- --file ./query.graphql --vars '{"first":10}'
+ *   npm run graphql -- --version 2025-01 "query { shop { name } }"
  */
 
 import { readFileSync } from 'fs';
@@ -18,13 +19,13 @@ async function main() {
   const args = process.argv.slice(2);
 
   if (args.length === 0) {
-    console.error('Usage: npm run graphql -- <endpoint> <query> [--vars <json>] [--file <path>]');
+    console.error('Usage: npm run graphql -- <query> [--vars <json>] [--file <path>] [--version <YYYY-MM>]');
     process.exit(1);
   }
 
-  let endpoint = '';
   let query = '';
   let variables: Record<string, unknown> | undefined;
+  let shopifyApiVersion: string | undefined;
 
   let i = 0;
   while (i < args.length) {
@@ -56,17 +57,19 @@ async function main() {
       continue;
     }
 
+    if (arg === '--version') {
+      const value = args[i + 1];
+      if (!value) break;
+      shopifyApiVersion = value;
+      i += 2;
+      continue;
+    }
+
     if (arg === '--file') {
       const value = args[i + 1];
       if (!value) break;
       query = readQueryFromFile(value);
       i += 2;
-      continue;
-    }
-
-    if (!endpoint) {
-      endpoint = arg;
-      i += 1;
       continue;
     }
 
@@ -79,11 +82,6 @@ async function main() {
     i += 1;
   }
 
-  if (!endpoint) {
-    console.error('Missing endpoint');
-    process.exit(1);
-  }
-
   if (!query) {
     console.error('Missing query. Provide an inline query or use --file <path>.');
     process.exit(1);
@@ -91,9 +89,9 @@ async function main() {
 
   try {
     const result = await callShopifyAdminGraphql({
-      endpoint,
       query,
       variables,
+      ...(shopifyApiVersion ? { shopify_api_version: shopifyApiVersion } : {}),
     });
 
     console.log(JSON.stringify(result, null, 2));

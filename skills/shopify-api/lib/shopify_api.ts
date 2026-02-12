@@ -17,7 +17,7 @@ function getEdgeFunctionUrl(): string {
 
 export interface RequestBody {
   workspace_id: string;
-  endpoint: string;
+  shopify_api_version?: string;
   query: string;
   variables?: Record<string, unknown>;
 }
@@ -48,9 +48,6 @@ async function callEdgeFunction<T>(body: RequestBody): Promise<T> {
     workspace_id: config.workspaceId!,
   };
 
-  if (!requestBody.endpoint || !requestBody.endpoint.trim()) {
-    throw new Error('endpoint is required');
-  }
   if (!requestBody.query || !requestBody.query.trim()) {
     throw new Error('query is required');
   }

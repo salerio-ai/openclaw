@@ -4,8 +4,7 @@
   "description": "Shopify Admin GraphQL skill via Supabase Edge Function",
   "type": "module",
   "scripts": {
-    "graphql": "tsx scripts/graphql.ts",
-    "test": "vitest run"
+    "graphql": "tsx scripts/graphql.ts"
   },
   "devDependencies": {
     "@types/node": "^20.19.28",
