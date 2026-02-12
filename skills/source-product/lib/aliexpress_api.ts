@@ -47,6 +47,14 @@ export interface SearchImageParams {
   search_type?: string;
 }
 
+export interface GetProductInfoParams {
+  product_id?: string;
+  url?: string;
+  ship_to_country?: string;
+  target_currency?: string;
+  target_language?: string;
+}
+
 export interface AliExpressProduct {
   product_id: string;
   title: string;
@@ -136,20 +144,6 @@ async function callEdgeFunction<T>(
   return result as T;
 }
 
-/**
- * Format price for display
- */
-function formatPrice(currency: string, amount: string): string {
-  return currency === 'USD' ? `$${amount}` : `${amount} ${currency}`;
-}
-
-/**
- * Convert edge function product format to skill format
- */
-function convertProduct(product: AliExpressProduct): AliExpressProduct {
-  return product;
-}
-
 // =============================================================================
 // Public API
 // =============================================================================
@@ -201,7 +195,7 @@ export async function searchTextProducts(
       `Text search successful: ${result.total_count} products found`
     );
 
-    return result.products.map(convertProduct);
+    return result.products;
   } catch (error) {
     throw new Error(
       `Text search failed: ${error instanceof Error ? error.message : String(error)}`
@@ -265,7 +259,7 @@ export async function searchImageProducts(
       `Image search successful: ${result.total_count} products found`
     );
 
-    return result.products.map(convertProduct);
+    return result.products;
   } catch (error) {
     throw new Error(
       `Image search failed: ${error instanceof Error ? error.message : String(error)}`
@@ -357,4 +351,110 @@ export async function testAccessToken() {
     workspace_id: config.workspaceId,
     message: 'Access token is valid.',
   };
+}
+
+/**
+ * Parse AliExpress product ID from URL
+ *
+ * Supports various AliExpress URL formats:
+ * - https://www.aliexpress.com/item/1234567890.html
+ * - https://www.aliexpress.us/item/1234567890.html
+ * - https://www.aliexpress.com/item/1234567890-123456789.html
+ * - URLs with query parameters
+ */
+export function parseAliExpressProductId(url: string): string {
+  if (!url || !url.trim()) {
+    throw new Error('URL is required');
+  }
+
+  // Try to extract product ID from URL path
+  // Match patterns like /item/1234567890.html or /item/1234567890-123456789.html
+  const match = url.match(/\/item\/(\d+)(?:-\d+)?\.html/);
+
+  if (!match || !match[1]) {
+    throw new Error(
+      'Could not parse product ID from URL. Expected format: ' +
+      'https://www.aliexpress.com/item/1234567890.html'
+    );
+  }
+
+  return match[1];
+}
+
+/**
+ * Get AliExpress product detailed information (returns raw API data)
+ *
+ * This function:
+ * 1. Parses AliExpress URL to extract product ID (if URL is provided)
+ * 2. Fetches detailed product information from AliExpress API
+ * 3. Returns the raw API response data
+ *
+ * @param params - Either product_id or url is required
+ */
+export async function getProductInfo(
+  params: GetProductInfoParams
+): Promise<{
+  success: boolean;
+  source: string;
+  product_id: string;
+  data: any;
+  raw_response: any;
+}> {
+  const {
+    product_id,
+    url,
+    ship_to_country = 'US',
+    target_currency = 'USD',
+    target_language = 'en',
+  } = params;
+
+  // Validate that either product_id or url is provided
+  if (!product_id && !url) {
+    throw new Error('Either product_id or url parameter is required');
+  }
+
+  // Extract product_id from URL if URL is provided
+  let productId = product_id;
+  if (url && !productId) {
+    try {
+      productId = parseAliExpressProductId(url);
+    } catch (error) {
+      throw new Error(
+        `Failed to parse product ID from URL: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  try {
+    const body: Record<string, any> = {
+      product_id: productId,
+      ship_to_country,
+      target_currency,
+      target_language,
+    };
+
+    const result = await callEdgeFunction<{
+      success: boolean;
+      source: string;
+      product_id: string;
+      data: any;
+      raw_response: any;
+      error?: string;
+    }>('aliexpress-product-info', body);
+
+    // Handle error response
+    if (result.error) {
+      throw new Error(result.error);
+    }
+
+    if (!result.success) {
+      throw new Error('API request failed');
+    }
+
+    return result;
+  } catch (error) {
+    throw new Error(
+      `Get product info failed: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
 }

@@ -40,28 +40,51 @@ async function main() {
   };
 
   // Parse optional parameters
-  for (let i = 1; i < args.length; i += 2) {
-    const key = args[i]?.replace(/^--/, '');
-    const value = args[i + 1];
+  let i = 1;
+  while (i < args.length) {
+    const arg = args[i];
 
-    if (!key || !value) continue;
+    // Check if it's a flag (starts with --)
+    if (arg?.startsWith('--')) {
+      const key = arg.replace(/^--/, '');
+      const value = args[i + 1];
 
-    switch (key) {
-      case 'page':
-        params.page_index = parseInt(value, 10);
-        break;
-      case 'pageSize':
-        params.page_size = parseInt(value, 10);
-        break;
-      case 'sort':
-        params.sort_by = value;
-        break;
-      case 'category':
-        params.category_id = value;
-        break;
-      case 'country':
-        params.country_code = value;
-        break;
+      // Skip if no value provided
+      if (!value || value.startsWith('--')) {
+        console.warn(`Warning: ${arg} requires a value, skipping`);
+        i++;
+        continue;
+      }
+
+      switch (key) {
+        case 'page':
+          params.page_index = parseInt(value, 10);
+          i += 2;
+          break;
+        case 'pageSize':
+          params.page_size = parseInt(value, 10);
+          i += 2;
+          break;
+        case 'sort':
+          params.sort_by = value;
+          i += 2;
+          break;
+        case 'category':
+          params.category_id = value;
+          i += 2;
+          break;
+        case 'country':
+          params.country_code = value;
+          i += 2;
+          break;
+        default:
+          console.warn(`Warning: Unknown parameter ${key}, skipping`);
+          i += 2;
+          break;
+      }
+    } else {
+      // Not a flag, skip it
+      i++;
     }
   }
 

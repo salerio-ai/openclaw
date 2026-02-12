@@ -122,6 +122,16 @@ Find multiple suppliers for the same product:
 npm run search:text -- "yoga mat"
 ```
 
+### Product Import for E-commerce
+Get product details for importing to your store:
+```bash
+# Get product info (returns raw API data)
+npm run get:product -- --url "https://www.aliexpress.com/item/1005001234567890.html"
+
+# With options for different markets
+npm run get:product -- --url "..." --country "GB" --currency "GBP"
+```
+
 ## Configuration
 
 This skill reads configuration from `~/.bustly/bustlyOauth.json` (automatically configured via Bustly OAuth login).
@@ -148,8 +158,79 @@ The skill uses the `workspace_id` to:
 |------------|-------------|
 | `search:image` | Search products by image (URL, local path, or base64) |
 | `search:text` | Search products by text query |
+| `get:product` | Get detailed product information by URL or product ID |
 | `get:accounts` | List AliExpress accounts for current workspace |
 | `test:token` | Test if access token is valid |
+
+## Get Product Info
+
+Get detailed product information from AliExpress using a product URL or product ID.
+
+### By Product URL
+```bash
+npm run get:product -- --url "https://www.aliexpress.com/item/1234567890.html"
+```
+
+### By Product ID
+```bash
+npm run get:product -- --product-id "1234567890"
+```
+
+### With Custom Options
+```bash
+# Ship to different country
+npm run get:product -- --url "https://www.aliexpress.com/item/1234567890.html" --country "GB"
+
+# Different currency
+npm run get:product -- --productId "1234567890" --currency "EUR"
+
+# Different language
+npm run get:product -- --productId "1234567890" --language "fr"
+
+# Combine options
+npm run get:product -- --url "..." --country "GB" --currency "GBP"
+
+# Show complete raw API response
+npm run get:product -- --productId "1234567890" --raw-response
+```
+
+### Response Format
+
+The function returns the **raw API response** from AliExpress to ensure compatibility with API changes. The response includes:
+
+**Quick Reference Fields:**
+- Title (`ae_item_base_info_dto.subject`)
+- Description (`ae_item_base_info_dto.detail`)
+- Images (`ae_multimedia_info_dto.image_urls` - semicolon-separated)
+- SKU Variants (`ae_item_sku_info_dtos` array)
+- Price information
+- Inventory data
+
+**Full Raw Data:**
+- Complete JSON response from AliExpress API
+- Can be parsed programmatically for custom needs
+- Resilient to API format changes
+
+### Example Use Cases
+
+**Product Analysis:**
+```bash
+# Get detailed product info for analysis
+npm run get:product -- --productId "1005001234567890"
+```
+
+**Multi-Market Research:**
+```bash
+# Check pricing for different countries
+npm run get:product -- --productId "1005001234567890" --country "DE" --currency "EUR"
+npm run get:product -- --productId "1005001234567890" --country "GB" --currency "GBP"
+```
+
+**URL to Product ID Parsing:**
+```bash
+# Automatically extracts product ID from URL
+npm run get:product -- --url "https://www.aliexpress.com/item/1005001234567890.html"
+```
 
 ## Edge Functions
 
@@ -169,6 +250,22 @@ Searches AliExpress products by image. Accepts:
 - Optional: `ship_to`, `sort_type`, `currency`, `search_type`
 
 **Note:** Either `image_url` OR `image_base64` is required.
+
+### aliexpress-product-info
+Gets detailed product information by product ID. Accepts:
+- `workspace_id`: Workspace UUID (from config)
+- `access_token`: JWT token (from config)
+- `product_id`: AliExpress product ID
+- Optional: `ship_to_country`, `target_currency`, `target_language`
+
+Returns **raw API response** from AliExpress with:
+- `success`: Boolean indicating success
+- `source`: "aliexpress"
+- `product_id`: The product ID
+- `data`: Raw result object from AliExpress API
+- `raw_response`: Complete API response
+
+**Note:** The raw data format ensures the code doesn't break when AliExpress changes their API response structure. Consumers can parse the fields they need.
 
 ## Database Tables Used
 
