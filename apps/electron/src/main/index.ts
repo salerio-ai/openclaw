@@ -370,6 +370,8 @@ async function startGateway(): Promise<boolean> {
       resourcesPath,
       appPath,
     });
+    const bundledSkillsDir = resolve(resourcesPath, "skills");
+    writeMainLog(`Bundled skills dir: ${bundledSkillsDir}`);
     const bundledVersion = resolveBundledOpenClawVersion();
     if (bundledVersion) {
       writeMainLog(`Bundled OpenClaw version: ${bundledVersion}`);
@@ -451,6 +453,7 @@ async function startGateway(): Promise<boolean> {
       ...envVars,
       NODE_ENV: "production",
       OPENCLAW_BUNDLED_PLUGINS_DIR: bundledPluginsDir,
+      ...(existsSync(bundledSkillsDir) ? { OPENCLAW_BUNDLED_SKILLS_DIR: bundledSkillsDir } : {}),
       OPENCLAW_STATE_DIR: stateDir,
       OPENCLAW_CONFIG_PATH: resolveElectronConfigPath(),
       HOME: homeDir,
