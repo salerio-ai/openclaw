@@ -465,6 +465,23 @@ function buildChatItems(props: ChatProps): Array<ChatItem | MessageGroup> {
       continue;
     }
 
+    // Filter out system notification messages (e.g., "Exec completed", background process updates)
+    // These are internal OpenClaw events that shouldn't be shown to users
+    if (normalized.role.toLowerCase() === "system") {
+      const textContent = normalized.content
+        .filter((c) => c.type === "text")
+        .map((c) => c.text ?? "")
+        .join("");
+      // Skip system messages that look like internal notifications
+      if (
+        /^System:\s*\[.*\]\s*Exec completed/i.test(textContent) ||
+        /^\[.*\]\s*Exec completed/i.test(textContent) ||
+        textContent.startsWith("Exec completed")
+      ) {
+        continue;
+      }
+    }
+
     items.push({
       kind: "message",
       key: messageKey(msg, i),

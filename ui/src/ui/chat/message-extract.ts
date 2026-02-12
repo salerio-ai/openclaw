@@ -41,13 +41,42 @@ export function stripEnvelope(text: string): string {
   return text.slice(match[0].length);
 }
 
+/**
+ * Strip [media attached: ...] lines from text.
+ * These are system-injected metadata for AI tools and shouldn't be shown to users.
+ */
+function stripMediaAttachedLines(text: string): string {
+  // Pattern matches:
+  // - [media attached: N files] (header line)
+  // - [media attached: path (type) | url]
+  // - [media attached N/M: path (type) | url]
+  // Also strip the "To send an image back..." instruction lines
+  const lines = text.split(/\r?\n/);
+  const filtered = lines.filter((line) => {
+    const trimmed = line.trim();
+    // Skip [media attached: ...] lines
+    if (/^\[media attached(?:\s+\d+\/\d+)?:/.test(trimmed)) {
+      return false;
+    }
+    // Skip the "To send an image back..." instruction
+    if (trimmed.startsWith("To send an image back,")) {
+      return false;
+    }
+    return true;
+  });
+  return filtered.join("\n").trim();
+}
+
 export function extractText(message: unknown): string | null {
   const m = message as Record<string, unknown>;
   const role = typeof m.role === "string" ? m.role : "";
   const content = m.content;
   if (typeof content === "string") {
-    const processed = role === "assistant" ? stripThinkingTags(content) : stripEnvelope(content);
-    return processed;
+    let processed = role === "assistant" ? stripThinkingTags(content) : stripEnvelope(content);
+    if (role === "user") {
+      processed = stripMediaAttachedLines(processed);
+    }
+    return processed || null;
   }
   if (Array.isArray(content)) {
     const parts = content
@@ -61,13 +90,19 @@ export function extractText(message: unknown): string | null {
       .filter((v): v is string => typeof v === "string");
     if (parts.length > 0) {
       const joined = parts.join("\n");
-      const processed = role === "assistant" ? stripThinkingTags(joined) : stripEnvelope(joined);
-      return processed;
+      let processed = role === "assistant" ? stripThinkingTags(joined) : stripEnvelope(joined);
+      if (role === "user") {
+        processed = stripMediaAttachedLines(processed);
+      }
+      return processed || null;
     }
   }
   if (typeof m.text === "string") {
-    const processed = role === "assistant" ? stripThinkingTags(m.text) : stripEnvelope(m.text);
-    return processed;
+    let processed = role === "assistant" ? stripThinkingTags(m.text) : stripEnvelope(m.text);
+    if (role === "user") {
+      processed = stripMediaAttachedLines(processed);
+    }
+    return processed || null;
   }
   return null;
 }
