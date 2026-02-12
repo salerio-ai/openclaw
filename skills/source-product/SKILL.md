@@ -6,6 +6,38 @@ metadata: {"openclaw":{"always":true}}
 
 This skill provides AliExpress product sourcing capabilities, helping you find suppliers and products through image search or text search.
 
+## Handling User Images (Agent Instructions)
+
+When a user wants to find similar products using an image:
+
+### 1. Check for MediaPath (WhatsApp/Telegram)
+If the message came from WhatsApp or Telegram with an image, `MediaPath` should be available in your context. Use it directly:
+
+```bash
+npm run search:image -- "{{MediaPath}}"
+```
+
+The media files are saved at `~/.bustly/media/inbound/` directory.
+
+### 2. If User Provides a URL
+Use the URL directly:
+
+```bash
+npm run search:image -- "https://example.com/product-image.jpg"
+```
+
+### 3. If User Provides a Local File Path
+Use the path directly:
+
+```bash
+npm run search:image -- "/path/to/image.jpg"
+```
+
+### 4. Webchat Limitation
+If the user uploaded an image via webchat (web UI), the image is sent as multimodal input (you can "see" it) but there's no file path available. In this case:
+- Ask the user to provide an image URL instead
+- Or describe what you see and offer to do a text search with those keywords
+
 ## Architecture
 
 This skill uses **Supabase Edge Functions** to securely call AliExpress APIs without exposing sensitive credentials to client applications.

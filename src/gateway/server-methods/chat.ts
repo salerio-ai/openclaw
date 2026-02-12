@@ -14,6 +14,7 @@ import {
   extractShortModelName,
   type ResponsePrefixContext,
 } from "../../auto-reply/reply/response-prefix-template.js";
+import { saveMediaBuffer } from "../../media/store.js";
 import { resolveSendPolicy } from "../../sessions/send-policy.js";
 import { INTERNAL_MESSAGE_CHANNEL } from "../../utils/message-channel.js";
 import {
@@ -355,6 +356,7 @@ export const chatHandlers: GatewayRequestHandlers = {
     }
     let parsedMessage = p.message;
     let parsedImages: ChatImageContent[] = [];
+    const savedMediaPaths: string[] = [];
     if (normalizedAttachments.length > 0) {
       try {
         const parsed = await parseMessageWithAttachments(p.message, normalizedAttachments, {
@@ -363,6 +365,16 @@ export const chatHandlers: GatewayRequestHandlers = {
         });
         parsedMessage = parsed.message;
         parsedImages = parsed.images;
+        // Save images to disk so MediaPath is available for skills/tools
+        for (const img of parsedImages) {
+          try {
+            const buffer = Buffer.from(img.data, "base64");
+            const saved = await saveMediaBuffer(buffer, img.mimeType, "inbound");
+            savedMediaPaths.push(saved.path);
+          } catch (saveErr) {
+            context.logGateway.warn(`webchat media save failed: ${formatForLog(saveErr)}`);
+          }
+        }
       } catch (err) {
         respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, String(err)));
         return;
@@ -470,6 +482,9 @@ export const chatHandlers: GatewayRequestHandlers = {
         SenderId: clientInfo?.id,
         SenderName: clientInfo?.displayName,
         SenderUsername: clientInfo?.displayName,
+        // Webchat media paths (saved from attachments)
+        MediaPath: savedMediaPaths[0],
+        MediaPaths: savedMediaPaths.length > 0 ? savedMediaPaths : undefined,
       };
 
       const agentId = resolveSessionAgentId({
