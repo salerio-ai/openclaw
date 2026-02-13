@@ -201,6 +201,20 @@
   height: 12px;
 }
 
+.topbar-status .update-pill {
+  border: 1px solid var(--bg-hover);
+  background: var(--bg-hover);
+  color: var(--fg);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.topbar-status .update-pill:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 /* Bustly login button */
 .bustly-login-btn {
   padding: 6px 12px;

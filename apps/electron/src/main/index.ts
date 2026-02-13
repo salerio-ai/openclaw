@@ -72,6 +72,9 @@ let needsOnboardAtLaunch = false;
 let gatewayPort: number = 17999;
 let gatewayBind: string = "loopback";
 let gatewayToken: string | null = null;
+let updateReady = false;
+let updateVersion: string | null = null;
+let updateInstalling = false;
 
 const EXTERNAL_NAV_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
@@ -874,7 +877,7 @@ function setupAutoUpdater(): void {
 
   const platformKey =
     process.platform === "darwin"
-      ? "macos"
+      ? `mac-${process.arch === "arm64" ? "arm64" : "x64"}`
       : process.platform === "win32"
         ? "windows"
         : "linux";
@@ -897,8 +900,17 @@ function setupAutoUpdater(): void {
   writeMainLog(`[Updater] App version: ${appVersion}`);
   writeMainLog(`[Updater] Channel: ${channel} metadata: ${metadataFile}`);
 
+  if (channel !== "latest") {
+    autoUpdater.allowPrerelease = true;
+    writeMainLog("[Updater] allowPrerelease enabled");
+  }
+
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
+  // macOS + generic provider has shown flaky partial installs in our env;
+  // force full package downloads instead of differential/blockmap patches.
+  autoUpdater.disableDifferentialDownload = true;
+  writeMainLog("[Updater] Differential download disabled");
 
   if (resolvedUpdateUrl) {
     try {
@@ -943,9 +955,26 @@ function setupAutoUpdater(): void {
   autoUpdater.on("update-downloaded", (info) => {
     writeMainLog(`[Updater] Update downloaded: ${info.version}`);
     sendUpdateStatus("downloaded", { info });
+    updateReady = true;
+    updateVersion = info.version ?? null;
   });
 
-  void autoUpdater.checkForUpdates();
+  autoUpdater.on("before-quit-for-update", () => {
+    updateInstalling = true;
+    writeMainLog("[Updater] before-quit-for-update");
+  });
+
+  void autoUpdater.checkForUpdates()
+    .then((result) => {
+      if (result?.updateInfo?.version) {
+        writeMainLog(`[Updater] checkForUpdates result: ${result.updateInfo.version}`);
+      } else {
+        writeMainLog("[Updater] checkForUpdates result: no update info");
+      }
+    })
+    .catch((error) => {
+      writeMainLog(`[Updater] checkForUpdates failed: ${error instanceof Error ? error.message : String(error)}`);
+    });
 }
 
 function ensureWindow(): void {
@@ -1088,11 +1117,24 @@ function setupIpcHandlers(): void {
 
   ipcMain.handle("updater-install", () => {
     try {
-      autoUpdater.quitAndInstall();
+      writeMainLog("[Updater] updater-install requested");
+      sendUpdateStatus("installing", { version: updateVersion });
+      updateInstalling = true;
+      setTimeout(() => {
+        writeMainLog("[Updater] Calling quitAndInstall");
+        autoUpdater.quitAndInstall(false, true);
+      }, 2000);
       return { success: true };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
+  });
+
+  ipcMain.handle("updater-status", () => {
+    return {
+      ready: updateReady,
+      version: updateVersion,
+    };
   });
 
   // === Onboarding handlers ===
@@ -1777,6 +1819,11 @@ app.on("activate", () => {
 app.on("before-quit", async () => {
   console.log("[Lifecycle] App about to quit");
   writeMainLog("App about to quit");
+
+  if (updateInstalling) {
+    writeMainLog("[Updater] Update install in progress; skipping graceful gateway shutdown");
+    return;
+  }
 
   // Ensure gateway is stopped before quitting
   if (gatewayProcess) {

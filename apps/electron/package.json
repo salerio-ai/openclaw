@@ -1,6 +1,6 @@
 {
   "name": "bustly",
-  "version": "0.0.1-rc.1",
+  "version": "0.0.1",
   "description": "OpenClaw Electron Desktop Client",
   "main": "dist/main/index.js",
   "private": true,
@@ -19,14 +19,21 @@
     "check:main-deps": "node scripts/check-main-deps.js",
     "prepare:openclaw-deps": "node scripts/prepare-openclaw-deps.js",
     "prepare:node": "node scripts/prepare-node.js",
-    "pack:app": "pnpm run prepare:openclaw-deps && pnpm run prepare:node && pnpm run build && CSC_IDENTITY_AUTO_DISCOVERY=false PUBLISH_URL=$(node scripts/resolve-publish-url.js) pnpm dlx electron-builder --mac dir --publish=always -c.publish.provider=generic -c.publish.url=$PUBLISH_URL -c.mac.identity=null",
-    "pack:dmg": "pnpm run prepare:openclaw-deps && pnpm run prepare:node && pnpm run build && CSC_IDENTITY_AUTO_DISCOVERY=false PUBLISH_URL=$(node scripts/resolve-publish-url.js) pnpm dlx electron-builder --mac dmg --publish=always -c.publish.provider=generic -c.publish.url=$PUBLISH_URL -c.mac.identity=null",
-    "pack:dmg:prod": "pnpm run prepare:openclaw-deps && pnpm run prepare:node && pnpm run build && PUBLISH_URL=$(node scripts/resolve-publish-url.js) pnpm dlx electron-builder --mac --publish=always -c.publish.provider=generic -c.publish.url=$PUBLISH_URL && node scripts/notarize-mac-artifacts.js",
     "upload:test": "node scripts/upload-oss.js --env test",
     "upload:prod": "node scripts/upload-oss.js --env prod",
     "preview": "vite preview",
     "lint": "oxlint",
-    "format": "oxfmt"
+    "format": "oxfmt",
+    "pack:dmg": "pnpm run prepare:openclaw-deps && pnpm run prepare:node && pnpm run build && CSC_IDENTITY_AUTO_DISCOVERY=false PUBLISH_URL=$(node scripts/resolve-publish-url.js) pnpm dlx electron-builder --mac dmg --publish=always -c.publish.provider=generic -c.publish.url=$PUBLISH_URL -c.mac.identity=null",
+    "pack:release": "node scripts/build-release.js",
+    "pack:release:test:mac": "node scripts/build-release.js --env test --platform mac",
+    "pack:release:prod:mac": "node scripts/build-release.js --env prod --platform mac",
+    "pack:release:test:mac-x64": "node scripts/build-release.js --env test --platform mac --arch x64",
+    "pack:release:prod:mac-x64": "node scripts/build-release.js --env prod --platform mac --arch x64",
+    "pack:release:test:windows": "node scripts/build-release.js --env test --platform windows",
+    "pack:release:prod:windows": "node scripts/build-release.js --env prod --platform windows",
+    "pack:release:test:linux": "node scripts/build-release.js --env test --platform linux",
+    "pack:release:prod:linux": "node scripts/build-release.js --env prod --platform linux"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock": "3.848.0",

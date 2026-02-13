@@ -22,6 +22,7 @@ function AppShell() {
   const [showOnboard, setShowOnboard] = useState(false);
   const [showOnboardLoading, setShowOnboardLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [updateMessage, setUpdateMessage] = useState<string | null>(null);
   const location = useLocation();
   const pathname = location.pathname || "/";
   const logIdRef = useRef(0);
@@ -180,6 +181,24 @@ function AppShell() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!window.electronAPI?.onUpdateStatus) {
+      return;
+    }
+    const unsubscribe = window.electronAPI.onUpdateStatus((data) => {
+      if (data.event === "available" || data.event === "download-progress") {
+        setUpdateMessage("A new version was found. Updating now...");
+      } else if (data.event === "downloaded") {
+        setUpdateMessage("Find new version available.");
+      } else if (data.event === "error") {
+        setUpdateMessage(null);
+      }
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
   // Gateway control handlers
   const handleStartGateway = useCallback(async () => {
     if (!window.electronAPI) return;
@@ -264,6 +283,9 @@ function AppShell() {
             <p className="onboard-loading-subtitle">
               Setting up the AI. This should only take a moment...
             </p>
+            {updateMessage ? (
+              <p className="onboard-loading-update">{updateMessage}</p>
+            ) : null}
           </div>
         </div>
       );

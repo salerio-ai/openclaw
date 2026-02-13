@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getAppInfo: () => ipcRenderer.invoke("get-app-info"),
   updaterCheck: () => ipcRenderer.invoke("updater-check"),
   updaterInstall: () => ipcRenderer.invoke("updater-install"),
+  updaterStatus: () => ipcRenderer.invoke("updater-status"),
 
   // Onboarding
   bustlyLogin: () => ipcRenderer.invoke("bustly-login"),

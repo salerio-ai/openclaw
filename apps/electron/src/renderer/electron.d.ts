@@ -163,6 +163,7 @@ interface ElectronAPI {
   onboardWhatsAppStart: (options?: { force?: boolean }) => Promise<{ qrDataUrl?: string; message: string }>;
   onboardWhatsAppWait: (options?: { timeoutMs?: number }) => Promise<{ connected: boolean; message: string }>;
   onboardWhatsAppConfig: (payload: WhatsAppConfigRequest) => Promise<{ success: boolean; error?: string }>;
+  updaterStatus: () => Promise<{ ready: boolean; version?: string | null }>;
 
   // Event listeners
   onOAuthRequestCode: (callback: (message: string) => void) => () => void;
@@ -170,6 +171,7 @@ interface ElectronAPI {
   onGatewayExit: (callback: (data: GatewayExitData) => void) => () => void;
   onMainLog: (callback: (data: MainLogData) => void) => () => void;
   onBustlyLoginRefresh: (callback: () => void) => () => void;
+  onUpdateStatus: (callback: (data: { event: string }) => void) => () => void;
 }
 
 interface Window {

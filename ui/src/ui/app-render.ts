@@ -202,6 +202,18 @@ export function renderApp(state: AppViewState) {
           </div>
         </div>
         <div class="topbar-status">
+          ${state.updateReady
+            ? html`
+                <button
+                  class="pill update-pill"
+                  title=${state.updateVersion ? `Update ${state.updateVersion} ready` : "Update ready"}
+                  @click=${state.handleUpdateInstall}
+                  ?disabled=${state.updateInstalling}
+                >
+                  ${state.updateInstalling ? "Preparing update..." : "Click to restart for update"}
+                </button>
+              `
+            : nothing}
           <div class="pill">
             <span class="statusDot ${state.connected ? "ok" : ""}"></span>
             <span>Health</span>

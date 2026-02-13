@@ -78,6 +78,12 @@ import { type ChatAttachment, type ChatQueueItem, type CronFormState } from "./u
 declare global {
   interface Window {
     __OPENCLAW_CONTROL_UI_BASE_PATH__?: string;
+    electronAPI?: {
+      onBustlyLoginRefresh?: (callback: () => void) => () => void;
+      onUpdateStatus?: (callback: (data: { event: string; info?: { version?: string } }) => void) => () => void;
+      updaterInstall?: () => void;
+      updaterStatus?: () => Promise<{ ready: boolean; version?: string | null }>;
+    };
   }
 }
 
@@ -162,6 +168,9 @@ export class OpenClawApp extends LitElement {
   @state() configSaving = false;
   @state() configApplying = false;
   @state() updateRunning = false;
+  @state() updateReady = false;
+  @state() updateVersion: string | null = null;
+  @state() updateInstalling = false;
   @state() applySessionKey = this.settings.lastActiveSessionKey;
   @state() configSnapshot: ConfigSnapshot | null = null;
   @state() configSchema: unknown = null;
@@ -284,6 +293,7 @@ export class OpenClawApp extends LitElement {
   private themeMediaHandler: ((event: MediaQueryListEvent) => void) | null = null;
   private topbarObserver: ResizeObserver | null = null;
   private bustlyLoginRefreshUnsubscribe: (() => void) | null = null;
+  private updateStatusUnsubscribe: (() => void) | null = null;
 
   createRenderRoot() {
     return this;
@@ -297,12 +307,31 @@ export class OpenClawApp extends LitElement {
     handleConnected(this as unknown as Parameters<typeof handleConnected>[0]);
     document.addEventListener('click', this.handleBustlyUserMenuClose.bind(this));
 
-    const electronAPI = (window as unknown as {
-      electronAPI?: { onBustlyLoginRefresh?: (callback: () => void) => () => void };
-    }).electronAPI;
+    const electronAPI = window.electronAPI;
     if (electronAPI?.onBustlyLoginRefresh) {
       this.bustlyLoginRefreshUnsubscribe = electronAPI.onBustlyLoginRefresh(() => {
         void this.checkBustlyLoginStatus();
+      });
+    }
+    if (electronAPI?.onUpdateStatus) {
+      this.updateStatusUnsubscribe = electronAPI.onUpdateStatus((data) => {
+        if (data.event === "downloaded") {
+          this.updateReady = true;
+          this.updateVersion = data.info?.version ?? null;
+          return;
+        }
+        if (data.event === "error") {
+          this.updateReady = false;
+          this.updateVersion = null;
+        }
+      });
+    }
+    if (electronAPI?.updaterStatus) {
+      void electronAPI.updaterStatus().then((status) => {
+        if (status?.ready) {
+          this.updateReady = true;
+          this.updateVersion = status.version ?? null;
+        }
       });
     }
   }
@@ -317,6 +346,10 @@ export class OpenClawApp extends LitElement {
     if (this.bustlyLoginRefreshUnsubscribe) {
       this.bustlyLoginRefreshUnsubscribe();
       this.bustlyLoginRefreshUnsubscribe = null;
+    }
+    if (this.updateStatusUnsubscribe) {
+      this.updateStatusUnsubscribe();
+      this.updateStatusUnsubscribe = null;
     }
     super.disconnectedCallback();
   }
@@ -357,6 +390,14 @@ export class OpenClawApp extends LitElement {
 
   async loadAssistantIdentity() {
     await loadAssistantIdentityInternal(this);
+  }
+
+  handleUpdateInstall() {
+    if (!window.electronAPI?.updaterInstall) {
+      return;
+    }
+    this.updateInstalling = true;
+    window.electronAPI.updaterInstall();
   }
 
   applySettings(next: UiSettings) {

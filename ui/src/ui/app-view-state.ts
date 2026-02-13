@@ -79,6 +79,8 @@ export type AppViewState = {
   configSaving: boolean;
   configApplying: boolean;
   updateRunning: boolean;
+  updateReady: boolean;
+  updateVersion: string | null;
   configSnapshot: ConfigSnapshot | null;
   configSchema: unknown;
   configSchemaLoading: boolean;
@@ -192,6 +194,7 @@ export type AppViewState = {
   handleLoadLogs: () => Promise<void>;
   handleDebugCall: () => Promise<void>;
   handleRunUpdate: () => Promise<void>;
+  handleUpdateInstall: () => void;
   setPassword: (next: string) => void;
   setSessionKey: (next: string) => void;
   setChatMessage: (next: string) => void;

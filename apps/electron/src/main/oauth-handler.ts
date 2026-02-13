@@ -373,6 +373,15 @@ export function handleOAuthPromptResponse(value: string) {
 
 // Provider configurations
 const PROVIDERS = {
+  anthropic: {
+    id: "anthropic",
+    label: "Anthropic",
+    authMethods: [
+      { id: "api_key", label: "API Key", kind: "api_key" as AuthMethodKind },
+    ],
+    defaultModel: "anthropic/claude-opus-4-5",
+    envKey: "ANTHROPIC_API_KEY",
+  },
   openai: {
     id: "openai",
     label: "OpenAI",
@@ -400,15 +409,6 @@ const PROVIDERS = {
     defaultModel: "openrouter/minimax/minimax-m2.1",
     envKey: "OPENROUTER_API_KEY",
     isDev: true,
-  },
-  anthropic: {
-    id: "anthropic",
-    label: "Anthropic",
-    authMethods: [
-      { id: "api_key", label: "API Key", kind: "api_key" as AuthMethodKind },
-    ],
-    defaultModel: "anthropic/claude-opus-4-5",
-    envKey: "ANTHROPIC_API_KEY",
   },
 };
 
