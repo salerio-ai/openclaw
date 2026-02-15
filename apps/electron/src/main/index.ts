@@ -64,6 +64,8 @@ import { webAuthExists } from "../../../../src/web/session";
 
 const __dirname = resolve(fileURLToPath(import.meta.url), "..");
 const autoUpdater = updater.autoUpdater;
+const APP_PROTOCOL = "bustly";
+const DEEP_LINK_CHANNEL = "deep-link";
 
 let gatewayProcess: ChildProcess | null = null;
 let mainWindow: BrowserWindow | null = null;
@@ -75,6 +77,7 @@ let gatewayToken: string | null = null;
 let updateReady = false;
 let updateVersion: string | null = null;
 let updateInstalling = false;
+let pendingDeepLink: { url: string; route: string | null } | null = null;
 
 const EXTERNAL_NAV_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
@@ -95,6 +98,105 @@ function shouldOpenExternal(url: string): boolean {
     return false;
   }
   return !EXTERNAL_NAV_HOSTS.has(parsed.hostname.toLowerCase());
+}
+
+function normalizeDeepLinkRoute(route: string | null | undefined): string | null {
+  if (!route) {
+    return null;
+  }
+  const normalized = route.replace(/^#\/?/, "").replace(/^\/+/, "").trim();
+  if (!normalized) {
+    return null;
+  }
+  if (normalized === "home") {
+    return "/";
+  }
+  return normalized.startsWith("/") ? normalized : `/${normalized}`;
+}
+
+function parseDeepLink(url: string): { url: string; route: string | null } | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== `${APP_PROTOCOL}:`) {
+    return null;
+  }
+
+  const routeFromQuery = normalizeDeepLinkRoute(parsed.searchParams.get("route"));
+  const routeFromPath = normalizeDeepLinkRoute(parsed.pathname);
+  const routeFromHost =
+    parsed.hostname && parsed.hostname !== "open" ? normalizeDeepLinkRoute(parsed.hostname) : null;
+
+  return {
+    url,
+    route: routeFromQuery ?? routeFromPath ?? routeFromHost ?? null,
+  };
+}
+
+function focusMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore();
+  }
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+function dispatchDeepLink(url: string): boolean {
+  const payload = parseDeepLink(url);
+  if (!payload) {
+    return false;
+  }
+
+  pendingDeepLink = payload;
+  writeMainLog(`[DeepLink] received url=${payload.url} route=${payload.route ?? "(none)"}`);
+
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    ensureWindow();
+    return true;
+  }
+
+  focusMainWindow();
+  if (payload.route) {
+    loadRendererWindow(mainWindow, { hash: payload.route });
+  }
+  mainWindow.webContents.send(DEEP_LINK_CHANNEL, payload);
+  pendingDeepLink = null;
+  return true;
+}
+
+function flushPendingDeepLink() {
+  if (!pendingDeepLink || !mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  const payload = pendingDeepLink;
+  focusMainWindow();
+  if (payload.route) {
+    loadRendererWindow(mainWindow, { hash: payload.route });
+  }
+  mainWindow.webContents.send(DEEP_LINK_CHANNEL, payload);
+  pendingDeepLink = null;
+}
+
+function registerProtocolClient() {
+  try {
+    let success = false;
+    if (process.defaultApp && process.argv.length >= 2) {
+      success = app.setAsDefaultProtocolClient(APP_PROTOCOL, process.execPath, [resolve(process.argv[1])]);
+    } else {
+      success = app.setAsDefaultProtocolClient(APP_PROTOCOL);
+    }
+    writeMainLog(`[DeepLink] protocol registration ${success ? "ok" : "failed"} scheme=${APP_PROTOCOL}`);
+  } catch (error) {
+    writeMainLog(
+      `[DeepLink] protocol registration error: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 }
 let initResult: InitializationResult | null = null;
 let mainLogPath: string | null = null;
@@ -863,6 +965,11 @@ function createWindow(): void {
       mainWindow.webContents.send("bustly-login-refresh");
     })();
   });
+
+  mainWindow.webContents.once("did-finish-load", () => {
+    flushPendingDeepLink();
+  });
+  flushPendingDeepLink();
 }
 
 function setupAutoUpdater(): void {
@@ -1655,10 +1762,41 @@ function setupIpcHandlers(): void {
     const open = toggleDevPanelWindow();
     return { success: true, open };
   });
+
+  ipcMain.handle("deep-link-consume-pending", () => {
+    const next = pendingDeepLink;
+    pendingDeepLink = null;
+    return next;
+  });
 }
+
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
+
+app.on("second-instance", (_event, argv) => {
+  const deepLinkArg = argv.find((value) => value.startsWith(`${APP_PROTOCOL}://`));
+  if (deepLinkArg) {
+    dispatchDeepLink(deepLinkArg);
+    return;
+  }
+  focusMainWindow();
+});
+
+app.on("open-url", (event, url) => {
+  event.preventDefault();
+  dispatchDeepLink(url);
+});
+
+const initialDeepLinkArg = process.argv.find((value) => value.startsWith(`${APP_PROTOCOL}://`));
 
 // App lifecycle
 app.whenReady().then(async () => {
+  registerProtocolClient();
+  if (initialDeepLinkArg) {
+    dispatchDeepLink(initialDeepLinkArg);
+  }
   powerSaveBlocker.start("prevent-app-suspension");
   // Load .env file at startup (must be after app is ready to get correct paths)
   const loadDotEnv = () => {

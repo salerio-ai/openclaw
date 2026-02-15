@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { HashRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 // Types are defined in electron.d.ts
 import Onboard from "./components/Onboard";
@@ -24,12 +24,28 @@ function AppShell() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [updateMessage, setUpdateMessage] = useState<string | null>(null);
   const location = useLocation();
+  const navigate = useNavigate();
   const pathname = location.pathname || "/";
   const logIdRef = useRef(0);
   const controlUiRequestedRef = useRef(false);
   const isDevPanelWindow = pathname === "/devpanel";
   const isBustlyLoginWindow = pathname === "/bustly-login";
   const isProviderSetupWindow = pathname === "/provider-setup";
+
+  const handleDeepLink = useCallback(
+    (data: { url: string; route: string | null } | null) => {
+      const route = data?.route;
+      if (!route) {
+        return;
+      }
+      if (route === "/") {
+        navigate("/", { replace: true });
+        return;
+      }
+      navigate(route, { replace: true });
+    },
+    [navigate],
+  );
 
   // Load initial data
   useEffect(() => {
@@ -198,6 +214,21 @@ function AppShell() {
       unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (!window.electronAPI) {
+      return;
+    }
+    void window.electronAPI.consumePendingDeepLink().then((data) => {
+      handleDeepLink(data);
+    });
+    const unsubscribe = window.electronAPI.onDeepLink((data) => {
+      handleDeepLink(data);
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, [handleDeepLink]);
 
   // Gateway control handlers
   const handleStartGateway = useCallback(async () => {

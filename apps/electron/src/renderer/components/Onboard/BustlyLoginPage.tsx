@@ -107,7 +107,7 @@ export default function BustlyLoginPage({
       <div className="mb-10">
         <img src={bustlyLogo} alt="Bustly AI" className="h-20 mx-auto mb-2" />
         <h1 className="text-4xl font-bold text-[#1A162F] mb-2">Bustly AI</h1>
-        <p className="text-lg text-[#6C6F86]">The 24/7 brain for your business</p>
+        <p className="text-lg text-[#6C6F86]">The 24/7 Operator for Your Business</p>
       </div>
 
       {error && (

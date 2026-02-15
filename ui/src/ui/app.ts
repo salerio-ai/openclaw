@@ -88,6 +88,31 @@ declare global {
 }
 
 const injectedAssistantIdentity = resolveInjectedAssistantIdentity();
+const DEFAULT_WEBUI_CHAT_DRAFT = `Help me launch one winning product.
+
+Find 10 products on AliExpress for [TARGET MARKET] in [NICHE].
+For each product, include the AliExpress source URL. Rank the top three by conversion potential and explain why.
+
+Then take the #1 product and:
+1) Create a Shopify draft listing
+2) Write a high-converting title, bullet points, and description
+3) Recommend a selling price (and compare-at price)
+4) Generate an SEO title and meta description
+
+Output a plan first. Do not execute any write actions until I confirm.`;
+const CHAT_DRAFT_ONCE_KEY = "openclaw.control.chat.default-draft.once.v1";
+
+function resolveInitialChatDraft(): string {
+  try {
+    if (localStorage.getItem(CHAT_DRAFT_ONCE_KEY) === "1") {
+      return "";
+    }
+    localStorage.setItem(CHAT_DRAFT_ONCE_KEY, "1");
+    return DEFAULT_WEBUI_CHAT_DRAFT;
+  } catch {
+    return DEFAULT_WEBUI_CHAT_DRAFT;
+  }
+}
 
 function resolveOnboardingMode(): boolean {
   if (!window.location.search) {
@@ -125,7 +150,7 @@ export class OpenClawApp extends LitElement {
   @state() sessionKey = this.settings.sessionKey;
   @state() chatLoading = false;
   @state() chatSending = false;
-  @state() chatMessage = "";
+  @state() chatMessage = resolveInitialChatDraft();
   @state() chatMessages: unknown[] = [];
   @state() chatToolMessages: unknown[] = [];
   @state() chatStream: string | null = null;

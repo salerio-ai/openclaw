@@ -114,7 +114,7 @@ export default function WhatsAppStep({ onBack, onSkip, onDone }: WhatsAppStepPro
         <img src={bustlyLogo} alt="Bustly Logo" className="h-12 mx-auto mb-3" />
         <h2 className="text-3xl font-bold text-[#1A162F] mb-3">Connect WhatsApp</h2>
         <p className="text-[#6B6F86] text-lg max-w-2xl mx-auto leading-relaxed">
-          Connect WhatsApp to ask Bustly AI questions.
+          Connect WhatsApp to send Bustly tasks anytime, anywhere.
         </p>
       </div>
 

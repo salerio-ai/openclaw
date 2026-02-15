@@ -72,6 +72,14 @@
   "build": {
     "appId": "bustly",
     "productName": "Bustly",
+    "protocols": [
+      {
+        "name": "Bustly Deep Link",
+        "schemes": [
+          "bustly"
+        ]
+      }
+    ],
     "icon": "build/icons/icon",
     "files": [
       "dist/**",

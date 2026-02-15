@@ -62,6 +62,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("onboard-whatsapp-wait", options),
   onboardWhatsAppConfig: (payload: WhatsAppConfigRequest) =>
     ipcRenderer.invoke("onboard-whatsapp-config", payload),
+  consumePendingDeepLink: () => ipcRenderer.invoke("deep-link-consume-pending"),
 
   // Event listeners
   onOAuthRequestCode: (callback: any) => {
@@ -94,5 +95,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     const listener = () => callback();
     ipcRenderer.on("bustly-login-refresh", listener);
     return () => ipcRenderer.removeListener("bustly-login-refresh", listener);
+  },
+  onDeepLink: (callback: (payload: { url: string; route: string | null }) => void) => {
+    const listener = (_event: unknown, payload: { url: string; route: string | null }) =>
+      callback(payload);
+    ipcRenderer.on("deep-link", listener);
+    return () => ipcRenderer.removeListener("deep-link", listener);
   },
 });
