@@ -22,7 +22,7 @@ Examples:
 
 ```
 /debug show
-/debug set messages.responsePrefix="[bustly]"
+/debug set messages.responsePrefix="[openclaw]"
 /debug unset messages.responsePrefix
 /debug reset
 ```
@@ -34,13 +34,13 @@ Examples:
 For fast iteration, run the gateway under the file watcher:
 
 ```bash
-pnpm gateway:watch --force
+pnpm gateway:watch
 ```
 
 This maps to:
 
 ```bash
-tsx watch src/entry.ts gateway --force
+node --watch-path src --watch-path tsconfig.json --watch-path package.json --watch-preserve-output scripts/run-node.mjs gateway --force
 ```
 
 Add any gateway CLI flags after `gateway:watch` and they will be passed through
@@ -51,7 +51,7 @@ on each restart.
 Use the dev profile to isolate state and spin up a safe, disposable setup for
 debugging. There are **two** `--dev` flags:
 
-- **Global `--dev` (profile):** isolates state under `~/.bustly-dev` and
+- **Global `--dev` (profile):** isolates state under `~/.openclaw-dev` and
   defaults the gateway port to `19001` (derived ports shift with it).
 - **`gateway --dev`: tells the Gateway to auto-create a default config +
   workspace** when missing (and skip BOOTSTRAP.md).
@@ -69,8 +69,8 @@ What this does:
 
 1. **Profile isolation** (global `--dev`)
    - `OPENCLAW_PROFILE=dev`
-   - `OPENCLAW_STATE_DIR=~/.bustly-dev`
-   - `OPENCLAW_CONFIG_PATH=~/.bustly-dev/openclaw.json`
+   - `OPENCLAW_STATE_DIR=~/.openclaw-dev`
+   - `OPENCLAW_CONFIG_PATH=~/.openclaw-dev/openclaw.json`
    - `OPENCLAW_GATEWAY_PORT=19001` (browser/canvas shift accordingly)
 
 2. **Dev bootstrap** (`gateway --dev`)
@@ -113,25 +113,25 @@ This is the best way to see whether reasoning is arriving as plain text deltas
 Enable it via CLI:
 
 ```bash
-pnpm gateway:watch --force --raw-stream
+pnpm gateway:watch --raw-stream
 ```
 
 Optional path override:
 
 ```bash
-pnpm gateway:watch --force --raw-stream --raw-stream-path ~/.bustly/logs/raw-stream.jsonl
+pnpm gateway:watch --raw-stream --raw-stream-path ~/.openclaw/logs/raw-stream.jsonl
 ```
 
 Equivalent env vars:
 
 ```bash
 OPENCLAW_RAW_STREAM=1
-OPENCLAW_RAW_STREAM_PATH=~/.bustly/logs/raw-stream.jsonl
+OPENCLAW_RAW_STREAM_PATH=~/.openclaw/logs/raw-stream.jsonl
 ```
 
 Default file:
 
-`~/.bustly/logs/raw-stream.jsonl`
+`~/.openclaw/logs/raw-stream.jsonl`
 
 ## Raw chunk logging (pi-mono)
 

@@ -19,6 +19,18 @@ export type SlackChannelConfigResolved = {
   matchSource?: ChannelMatchSource;
 };
 
+export type SlackChannelConfigEntry = {
+  enabled?: boolean;
+  allow?: boolean;
+  requireMention?: boolean;
+  allowBots?: boolean;
+  users?: Array<string | number>;
+  skills?: string[];
+  systemPrompt?: string;
+};
+
+export type SlackChannelConfigEntries = Record<string, SlackChannelConfigEntry>;
+
 function firstDefined<T>(...values: Array<T | undefined>) {
   for (const value of values) {
     if (typeof value !== "undefined") {
@@ -35,6 +47,7 @@ export function shouldEmitSlackReactionNotification(params: {
   userId: string;
   userName?: string | null;
   allowlist?: Array<string | number> | null;
+  allowNameMatching?: boolean;
 }) {
   const { mode, botId, messageAuthorId, userId, userName, allowlist } = params;
   const effectiveMode = mode ?? "own";
@@ -56,6 +69,7 @@ export function shouldEmitSlackReactionNotification(params: {
       allowList: users,
       id: userId,
       name: userName ?? undefined,
+      allowNameMatching: params.allowNameMatching,
     });
   }
   return true;
@@ -74,18 +88,7 @@ export function resolveSlackChannelLabel(params: { channelId?: string; channelNa
 export function resolveSlackChannelConfig(params: {
   channelId: string;
   channelName?: string;
-  channels?: Record<
-    string,
-    {
-      enabled?: boolean;
-      allow?: boolean;
-      requireMention?: boolean;
-      allowBots?: boolean;
-      users?: Array<string | number>;
-      skills?: string[];
-      systemPrompt?: string;
-    }
-  >;
+  channels?: SlackChannelConfigEntries;
   defaultRequireMention?: boolean;
 }): SlackChannelConfigResolved | null {
   const { channelId, channelName, channels, defaultRequireMention } = params;

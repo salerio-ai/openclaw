@@ -1,45 +1,9 @@
+import { stripInboundMetadata } from "../../../../src/auto-reply/reply/strip-inbound-meta.js";
+import { stripEnvelope } from "../../../../src/shared/chat-envelope.js";
 import { stripThinkingTags } from "../format.ts";
-
-const ENVELOPE_PREFIX = /^\[([^\]]+)\]\s*/;
-const ENVELOPE_CHANNELS = [
-  "WebChat",
-  "WhatsApp",
-  "Telegram",
-  "Signal",
-  "Slack",
-  "Discord",
-  "iMessage",
-  "Teams",
-  "Matrix",
-  "Zalo",
-  "Zalo Personal",
-  "BlueBubbles",
-];
 
 const textCache = new WeakMap<object, string | null>();
 const thinkingCache = new WeakMap<object, string | null>();
-
-function looksLikeEnvelopeHeader(header: string): boolean {
-  if (/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}Z\b/.test(header)) {
-    return true;
-  }
-  if (/\d{4}-\d{2}-\d{2} \d{2}:\d{2}\b/.test(header)) {
-    return true;
-  }
-  return ENVELOPE_CHANNELS.some((label) => header.startsWith(`${label} `));
-}
-
-export function stripEnvelope(text: string): string {
-  const match = text.match(ENVELOPE_PREFIX);
-  if (!match) {
-    return text;
-  }
-  const header = match[1] ?? "";
-  if (!looksLikeEnvelopeHeader(header)) {
-    return text;
-  }
-  return text.slice(match[0].length);
-}
 
 /**
  * Strip [media attached: ...] lines from text.
@@ -67,15 +31,21 @@ function stripMediaAttachedLines(text: string): string {
   return filtered.join("\n").trim();
 }
 
+function stripInboundMetadataForDisplay(text: string): string {
+  return stripMediaAttachedLines(stripInboundMetadata(text));
+}
 export function extractText(message: unknown): string | null {
   const m = message as Record<string, unknown>;
   const role = typeof m.role === "string" ? m.role : "";
+  const shouldStripInboundMetadata = role.toLowerCase() === "user";
   const content = m.content;
   if (typeof content === "string") {
-    let processed = role === "assistant" ? stripThinkingTags(content) : stripEnvelope(content);
-    if (role === "user") {
-      processed = stripMediaAttachedLines(processed);
-    }
+    const processed =
+      role === "assistant"
+        ? stripThinkingTags(content)
+        : shouldStripInboundMetadata
+          ? stripInboundMetadataForDisplay(stripEnvelope(content))
+          : stripEnvelope(content);
     return processed || null;
   }
   if (Array.isArray(content)) {
@@ -90,18 +60,22 @@ export function extractText(message: unknown): string | null {
       .filter((v): v is string => typeof v === "string");
     if (parts.length > 0) {
       const joined = parts.join("\n");
-      let processed = role === "assistant" ? stripThinkingTags(joined) : stripEnvelope(joined);
-      if (role === "user") {
-        processed = stripMediaAttachedLines(processed);
-      }
+      const processed =
+        role === "assistant"
+          ? stripThinkingTags(joined)
+          : shouldStripInboundMetadata
+            ? stripInboundMetadataForDisplay(stripEnvelope(joined))
+            : stripEnvelope(joined);
       return processed || null;
     }
   }
   if (typeof m.text === "string") {
-    let processed = role === "assistant" ? stripThinkingTags(m.text) : stripEnvelope(m.text);
-    if (role === "user") {
-      processed = stripMediaAttachedLines(processed);
-    }
+    const processed =
+      role === "assistant"
+        ? stripThinkingTags(m.text)
+        : shouldStripInboundMetadata
+          ? stripInboundMetadataForDisplay(stripEnvelope(m.text))
+          : stripEnvelope(m.text);
     return processed || null;
   }
   return null;

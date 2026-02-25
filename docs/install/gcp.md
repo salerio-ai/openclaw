@@ -22,7 +22,7 @@ Pricing varies by machine type and region; pick the smallest VM that fits your w
 - Create a Compute Engine VM
 - Install Docker (isolated app runtime)
 - Start the OpenClaw Gateway in Docker
-- Persist `~/.bustly` + `~/.bustly/workspace` on the host (survives restarts/rebuilds)
+- Persist `~/.openclaw` + `~/.openclaw/workspace` on the host (survives restarts/rebuilds)
 - Access the Control UI from your laptop via an SSH tunnel
 
 The Gateway can be accessed via:
@@ -204,8 +204,8 @@ Docker containers are ephemeral.
 All long-lived state must live on the host.
 
 ```bash
-mkdir -p ~/.bustly
-mkdir -p ~/.bustly/workspace
+mkdir -p ~/.openclaw
+mkdir -p ~/.openclaw/workspace
 ```
 
 ---
@@ -218,13 +218,13 @@ Create `.env` in the repository root.
 OPENCLAW_IMAGE=openclaw:latest
 OPENCLAW_GATEWAY_TOKEN=change-me-now
 OPENCLAW_GATEWAY_BIND=lan
-OPENCLAW_GATEWAY_PORT=17999
+OPENCLAW_GATEWAY_PORT=18789
 
-OPENCLAW_CONFIG_DIR=/home/$USER/.bustly
-OPENCLAW_WORKSPACE_DIR=/home/$USER/.bustly/workspace
+OPENCLAW_CONFIG_DIR=/home/$USER/.openclaw
+OPENCLAW_WORKSPACE_DIR=/home/$USER/.openclaw/workspace
 
 GOG_KEYRING_PASSWORD=change-me-now
-XDG_CONFIG_HOME=/home/node/.bustly
+XDG_CONFIG_HOME=/home/node/.openclaw
 ```
 
 Generate strong secrets:
@@ -260,16 +260,12 @@ services:
       - XDG_CONFIG_HOME=${XDG_CONFIG_HOME}
       - PATH=/home/linuxbrew/.linuxbrew/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     volumes:
-      - ${OPENCLAW_CONFIG_DIR}:/home/node/.bustly
-      - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.bustly/workspace
+      - ${OPENCLAW_CONFIG_DIR}:/home/node/.openclaw
+      - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.openclaw/workspace
     ports:
       # Recommended: keep the Gateway loopback-only on the VM; access via SSH tunnel.
       # To expose it publicly, remove the `127.0.0.1:` prefix and firewall accordingly.
-      - "127.0.0.1:${OPENCLAW_GATEWAY_PORT}:17999"
-
-      # Optional: only if you run iOS/Android nodes against this VM and need Canvas host.
-      # If you expose this publicly, read /gateway/security and firewall accordingly.
-      # - "18793:18793"
+      - "127.0.0.1:${OPENCLAW_GATEWAY_PORT}:18789"
     command:
       [
         "node",
@@ -381,7 +377,7 @@ docker compose logs -f openclaw-gateway
 Success:
 
 ```
-[gateway] listening on ws://0.0.0.0:17999
+[gateway] listening on ws://0.0.0.0:18789
 ```
 
 ---
@@ -391,12 +387,12 @@ Success:
 Create an SSH tunnel to forward the Gateway port:
 
 ```bash
-gcloud compute ssh openclaw-gateway --zone=us-central1-a -- -L 17999:127.0.0.1:17999
+gcloud compute ssh openclaw-gateway --zone=us-central1-a -- -L 18789:127.0.0.1:18789
 ```
 
 Open in your browser:
 
-`http://127.0.0.1:17999/`
+`http://127.0.0.1:18789/`
 
 Paste your gateway token.
 
@@ -407,18 +403,18 @@ Paste your gateway token.
 OpenClaw runs in Docker, but Docker is not the source of truth.
 All long-lived state must survive restarts, rebuilds, and reboots.
 
-| Component           | Location                        | Persistence mechanism  | Notes                            |
-| ------------------- | ------------------------------- | ---------------------- | -------------------------------- |
-| Gateway config      | `/home/node/.bustly/`           | Host volume mount      | Includes `openclaw.json`, tokens |
-| Model auth profiles | `/home/node/.bustly/`           | Host volume mount      | OAuth tokens, API keys           |
-| Skill configs       | `/home/node/.bustly/skills/`    | Host volume mount      | Skill-level state                |
-| Agent workspace     | `/home/node/.bustly/workspace/` | Host volume mount      | Code and agent artifacts         |
-| WhatsApp session    | `/home/node/.bustly/`           | Host volume mount      | Preserves QR login               |
-| Gmail keyring       | `/home/node/.bustly/`           | Host volume + password | Requires `GOG_KEYRING_PASSWORD`  |
-| External binaries   | `/usr/local/bin/`               | Docker image           | Must be baked at build time      |
-| Node runtime        | Container filesystem            | Docker image           | Rebuilt every image build        |
-| OS packages         | Container filesystem            | Docker image           | Do not install at runtime        |
-| Docker container    | Ephemeral                       | Restartable            | Safe to destroy                  |
+| Component           | Location                          | Persistence mechanism  | Notes                            |
+| ------------------- | --------------------------------- | ---------------------- | -------------------------------- |
+| Gateway config      | `/home/node/.openclaw/`           | Host volume mount      | Includes `openclaw.json`, tokens |
+| Model auth profiles | `/home/node/.openclaw/`           | Host volume mount      | OAuth tokens, API keys           |
+| Skill configs       | `/home/node/.openclaw/skills/`    | Host volume mount      | Skill-level state                |
+| Agent workspace     | `/home/node/.openclaw/workspace/` | Host volume mount      | Code and agent artifacts         |
+| WhatsApp session    | `/home/node/.openclaw/`           | Host volume mount      | Preserves QR login               |
+| Gmail keyring       | `/home/node/.openclaw/`           | Host volume + password | Requires `GOG_KEYRING_PASSWORD`  |
+| External binaries   | `/usr/local/bin/`                 | Docker image           | Must be baked at build time      |
+| Node runtime        | Container filesystem              | Docker image           | Rebuilt every image build        |
+| OS packages         | Container filesystem              | Docker image           | Do not install at runtime        |
+| Docker container    | Ephemeral                         | Restartable            | Safe to destroy                  |
 
 ---
 
