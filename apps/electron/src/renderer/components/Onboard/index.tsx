@@ -1,6 +1,5 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import BustlyLoginPage from "./BustlyLoginPage";
-import ProviderStep from "./ProviderStep";
 import WhatsAppStep from "./WhatsAppStep";
 import { useProviderSetup } from "./useProviderSetup";
 
@@ -9,20 +8,51 @@ interface OnboardProps {
   onCancel: () => void;
 }
 
-type Step = "bustly-login" | "select-provider" | "connect-whatsapp";
+type Step = "bustly-login" | "connect-whatsapp";
 
 const BETA_AUTO_BOOTSTRAP = {
   providerId: "openrouter",
-  apiKey: "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",
+  // model: "openrouter/anthropic/claude-opus-4.6",
   model: "openrouter/z-ai/glm-5",
 } as const;
 
 export default function Onboard({ onComplete, onCancel }: OnboardProps) {
   const [step, setStep] = useState<Step>("bustly-login");
+  const [betaOpenRouterApiKey, setBetaOpenRouterApiKey] = useState("");
+
+  useEffect(() => {
+    if (!window.electronAPI?.onboardBetaOpenRouterApiKey) {
+      return;
+    }
+    void (async () => {
+      try {
+        const apiKey = await window.electronAPI.onboardBetaOpenRouterApiKey();
+        setBetaOpenRouterApiKey(apiKey.trim());
+      } catch (error) {
+        console.error("Failed to load beta OpenRouter API key:", error);
+      }
+    })();
+  }, []);
+
+  // Start auto bootstrap as soon as the app has the beta key (no login-step gating).
+  const autoBootstrap = betaOpenRouterApiKey
+    ? {
+        ...BETA_AUTO_BOOTSTRAP,
+        apiKey: betaOpenRouterApiKey,
+      }
+    : undefined;
+
   const providerSetup = useProviderSetup({
-    onConfigured: () => setStep("connect-whatsapp"),
-    autoBootstrap: BETA_AUTO_BOOTSTRAP,
+    skipModelSelection: true,
+    autoBootstrap,
   });
+
+  useEffect(() => {
+    if (!providerSetup.error) {
+      return;
+    }
+    console.error("Auto bootstrap failed:", providerSetup.error);
+  }, [providerSetup.error]);
 
   const handleWhatsAppDone = useCallback(async () => {
     if (window.electronAPI?.onboardOpenControlUi) {
@@ -36,45 +66,15 @@ export default function Onboard({ onComplete, onCancel }: OnboardProps) {
       // Can't go back from login page
       return;
     }
-    if (step === "connect-whatsapp") {
-      setStep("select-provider");
-    }
+    setStep("bustly-login");
   }, [step]);
 
   if (step === "bustly-login") {
     return (
       <BustlyLoginPage
-        onContinue={() => setStep("select-provider")}
+        onContinue={() => setStep("connect-whatsapp")}
         autoContinue
         showContinueWhenLoggedIn={false}
-      />
-    );
-  }
-
-  if (step === "select-provider") {
-    return (
-      <ProviderStep
-        providers={providerSetup.providers}
-        selectedProvider={providerSetup.selectedProvider}
-        error={providerSetup.error}
-        selectedMethod={providerSetup.selectedMethod}
-        credential={providerSetup.credential}
-        loading={providerSetup.loading}
-        onCredentialChange={providerSetup.setCredential}
-        onAuthenticate={providerSetup.handleAuthenticate}
-        onCancelAuth={providerSetup.handleCancelAuth}
-        onResetProvider={providerSetup.resetProvider}
-        authResult={providerSetup.authResult}
-        modelLoading={providerSetup.modelLoading}
-        modelOptions={providerSetup.modelOptions}
-        selectedModel={providerSetup.selectedModel}
-        manualModel={providerSetup.manualModel}
-        onSelectedModelChange={providerSetup.setSelectedModel}
-        onManualModelChange={providerSetup.setManualModel}
-        onModelContinue={providerSetup.handleModelContinue}
-        onSelect={providerSetup.handleProviderSelect}
-        onBack={handleBack}
-        showClose={false}
       />
     );
   }

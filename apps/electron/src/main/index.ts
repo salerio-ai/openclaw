@@ -265,12 +265,26 @@ function ensureMainLogPath(): string {
 }
 
 function writeMainLog(message: string) {
-  try {
+  const line = `[${new Date().toISOString()}] ${message}\n`;
+  const writeLine = () => {
     const logPath = ensureMainLogPath();
-    const line = `[${new Date().toISOString()}] ${message}\n`;
+    mkdirSync(dirname(logPath), { recursive: true, mode: 0o700 });
     appendFileSync(logPath, line, "utf-8");
+  };
+
+  try {
+    writeLine();
   } catch (error) {
-    console.error("[Main log] Failed to write:", error);
+    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
+      try {
+        mainLogPath = null;
+        writeLine();
+      } catch (retryError) {
+        console.error("[Main log] Failed to write:", retryError);
+      }
+    } else {
+      console.error("[Main log] Failed to write:", error);
+    }
   }
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("main-log", { message });
@@ -1066,11 +1080,6 @@ function setupAutoUpdater(): void {
     updateVersion = info.version ?? null;
   });
 
-  autoUpdater.on("before-quit-for-update", () => {
-    updateInstalling = true;
-    writeMainLog("[Updater] before-quit-for-update");
-  });
-
   void autoUpdater.checkForUpdates()
     .then((result) => {
       if (result?.updateInfo?.version) {
@@ -1422,6 +1431,10 @@ function setupIpcHandlers(): void {
   });
 
   // === Onboarding handlers ===
+
+  ipcMain.handle("onboard-beta-openrouter-api-key", () => {
+    return process.env.BUSTLY_BETA_OPENROUTER_API_KEY ?? "";
+  });
 
   // List available providers
   ipcMain.handle("onboard-list-providers", () => {
@@ -1904,14 +1917,7 @@ app.whenReady().then(async () => {
   const fullyInitialized = isFullyInitialized();
   console.log(`[Init] fullyInitialized=${fullyInitialized}`);
   writeMainLog(`fullyInitialized=${fullyInitialized}`);
-  let needsInit = !fullyInitialized;
-  if (!needsInit) {
-    const checkConfig = loadGatewayConfig();
-    if (checkConfig && !checkConfig.token) {
-      console.log("[Init] Existing configuration is missing token, forcing re-initialization...");
-      needsInit = true;
-    }
-  }
+  const needsInit = !fullyInitialized;
   needsOnboardAtLaunch = needsInit;
 
   ensureWindow();

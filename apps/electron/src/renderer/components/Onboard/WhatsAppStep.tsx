@@ -37,14 +37,14 @@ export default function WhatsAppStep({ onBack, onSkip, onDone }: WhatsAppStepPro
   }, [loadStatus]);
 
   const handleStartLink = useCallback(
-    async (force: boolean) => {
+    async () => {
       if (!window.electronAPI?.onboardWhatsAppStart) {
         return;
       }
       setLoadingLink(true);
       setError(null);
       try {
-        const result = await window.electronAPI.onboardWhatsAppStart({ force });
+        const result = await window.electronAPI.onboardWhatsAppStart({ force: false });
         setQrDataUrl(result.qrDataUrl ?? null);
         setLinkMessage(result.message);
       } catch (err) {
@@ -90,6 +90,9 @@ export default function WhatsAppStep({ onBack, onSkip, onDone }: WhatsAppStepPro
     if (!window.electronAPI?.onboardWhatsAppConfig) {
       return;
     }
+    if (!status?.linked) {
+      return;
+    }
     setError(null);
 
     setSavingConfig(true);
@@ -109,15 +112,20 @@ export default function WhatsAppStep({ onBack, onSkip, onDone }: WhatsAppStepPro
     } finally {
       setSavingConfig(false);
     }
-  }, [onDone]);
+  }, [onDone, status?.linked]);
+
+  const hasQr = Boolean(qrDataUrl);
+  const isLinked = Boolean(status?.linked);
+  const canSave = isLinked && !savingConfig;
+  const showConnectAction = !hasQr && !isLinked;
 
   return (
-    <OnboardContainer align="start" className="w-full max-w-lg mx-auto px-6">
+    <OnboardContainer className="px-6">
       <div className="text-center mb-8">
         <img src={bustlyLogo} alt="Bustly Logo" className="h-12 mx-auto mb-3" />
         <h2 className="text-3xl font-bold text-[#1A162F] mb-3">Connect WhatsApp</h2>
         <p className="text-[#6B6F86] text-lg max-w-2xl mx-auto leading-relaxed">
-          Connect WhatsApp to send Bustly tasks anytime, anywhere.
+          Send Bustly tasks anytime, anywhere.
         </p>
       </div>
 
@@ -127,23 +135,12 @@ export default function WhatsAppStep({ onBack, onSkip, onDone }: WhatsAppStepPro
         </div>
       )}
 
-      <div className="bg-white border border-gray-200 rounded-2xl p-8 shadow-sm text-center">
+      <div className="bg-white border border-gray-200 rounded-2xl p-8 shadow-sm text-center min-w-[400px]">
         <div className="w-20 h-20 bg-[#25D366]/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
           <img src={whatsAppIcon} alt="WhatsApp" className="w-12 h-12 object-contain" />
         </div>
 
-        <h3 className="text-xl font-bold text-[#1A162F] mb-4">WhatsApp</h3>
-
-        {!status?.linked && !qrDataUrl && (
-          <button
-            type="button"
-            onClick={() => handleStartLink(Boolean(status?.linked))}
-            className="w-full py-3 bg-[#25D366] text-white font-bold rounded-xl hover:bg-[#25D366]/90 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-60"
-            disabled={loadingLink}
-          >
-            {loadingLink ? "Generating..." : "Connect WhatsApp"}
-          </button>
-        )}
+        <h3 className="text-xl font-bold text-[#1A162F]">WhatsApp</h3>
 
         {!status?.linked && qrDataUrl && (
           <div className="flex flex-col items-center animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -183,11 +180,11 @@ export default function WhatsAppStep({ onBack, onSkip, onDone }: WhatsAppStepPro
           </button>
           <button
             type="button"
-            onClick={handleSave}
-            disabled={savingConfig}
+            onClick={showConnectAction ? () => void handleStartLink() : handleSave}
+            disabled={showConnectAction ? loadingLink : !canSave}
             className="px-8 py-3 bg-[#1A162F] text-white font-bold rounded-xl hover:bg-[#1A162F]/90 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {savingConfig ? "Saving..." : "Save & Finish"}
+            {showConnectAction ? (loadingLink ? "Connecting..." : "Connect") : (savingConfig ? "Saving..." : "Save")}
           </button>
         </div>
       </div>

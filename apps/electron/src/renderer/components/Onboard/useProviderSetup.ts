@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 interface ProviderSetupOptions {
   onConfigured?: () => void;
+  skipModelSelection?: boolean;
   autoBootstrap?: {
     providerId: string;
     apiKey: string;
@@ -11,6 +12,7 @@ interface ProviderSetupOptions {
 
 export function useProviderSetup(options: ProviderSetupOptions) {
   const onConfigured = options.onConfigured;
+  const skipModelSelection = options.skipModelSelection ?? false;
   const autoBootstrap = options.autoBootstrap;
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<ProviderConfig | null>(null);
@@ -81,7 +83,6 @@ export function useProviderSetup(options: ProviderSetupOptions) {
           throw new Error(completeResult.error || "Failed to complete onboarding");
         }
 
-        setAuthResult(nextAuthResult);
         setLoading(false);
         onConfigured?.();
       } catch (err) {
@@ -146,6 +147,26 @@ export function useProviderSetup(options: ProviderSetupOptions) {
           return;
         }
 
+        if (skipModelSelection) {
+          const defaultModel = (nextAuthResult.defaultModel || provider.defaultModel || "").trim();
+          const completeResult = await window.electronAPI.onboardComplete(nextAuthResult, {
+            model: defaultModel || undefined,
+            openControlUi: false,
+          });
+          if (requestId !== authRequestIdRef.current) {
+            return;
+          }
+          if (!completeResult.success) {
+            setError(completeResult.error || "Failed to complete onboarding");
+            setLoading(false);
+            return;
+          }
+          setLoading(false);
+          setModelLoading(false);
+          onConfigured?.();
+          return;
+        }
+
         setAuthResult(nextAuthResult);
 
         const modelProvider = resolveModelProvider(provider.id, methodId);
@@ -179,7 +200,7 @@ export function useProviderSetup(options: ProviderSetupOptions) {
         setModelLoading(false);
       }
     },
-    [resolveModelProvider],
+    [onConfigured, resolveModelProvider, skipModelSelection],
   );
 
   const handleAuthenticate = useCallback(async () => {
