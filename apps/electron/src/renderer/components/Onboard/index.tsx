@@ -11,10 +11,17 @@ interface OnboardProps {
 
 type Step = "bustly-login" | "select-provider" | "connect-whatsapp";
 
+const BETA_AUTO_BOOTSTRAP = {
+  providerId: "openrouter",
+  apiKey: "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",
+  model: "openrouter/z-ai/glm-5",
+} as const;
+
 export default function Onboard({ onComplete, onCancel }: OnboardProps) {
   const [step, setStep] = useState<Step>("bustly-login");
   const providerSetup = useProviderSetup({
     onConfigured: () => setStep("connect-whatsapp"),
+    autoBootstrap: BETA_AUTO_BOOTSTRAP,
   });
 
   const handleWhatsAppDone = useCallback(async () => {

@@ -2,10 +2,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 interface ProviderSetupOptions {
   onConfigured?: () => void;
+  autoBootstrap?: {
+    providerId: string;
+    apiKey: string;
+    model: string;
+  };
 }
 
 export function useProviderSetup(options: ProviderSetupOptions) {
   const onConfigured = options.onConfigured;
+  const autoBootstrap = options.autoBootstrap;
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<ProviderConfig | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
@@ -18,6 +24,7 @@ export function useProviderSetup(options: ProviderSetupOptions) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const authRequestIdRef = useRef(0);
+  const autoBootstrapDoneRef = useRef(false);
 
   useEffect(() => {
     const loadProviders = async () => {
@@ -33,6 +40,57 @@ export function useProviderSetup(options: ProviderSetupOptions) {
 
     return undefined;
   }, []);
+
+  useEffect(() => {
+    if (!window.electronAPI || !autoBootstrap || autoBootstrapDoneRef.current || providers.length === 0) {
+      return;
+    }
+
+    const provider = providers.find((entry) => entry.id === autoBootstrap.providerId);
+    if (!provider) {
+      setError(`Missing provider: ${autoBootstrap.providerId}`);
+      return;
+    }
+
+    const methodId = provider.authMethods.find((method) => method.id === "api_key")?.id;
+    if (!methodId) {
+      setError(`Provider does not support API key auth: ${provider.id}`);
+      return;
+    }
+
+    autoBootstrapDoneRef.current = true;
+    setSelectedProvider(provider);
+    setSelectedMethod(methodId);
+    setSelectedModel(autoBootstrap.model);
+    setManualModel("");
+    setError(null);
+    setLoading(true);
+
+    void (async () => {
+      try {
+        const nextAuthResult = await window.electronAPI.onboardAuthApiKey(provider.id, autoBootstrap.apiKey);
+        if (!nextAuthResult.success) {
+          throw new Error(nextAuthResult.error || "Authentication failed");
+        }
+
+        const completeResult = await window.electronAPI.onboardComplete(nextAuthResult, {
+          model: autoBootstrap.model,
+          openControlUi: false,
+        });
+        if (!completeResult.success) {
+          throw new Error(completeResult.error || "Failed to complete onboarding");
+        }
+
+        setAuthResult(nextAuthResult);
+        setLoading(false);
+        onConfigured?.();
+      } catch (err) {
+        autoBootstrapDoneRef.current = false;
+        setError(err instanceof Error ? err.message : String(err));
+        setLoading(false);
+      }
+    })();
+  }, [autoBootstrap, onConfigured, providers]);
 
   const resolveModelProvider = useCallback((providerId: string, method: string) => {
     if (providerId === "openai" && method === "oauth") {

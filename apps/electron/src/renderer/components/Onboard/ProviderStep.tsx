@@ -67,7 +67,7 @@ export default function ProviderStep({
         : "We will open a browser window to authenticate.";
 
   return (
-    <OnboardContainer className="w-full max-w-4xl mx-auto px-6">
+    <OnboardContainer align="start" className="w-full max-w-4xl mx-auto px-6">
       <div className="relative text-center mb-8">
         {showClose && (
           <button
@@ -109,14 +109,14 @@ export default function ProviderStep({
         {providers
           .slice()
           .sort((a, b) => {
-            const order = ["openai", "anthropic", "google", "openrouter"];
+            const order = ["openai", "anthropic", "google", "zai", "openrouter"];
             return order.indexOf(a.id) - order.indexOf(b.id);
           })
           .map((provider) => {
           const isSelected = selectedProvider?.id === provider.id;
           const logo = providerLogos[provider.id];
           const isApiKeyFlowProvider =
-            provider.id === "openrouter" || provider.id === "anthropic";
+            provider.id === "openrouter" || provider.id === "anthropic" || provider.id === "zai";
           const isAnthropic = provider.id === "anthropic";
           const displayLabel =
             provider.id === "google" ? "Google Gemini" : provider.label;

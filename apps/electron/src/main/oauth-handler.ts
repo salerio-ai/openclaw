@@ -410,6 +410,15 @@ const PROVIDERS = {
     envKey: "OPENROUTER_API_KEY",
     isDev: true,
   },
+  zai: {
+    id: "zai",
+    label: "Z.AI",
+    authMethods: [
+      { id: "api_key", label: "API Key", kind: "api_key" as AuthMethodKind },
+    ],
+    defaultModel: "zai/glm-5",
+    envKey: "ZAI_API_KEY",
+  },
 };
 
 export type ProviderId = keyof typeof PROVIDERS;
