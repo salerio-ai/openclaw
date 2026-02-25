@@ -162,11 +162,8 @@ export default function WhatsAppStep({ onBack, onSkip, onDone }: WhatsAppStepPro
                 <span className="font-bold">Connected</span>
               </div>
             </div>
-            <p className="text-sm text-[#6B6F86] font-medium">Your AI assistant is ready to help.</p>
           </div>
         )}
-
-        {linkMessage && <p className="mt-4 text-xs text-[#6B6F86]">{linkMessage}</p>}
       </div>
 
       <div className="flex justify-end items-center mt-8 border-t border-gray-100 pt-6">
