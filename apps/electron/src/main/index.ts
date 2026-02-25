@@ -1656,7 +1656,7 @@ function setupIpcHandlers(): void {
 
       try {
         await startGateway();
-        if (options?.openControlUi !== false) {
+        if (options?.openControlUi === true) {
           openControlUiInMainWindow();
         }
       } catch (error) {
@@ -1952,7 +1952,6 @@ app.whenReady().then(async () => {
       await startGateway();
       console.log("[Gateway] ✓ Gateway started successfully");
       writeMainLog("Gateway started successfully");
-      openControlUiInMainWindow();
     } catch (error) {
       console.error("[Gateway] ✗ Failed to start gateway:", error);
       writeMainLog(`Gateway failed to start: ${error instanceof Error ? error.message : String(error)}`);

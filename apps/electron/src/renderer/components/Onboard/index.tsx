@@ -25,9 +25,6 @@ export default function Onboard({ onComplete, onCancel }: OnboardProps) {
   });
 
   const handleWhatsAppDone = useCallback(async () => {
-    if (window.electronAPI?.onboardOpenControlUi) {
-      await window.electronAPI.onboardOpenControlUi();
-    }
     onComplete();
   }, [onComplete]);
 

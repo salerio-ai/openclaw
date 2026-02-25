@@ -149,6 +149,7 @@ interface ElectronAPI {
   bustlyGetUserInfo: () => Promise<BustlyUserInfo | null>;
   bustlyLogout: () => Promise<{ success: boolean; error?: string }>;
   bustlyOpenLogin: () => Promise<{ success: boolean; error?: string }>;
+  bustlyOpenSettings: () => Promise<{ success: boolean; error?: string }>;
   bustlyOpenProviderSetup: () => Promise<{ success: boolean; error?: string }>;
   onboardListProviders: () => Promise<ProviderConfig[]>;
   onboardAuthApiKey: (provider: string, apiKey: string) => Promise<AuthResult>;
