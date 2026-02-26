@@ -3,11 +3,12 @@
  */
 
 import { randomBytes } from "node:crypto";
-import type { GatewayRequestHandler, GatewayRequestHandlerOptions } from "./types.js";
 import * as BustlyOAuth from "../../bustly-oauth.js";
+import type { GatewayRequestHandler, GatewayRequestHandlerOptions } from "./types.js";
 
 // In-memory OAuth state storage (for pending logins)
 const pendingOAuthLogins = new Map<string, { expiresAt: number }>();
+export const BUSTLY_OAUTH_CALLBACK_PATH = "/__openclaw__/bustly/authorize";
 
 /**
  * Get OAuth callback port from environment or default
@@ -26,12 +27,32 @@ function generateTraceId(): string {
   return randomBytes(16).toString("hex");
 }
 
+function resolvePublicRedirectUri(params: Record<string, unknown>): string {
+  const publicOrigin =
+    typeof params.publicOrigin === "string" ? params.publicOrigin.trim() : undefined;
+  if (publicOrigin) {
+    try {
+      const url = new URL(publicOrigin);
+      if ((url.protocol === "http:" || url.protocol === "https:") && url.host) {
+        url.pathname = BUSTLY_OAUTH_CALLBACK_PATH;
+        url.search = "";
+        url.hash = "";
+        return url.toString();
+      }
+    } catch {
+      // Fall back to localhost callback below.
+    }
+  }
+  return `http://127.0.0.1:${getOAuthCallbackPort()}${BUSTLY_OAUTH_CALLBACK_PATH}`;
+}
+
 /**
  * Initiate Bustly OAuth login flow
  */
 export const oauthLogin: GatewayRequestHandler = async ({
+  params,
   respond,
-}: Pick<GatewayRequestHandlerOptions, "respond">) => {
+}: Pick<GatewayRequestHandlerOptions, "params" | "respond">) => {
   try {
     // Load environment variables for OAuth configuration
     const apiBaseUrl = process.env.BUSTLY_API_BASE_URL;
@@ -55,14 +76,14 @@ export const oauthLogin: GatewayRequestHandler = async ({
     const loginTraceId = generateTraceId();
 
     // Build OAuth login URL
-    const redirectUri = `http://127.0.0.1:${getOAuthCallbackPort()}/authorize`;
-    const params = new URLSearchParams({
+    const redirectUri = resolvePublicRedirectUri(params);
+    const query = new URLSearchParams({
       client_id: clientId,
       redirect_uri: redirectUri,
       device_id: deviceId,
       login_trace_id: loginTraceId,
     });
-    const loginUrl = `${webBaseUrl}/admin/auth?${params.toString()}`;
+    const loginUrl = `${webBaseUrl}/admin/auth?${query.toString()}`;
 
     // Store pending login state
     pendingOAuthLogins.set(loginTraceId, {

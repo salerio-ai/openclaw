@@ -1,5 +1,3 @@
-import type { TlsOptions } from "node:tls";
-import type { WebSocketServer } from "ws";
 import {
   createServer as createHttpServer,
   type Server as HttpServer,
@@ -7,17 +5,19 @@ import {
   type ServerResponse,
 } from "node:http";
 import { createServer as createHttpsServer } from "node:https";
-import type { CanvasHostHandler } from "../canvas-host/server.js";
-import type { createSubsystemLogger } from "../logging/subsystem.js";
-import type { GatewayWsClient } from "./server/ws-types.js";
+import type { TlsOptions } from "node:tls";
+import type { WebSocketServer } from "ws";
 import { resolveAgentAvatar } from "../agents/identity-avatar.js";
+import * as BustlyOAuth from "../bustly-oauth.js";
 import {
   A2UI_PATH,
   CANVAS_HOST_PATH,
   CANVAS_WS_PATH,
   handleA2uiHttpRequest,
 } from "../canvas-host/a2ui.js";
+import type { CanvasHostHandler } from "../canvas-host/server.js";
 import { loadConfig } from "../config/config.js";
+import type { createSubsystemLogger } from "../logging/subsystem.js";
 import { safeEqualSecret } from "../security/secret-equal.js";
 import { handleSlackHttpRequest } from "../slack/http/index.js";
 import {
@@ -61,6 +61,8 @@ import { handleOpenAiHttpRequest } from "./openai-http.js";
 import { handleOpenResponsesHttpRequest } from "./openresponses-http.js";
 import { GATEWAY_CLIENT_MODES, normalizeGatewayClientMode } from "./protocol/client-info.js";
 import { handleMediaRequest } from "./server-media.js";
+import { BUSTLY_OAUTH_CALLBACK_PATH } from "./server-methods/oauth.js";
+import type { GatewayWsClient } from "./server/ws-types.js";
 import { handleToolsInvokeHttpRequest } from "./tools-invoke-http.js";
 
 type SubsystemLogger = ReturnType<typeof createSubsystemLogger>;
@@ -77,6 +79,193 @@ function sendJson(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.end(JSON.stringify(body));
+}
+
+type BustlyTokenApiResponse = {
+  code: string;
+  message: string;
+  status: string;
+  data: {
+    accessToken: string;
+    workspaceId: string;
+    userId: string;
+    userName: string;
+    userEmail: string;
+    skills?: string[];
+    extras?: {
+      "bustly-search-data"?: {
+        search_DATA_TOKEN?: string;
+        search_DATA_SUPABASE_URL?: string;
+        search_DATA_SUPABASE_ANON_KEY?: string;
+        search_DATA_WORKSPACE_ID?: string;
+      };
+      supabase_session?: {
+        access_token?: string;
+      };
+    };
+  };
+};
+
+function escapeHtml(text: string): string {
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function sendBustlyOAuthHtml(
+  res: ServerResponse,
+  params: { status: number; ok: boolean; title: string; message: string },
+) {
+  res.statusCode = params.status;
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.end(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapeHtml(params.title)}</title>
+  <style>
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#f6f7fb; color:#111; }
+    .wrap { min-height:100vh; display:grid; place-items:center; padding:24px; }
+    .card { width:min(560px,100%); background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:24px; box-shadow:0 10px 30px rgba(0,0,0,0.06); }
+    h1 { margin:0 0 8px; font-size:22px; }
+    p { margin:0; color:#4b5563; line-height:1.5; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>${params.ok ? "Login completed" : "Login failed"}</h1>
+      <p>${escapeHtml(params.message)}</p>
+    </div>
+  </div>
+  ${params.ok ? "<script>setTimeout(()=>window.close(), 2500)</script>" : ""}
+</body>
+</html>`);
+}
+
+async function exchangeBustlyAuthCode(code: string): Promise<BustlyTokenApiResponse> {
+  const apiBaseUrl = process.env.BUSTLY_API_BASE_URL;
+  if (!apiBaseUrl) {
+    throw new Error("Missing BUSTLY_API_BASE_URL");
+  }
+  const clientId = process.env.BUSTLY_CLIENT_ID ?? "openclaw-desktop";
+  const apiEndpoint = `${apiBaseUrl.replace(/\/+$/, "")}/api/oauth/getToken`;
+  const response = await fetch(apiEndpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      code,
+      client_id: clientId,
+      grant_type: "authorization_code",
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "");
+    throw new Error(
+      `Token exchange failed: HTTP ${response.status}${errorText ? ` ${errorText}` : ""}`,
+    );
+  }
+
+  const apiResponse = (await response.json()) as BustlyTokenApiResponse;
+  if (apiResponse.status !== "0") {
+    throw new Error(apiResponse.message || "Token exchange failed");
+  }
+  return apiResponse;
+}
+
+async function handleBustlyOAuthCallbackHttpRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<boolean> {
+  const url = new URL(req.url ?? "/", "http://localhost");
+  if (url.pathname !== BUSTLY_OAUTH_CALLBACK_PATH) {
+    return false;
+  }
+
+  if (req.method !== "GET") {
+    res.statusCode = 405;
+    res.setHeader("Allow", "GET");
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.end("Method Not Allowed");
+    return true;
+  }
+
+  const code = url.searchParams.get("code")?.trim() ?? "";
+  const state = url.searchParams.get("state")?.trim() ?? "";
+  if (!code) {
+    sendBustlyOAuthHtml(res, {
+      status: 400,
+      ok: false,
+      title: "Login failed",
+      message: "Missing authorization code. Please retry login from the dashboard.",
+    });
+    return true;
+  }
+
+  const oauthState = BustlyOAuth.readBustlyOAuthState();
+  if (!oauthState?.loginTraceId || oauthState.loginTraceId !== state) {
+    sendBustlyOAuthHtml(res, {
+      status: 400,
+      ok: false,
+      title: "Login failed",
+      message: "Invalid login state. Please retry login from the dashboard.",
+    });
+    return true;
+  }
+
+  try {
+    BustlyOAuth.setBustlyAuthCode(code);
+    const apiResponse = await exchangeBustlyAuthCode(code);
+    const supabaseAccessToken = apiResponse.data.extras?.supabase_session?.access_token ?? "";
+    if (!supabaseAccessToken) {
+      throw new Error("Missing Supabase access token in API response");
+    }
+
+    const searchDataConfig = apiResponse.data.extras?.["bustly-search-data"];
+    BustlyOAuth.completeBustlyLogin({
+      user: {
+        userId: apiResponse.data.userId,
+        userName: apiResponse.data.userName,
+        userEmail: apiResponse.data.userEmail,
+        workspaceId: apiResponse.data.workspaceId,
+        skills: searchDataConfig ? ["search-data"] : (apiResponse.data.skills ?? []),
+      },
+      bustlySearchData: searchDataConfig
+        ? {
+            SEARCH_DATA_SUPABASE_URL: searchDataConfig.search_DATA_SUPABASE_URL ?? "",
+            SEARCH_DATA_SUPABASE_ANON_KEY: searchDataConfig.search_DATA_SUPABASE_ANON_KEY ?? "",
+            SEARCH_DATA_SUPABASE_ACCESS_TOKEN: supabaseAccessToken,
+            SEARCH_DATA_TOKEN: searchDataConfig.search_DATA_TOKEN ?? apiResponse.data.accessToken,
+            SEARCH_DATA_WORKSPACE_ID:
+              searchDataConfig.search_DATA_WORKSPACE_ID ?? apiResponse.data.workspaceId,
+          }
+        : undefined,
+    });
+
+    console.log("[BustlyOAuth] Login completed via gateway HTTP callback");
+    sendBustlyOAuthHtml(res, {
+      status: 200,
+      ok: true,
+      title: "Login completed",
+      message: "Login completed. You can close this tab and return to the dashboard.",
+    });
+    return true;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[BustlyOAuth] Gateway callback failed:", message);
+    sendBustlyOAuthHtml(res, {
+      status: 500,
+      ok: false,
+      title: "Login failed",
+      message,
+    });
+    return true;
+  }
 }
 
 function isCanvasPath(pathname: string): boolean {
@@ -472,6 +661,11 @@ export function createGatewayHttpServer(opts: {
         req.url = scopedCanvas.rewrittenUrl;
       }
       const requestPath = new URL(req.url ?? "/", "http://localhost").pathname;
+      if (requestPath === BUSTLY_OAUTH_CALLBACK_PATH) {
+        if (await handleBustlyOAuthCallbackHttpRequest(req, res)) {
+          return;
+        }
+      }
       if (await handleHooksRequest(req, res)) {
         return;
       }
