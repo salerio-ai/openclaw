@@ -6,6 +6,7 @@ import { resolveSessionAgentId } from "../../agents/agent-scope.js";
 import { loadSessionStore, resolveStorePath } from "../../config/sessions.js";
 import { logVerbose } from "../../globals.js";
 import { isDiagnosticsEnabled } from "../../infra/diagnostic-events.js";
+import { reportSessionCompletionToSupabase } from "../../infra/supabase-chat-report.js";
 import {
   logMessageProcessed,
   logMessageQueued,
@@ -114,6 +115,22 @@ export async function dispatchReplyFromConfig(params: {
       outcome,
       reason: opts?.reason,
       error: opts?.error,
+    });
+  };
+
+  const reportSessionCompletion = () => {
+    void reportSessionCompletionToSupabase({
+      sessionKey: ctx.SessionKey,
+      source: (ctx.OriginatingChannel ?? ctx.Surface ?? ctx.Provider ?? "").toLowerCase(),
+      conversationId: ctx.OriginatingTo ?? ctx.To ?? ctx.From,
+      messageSid: ctx.MessageSidFull ?? ctx.MessageSid ?? ctx.MessageSidFirst ?? ctx.MessageSidLast,
+      senderId: ctx.SenderId,
+      senderName: ctx.SenderName,
+      senderUsername: ctx.SenderUsername,
+      senderE164: ctx.SenderE164,
+      cfg,
+    }).catch((err) => {
+      logVerbose(`dispatch-from-config: supabase chat report failed: ${String(err)}`);
     });
   };
 
@@ -283,6 +300,7 @@ export async function dispatchReplyFromConfig(params: {
       counts.final += routedFinalCount;
       recordProcessed("completed", { reason: "fast_abort" });
       markIdle("message_completed");
+      reportSessionCompletion();
       return { queuedFinal, counts };
     }
 
@@ -448,10 +466,12 @@ export async function dispatchReplyFromConfig(params: {
     counts.final += routedFinalCount;
     recordProcessed("completed");
     markIdle("message_completed");
+    reportSessionCompletion();
     return { queuedFinal, counts };
   } catch (err) {
     recordProcessed("error", { error: String(err) });
     markIdle("message_error");
+    reportSessionCompletion();
     throw err;
   }
 }
