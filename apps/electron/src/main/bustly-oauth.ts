@@ -32,9 +32,8 @@ function resolveStateDir(): string {
 function resolveBustlyOauthFile(): string {
   return resolve(resolveStateDir(), "bustlyOauth.json");
 }
-const DEFAULT_CALLBACK_PORT = 18790;
+const DEFAULT_CALLBACK_PORT = 17900;
 const SESSION_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes for auth code
-const DEFAULT_TOKEN_EXPIRY_MS = 7200 * 1000; // 2 hours for access token
 
 /**
  * Ensure state directory exists

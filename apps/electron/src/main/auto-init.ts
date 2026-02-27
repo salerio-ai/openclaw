@@ -5,7 +5,7 @@
  */
 
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -88,7 +88,7 @@ async function runCliOnboard(options: InitializationOptions): Promise<void> {
 
   const invocation = resolveCliInvocation(cliPath, args, { includeBundledNode: true });
   if (!invocation) {
-    throw new Error("Node binary not found. Set OPENCLAW_NODE_PATH or bundle node.");
+    throw new Error("Node binary not found in bundled resources.");
   }
   const command = invocation.command;
   const commandArgs = invocation.args;

@@ -53,7 +53,7 @@ export default function ProviderStep({
   selectedModel,
   manualModel,
   onSelectedModelChange,
-  onManualModelChange,
+  onManualModelChange: _onManualModelChange,
   onModelContinue,
   onSelect,
   onBack,
@@ -67,7 +67,7 @@ export default function ProviderStep({
         : "We will open a browser window to authenticate.";
 
   return (
-    <OnboardContainer className="w-full max-w-4xl mx-auto px-6">
+    <OnboardContainer align="start" className="w-full max-w-4xl mx-auto px-6">
       <div className="relative text-center mb-8">
         {showClose && (
           <button
@@ -106,12 +106,26 @@ export default function ProviderStep({
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-        {providers.map((provider) => {
+        {providers
+          .slice()
+          .toSorted((a, b) => {
+            const order = ["openai", "anthropic", "google", "zai", "openrouter"];
+            return order.indexOf(a.id) - order.indexOf(b.id);
+          })
+          .map((provider) => {
           const isSelected = selectedProvider?.id === provider.id;
           const logo = providerLogos[provider.id];
           const isApiKeyFlowProvider =
-            provider.id === "openrouter" || provider.id === "anthropic";
+            provider.id === "openrouter" || provider.id === "anthropic" || provider.id === "zai";
           const isAnthropic = provider.id === "anthropic";
+          const displayLabel =
+            provider.id === "google" ? "Google Gemini" : provider.label;
+          const badgeText =
+            provider.id === "openai"
+              ? "7D Free"
+              : provider.id === "anthropic"
+                ? "Max Performance"
+                : null;
           return (
             <div
               key={provider.id}
@@ -121,24 +135,29 @@ export default function ProviderStep({
                   : "border-gray-200 bg-white hover:border-[#1A162F] hover:shadow-lg"
               }`}
             >
+              {badgeText && (
+                <span className="absolute right-4 top-4 rounded-full bg-[#1A162F] px-2.5 py-1 text-[10px] font-semibold tracking-wide text-white">
+                  {badgeText}
+                </span>
+              )}
               <div className="w-16 h-16 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center p-3">
                 {isAnthropic ? (
                   <span
                     className="w-full h-full"
                     style={{ color: "rgb(217 119 87)" }}
-                    aria-label={provider.label}
+                    aria-label={displayLabel}
                     dangerouslySetInnerHTML={{ __html: claudeLogoRaw }}
                   />
                 ) : logo ? (
-                  <img src={logo} alt={provider.label} className="w-full h-full object-contain" />
+                  <img src={logo} alt={displayLabel} className="w-full h-full object-contain" />
                 ) : (
                   <span className="text-lg font-bold text-[#1A162F]">
-                    {provider.label.slice(0, 2).toUpperCase()}
+                    {displayLabel.slice(0, 2).toUpperCase()}
                   </span>
                 )}
               </div>
               <div>
-                <h3 className="text-xl font-bold text-[#1A162F]">{provider.label}</h3>
+                <h3 className="text-xl font-bold text-[#1A162F]">{displayLabel}</h3>
                 <p className="text-sm text-[#6B6F86] mt-1">{provider.defaultModel}</p>
               </div>
 
@@ -197,7 +216,7 @@ export default function ProviderStep({
                 <div className="mt-4 w-full rounded-xl border border-gray-200 bg-gray-50 p-4 text-left">
                   <div className="mb-3">
                     <p className="text-sm font-semibold text-[#1A162F]">
-                      {provider.label} credentials
+                      {displayLabel} credentials
                     </p>
                     <p className="mt-1 text-sm text-[#6B6F86]">{authHint}</p>
                   </div>

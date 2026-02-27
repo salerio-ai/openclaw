@@ -5,6 +5,7 @@
 
 import { shell } from "electron";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import type { AddressInfo } from "node:net";
 import { loginOpenAICodex, loginAntigravity } from "@mariozechner/pi-ai";
 import { loadConfig } from "../../../../src/config/config.js";
 import * as BustlyOAuth from "./bustly-oauth.js";
@@ -19,6 +20,7 @@ let oauthPromptResolver: ((value: string) => void) | null = null;
 const DEFAULT_OAUTH_CALLBACK_PORT = 18790;
 
 let oauthServer: ReturnType<typeof createServer> | null = null;
+let oauthServerPort: number | null = null;
 let oauthCodeResolver: ((code: string) => void) | null = null;
 
 /**
@@ -30,7 +32,7 @@ function getOAuthCallbackPort(): number {
     const port = config.bustlyOAuth?.callbackPort ?? DEFAULT_OAUTH_CALLBACK_PORT;
     console.log(`[Bustly OAuth] Using callback port: ${port} (from ${config.bustlyOAuth?.callbackPort ? 'config' : 'default'})`);
     return port;
-  } catch (error) {
+  } catch {
     console.log(`[Bustly OAuth] Failed to load config, using default port: ${DEFAULT_OAUTH_CALLBACK_PORT}`);
     return DEFAULT_OAUTH_CALLBACK_PORT;
   }
@@ -79,19 +81,21 @@ export function generateLoginUrl(
 }
 
 /**
- * Start the OAuth callback HTTP server
+ * Start the OAuth callback HTTP server and return the actual listening port.
+ * Falls back to an ephemeral loopback port when the configured port is occupied.
  */
-export function startOAuthCallbackServer(): number {
+export async function startOAuthCallbackServer(): Promise<number> {
   if (oauthServer) {
-    const port = getOAuthCallbackPort();
-    console.log("[Bustly OAuth] OAuth server already running on port", port);
-    return port;
+    const currentPort = oauthServerPort ?? getOAuthCallbackPort();
+    console.log("[Bustly OAuth] OAuth server already running on port", currentPort);
+    return currentPort;
   }
 
-  const port = getOAuthCallbackPort();
-  console.log("[Bustly OAuth] Starting OAuth callback server on port", port);
+  const configuredPort = getOAuthCallbackPort();
+  console.log("[Bustly OAuth] Starting OAuth callback server on port", configuredPort);
 
-  oauthServer = createServer((req: IncomingMessage, res: ServerResponse) => {
+  const server = createServer((req: IncomingMessage, res: ServerResponse) => {
+    const currentPort = oauthServerPort ?? configuredPort;
     console.log("=".repeat(60));
     console.log("[Bustly OAuth] Received request:", req.method, req.url);
     console.log("=".repeat(60));
@@ -104,7 +108,7 @@ export function startOAuthCallbackServer(): number {
       return;
     }
 
-    const url = new URL(urlRaw, `http://127.0.0.1:${port}`);
+    const url = new URL(urlRaw, `http://127.0.0.1:${currentPort}`);
     console.log("[Bustly OAuth] Pathname:", url);
 
     // Check if this is an OAuth callback
@@ -223,15 +227,54 @@ export function startOAuthCallbackServer(): number {
     console.log("=".repeat(60));
   });
 
-  oauthServer.listen(port, "127.0.0.1", () => {
-    console.log("[Bustly OAuth] OAuth callback server listening on http://127.0.0.1:" + port);
-  });
+  oauthServer = server;
 
-  oauthServer.on("error", (err: Error) => {
-    console.error("[Bustly OAuth] OAuth server error:", err);
-  });
+  const startServer = (portToTry: number): Promise<number> =>
+    new Promise((resolve, reject) => {
+      const onListening = () => {
+        const address = server.address() as AddressInfo | null;
+        const actualPort = address?.port ?? portToTry;
+        oauthServerPort = actualPort;
+        console.log("[Bustly OAuth] OAuth callback server listening on http://127.0.0.1:" + actualPort);
+        cleanup();
+        resolve(actualPort);
+      };
+      const onError = (err: Error) => {
+        cleanup();
+        reject(err);
+      };
+      const cleanup = () => {
+        server.off("listening", onListening);
+        server.off("error", onError);
+      };
+      server.on("listening", onListening);
+      server.on("error", onError);
+      server.listen(portToTry, "127.0.0.1");
+    });
 
-  return port;
+  try {
+    return await startServer(configuredPort);
+  } catch (err) {
+    const nodeErr = err as NodeJS.ErrnoException;
+    if (nodeErr.code !== "EADDRINUSE") {
+      oauthServer = null;
+      oauthServerPort = null;
+      console.error("[Bustly OAuth] OAuth server failed to start:", err);
+      throw err;
+    }
+
+    console.warn(
+      `[Bustly OAuth] Port ${configuredPort} is in use; retrying on a random loopback port`,
+    );
+    try {
+      return await startServer(0);
+    } catch (fallbackErr) {
+      oauthServer = null;
+      oauthServerPort = null;
+      console.error("[Bustly OAuth] OAuth server fallback start failed:", fallbackErr);
+      throw fallbackErr;
+    }
+  }
 }
 
 /**
@@ -244,6 +287,7 @@ export function stopOAuthCallbackServer(): void {
       console.log("[Bustly OAuth] OAuth callback server stopped");
     });
     oauthServer = null;
+    oauthServerPort = null;
   }
 }
 
@@ -373,6 +417,15 @@ export function handleOAuthPromptResponse(value: string) {
 
 // Provider configurations
 const PROVIDERS = {
+  anthropic: {
+    id: "anthropic",
+    label: "Anthropic",
+    authMethods: [
+      { id: "api_key", label: "API Key", kind: "api_key" as AuthMethodKind },
+    ],
+    defaultModel: "anthropic/claude-opus-4-5",
+    envKey: "ANTHROPIC_API_KEY",
+  },
   openai: {
     id: "openai",
     label: "OpenAI",
@@ -401,14 +454,14 @@ const PROVIDERS = {
     envKey: "OPENROUTER_API_KEY",
     isDev: true,
   },
-  anthropic: {
-    id: "anthropic",
-    label: "Anthropic",
+  zai: {
+    id: "zai",
+    label: "Z.AI",
     authMethods: [
       { id: "api_key", label: "API Key", kind: "api_key" as AuthMethodKind },
     ],
-    defaultModel: "anthropic/claude-opus-4-5",
-    envKey: "ANTHROPIC_API_KEY",
+    defaultModel: "zai/glm-5",
+    envKey: "ZAI_API_KEY",
   },
 };
 
@@ -652,22 +705,6 @@ export async function authenticateWithOAuth(params: {
     method: "oauth",
     error: "OAuth not supported for this provider",
   };
-}
-
-/**
- * Open OAuth URL in browser
- */
-async function openOAuthUrl(url: string): Promise<void> {
-  await shell.openExternal(url);
-}
-
-/**
- * Generate OAuth state parameter
- */
-function generateOAuthState(): string {
-  const randomValues = new Uint8Array(16);
-  crypto.getRandomValues(randomValues);
-  return Array.from(randomValues, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 /**

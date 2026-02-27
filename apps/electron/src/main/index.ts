@@ -13,6 +13,7 @@ import {
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { Socket } from "node:net";
+import updater from "electron-updater";
 import {
   initializeOpenClaw,
   getConfigPath,
@@ -32,13 +33,13 @@ import {
   stopOAuthCallbackServer,
   cancelOAuthFlow,
   type AuthResult,
+  type ProviderId,
 } from "./oauth-handler.js";
 import * as BustlyOAuth from "./bustly-oauth.js";
 import { loadModelCatalog } from "../../../../src/agents/model-catalog";
 import { upsertAuthProfile } from "../../../../src/agents/auth-profiles";
 import { DEFAULT_PROVIDER } from "../../../../src/agents/defaults";
 import {
-  buildAllowedModelSet,
   buildModelAliasIndex,
   modelKey,
   normalizeProviderId,
@@ -62,6 +63,9 @@ import { startWebLoginWithQr, waitForWebLogin } from "../../../../src/web/login-
 import { webAuthExists } from "../../../../src/web/session";
 
 const __dirname = resolve(fileURLToPath(import.meta.url), "..");
+const autoUpdater = updater.autoUpdater;
+const APP_PROTOCOL = "bustly";
+const DEEP_LINK_CHANNEL = "deep-link";
 
 let gatewayProcess: ChildProcess | null = null;
 let mainWindow: BrowserWindow | null = null;
@@ -70,6 +74,10 @@ let needsOnboardAtLaunch = false;
 let gatewayPort: number = 17999;
 let gatewayBind: string = "loopback";
 let gatewayToken: string | null = null;
+let updateReady = false;
+let updateVersion: string | null = null;
+let updateInstalling = false;
+let pendingDeepLink: { url: string; route: string | null } | null = null;
 
 const EXTERNAL_NAV_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
@@ -90,6 +98,105 @@ function shouldOpenExternal(url: string): boolean {
     return false;
   }
   return !EXTERNAL_NAV_HOSTS.has(parsed.hostname.toLowerCase());
+}
+
+function normalizeDeepLinkRoute(route: string | null | undefined): string | null {
+  if (!route) {
+    return null;
+  }
+  const normalized = route.replace(/^#\/?/, "").replace(/^\/+/, "").trim();
+  if (!normalized) {
+    return null;
+  }
+  if (normalized === "home") {
+    return "/";
+  }
+  return normalized.startsWith("/") ? normalized : `/${normalized}`;
+}
+
+function parseDeepLink(url: string): { url: string; route: string | null } | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== `${APP_PROTOCOL}:`) {
+    return null;
+  }
+
+  const routeFromQuery = normalizeDeepLinkRoute(parsed.searchParams.get("route"));
+  const routeFromPath = normalizeDeepLinkRoute(parsed.pathname);
+  const routeFromHost =
+    parsed.hostname && parsed.hostname !== "open" ? normalizeDeepLinkRoute(parsed.hostname) : null;
+
+  return {
+    url,
+    route: routeFromQuery ?? routeFromPath ?? routeFromHost ?? null,
+  };
+}
+
+function focusMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore();
+  }
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+function dispatchDeepLink(url: string): boolean {
+  const payload = parseDeepLink(url);
+  if (!payload) {
+    return false;
+  }
+
+  pendingDeepLink = payload;
+  writeMainLog(`[DeepLink] received url=${payload.url} route=${payload.route ?? "(none)"}`);
+
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    ensureWindow();
+    return true;
+  }
+
+  focusMainWindow();
+  if (payload.route) {
+    loadRendererWindow(mainWindow, { hash: payload.route });
+  }
+  mainWindow.webContents.send(DEEP_LINK_CHANNEL, payload);
+  pendingDeepLink = null;
+  return true;
+}
+
+function flushPendingDeepLink() {
+  if (!pendingDeepLink || !mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  const payload = pendingDeepLink;
+  focusMainWindow();
+  if (payload.route) {
+    loadRendererWindow(mainWindow, { hash: payload.route });
+  }
+  mainWindow.webContents.send(DEEP_LINK_CHANNEL, payload);
+  pendingDeepLink = null;
+}
+
+function registerProtocolClient() {
+  try {
+    let success = false;
+    if (process.defaultApp && process.argv.length >= 2) {
+      success = app.setAsDefaultProtocolClient(APP_PROTOCOL, process.execPath, [resolve(process.argv[1])]);
+    } else {
+      success = app.setAsDefaultProtocolClient(APP_PROTOCOL);
+    }
+    writeMainLog(`[DeepLink] protocol registration ${success ? "ok" : "failed"} scheme=${APP_PROTOCOL}`);
+  } catch (error) {
+    writeMainLog(
+      `[DeepLink] protocol registration error: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 }
 let initResult: InitializationResult | null = null;
 let mainLogPath: string | null = null;
@@ -116,6 +223,7 @@ const DASHBOARD_CHANNEL_PLUGIN_IDS = ["whatsapp"] as const;
 const PRELOAD_PATH = process.env.NODE_ENV === "development"
   ? resolve(__dirname, "main/preload.js")
   : resolve(__dirname, "preload.js");
+const UPDATE_STATUS_CHANNEL = "update-status";
 
 function resolveUserPath(input: string, homeDir: string): string {
   const trimmed = input.trim();
@@ -157,15 +265,35 @@ function ensureMainLogPath(): string {
 }
 
 function writeMainLog(message: string) {
-  try {
+  const line = `[${new Date().toISOString()}] ${message}\n`;
+  const writeLine = () => {
     const logPath = ensureMainLogPath();
-    const line = `[${new Date().toISOString()}] ${message}\n`;
+    mkdirSync(dirname(logPath), { recursive: true, mode: 0o700 });
     appendFileSync(logPath, line, "utf-8");
+  };
+
+  try {
+    writeLine();
   } catch (error) {
-    console.error("[Main log] Failed to write:", error);
+    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
+      try {
+        mainLogPath = null;
+        writeLine();
+      } catch (retryError) {
+        console.error("[Main log] Failed to write:", retryError);
+      }
+    } else {
+      console.error("[Main log] Failed to write:", error);
+    }
   }
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("main-log", { message });
+  }
+}
+
+function sendUpdateStatus(event: string, payload?: Record<string, unknown>) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(UPDATE_STATUS_CHANNEL, { event, ...payload });
   }
 }
 
@@ -279,6 +407,9 @@ function loadGatewayConfig(): { port: number; bind: string; token?: string } | n
  * Start the OpenClaw Gateway process
  */
 async function startGateway(): Promise<boolean> {
+  const oauthCallbackPort = await startOAuthCallbackServer();
+  console.log("[Bustly] OAuth callback server started on port", oauthCallbackPort);
+
   return new Promise((resolvePromise, reject) => {
     const startAt = Date.now();
     if (gatewayProcess) {
@@ -344,7 +475,7 @@ async function startGateway(): Promise<boolean> {
 
     const invocation = resolveCliInvocation(cliPath, args, { includeBundledNode: true });
     if (!invocation) {
-      writeMainLog("Failed to locate node binary. Set OPENCLAW_NODE_PATH or bundle node.");
+      writeMainLog("Failed to locate node binary in bundled resources.");
       reject(new Error("Node binary not found for OpenClaw CLI"));
       return;
     }
@@ -444,10 +575,6 @@ async function startGateway(): Promise<boolean> {
 
     const envVars = loadEnvVars();
 
-    // Start OAuth callback server for Bustly login
-    const oauthCallbackPort = startOAuthCallbackServer();
-    console.log("[Bustly] OAuth callback server started on port", oauthCallbackPort);
-
     const spawnEnv = {
       ...process.env,
       ...envVars,
@@ -527,7 +654,7 @@ async function startGateway(): Promise<boolean> {
       mainWindow?.webContents.send("gateway-exit", { code, signal });
     });
 
-    const startupTimeoutMs = 20_000;
+    const startupTimeoutMs = 45_000;
     const exitPromise = new Promise<never>((_resolve, rejectExit) => {
       gatewayProcess?.once("exit", (code, signal) => {
         rejectExit(
@@ -665,7 +792,7 @@ function openControlUiInMainWindow(): void {
     writeMainLog(`Control UI navigated: url=${url}`);
   });
 
-  waitForGatewayPort(gatewayPort).then((ready) => {
+  void waitForGatewayPort(gatewayPort).then((ready) => {
     writeMainLog(`Gateway port ${gatewayPort} ready=${ready}`);
     if (!ready || !mainWindow || mainWindow.isDestroyed()) {
       return;
@@ -851,6 +978,118 @@ function createWindow(): void {
       mainWindow.webContents.send("bustly-login-refresh");
     })();
   });
+
+  mainWindow.webContents.once("did-finish-load", () => {
+    flushPendingDeepLink();
+  });
+  flushPendingDeepLink();
+}
+
+function setupAutoUpdater(): void {
+  if (!app.isPackaged) {
+    writeMainLog("[Updater] Development mode: auto-updates enabled");
+  }
+
+  const updateUrl =
+    process.env.BUSTLY_UPDATE_URL?.trim();
+  const updateBaseUrl =
+    process.env.BUSTLY_UPDATE_BASE_URL?.trim();
+
+  const platformKey =
+    process.platform === "darwin"
+      ? `mac-${process.arch === "arm64" ? "arm64" : "x64"}`
+      : process.platform === "win32"
+        ? "windows"
+        : "linux";
+  const normalizeBase = (input: string) => input.replace(/\/+$/, "");
+  const buildPlatformUrl = (base: string) => `${normalizeBase(base)}/${platformKey}/`;
+  const resolvedUpdateUrl = updateUrl || (updateBaseUrl ? buildPlatformUrl(updateBaseUrl) : "");
+
+  const appVersion = app.getVersion();
+  const prerelease = appVersion.includes("-") ? appVersion.split("-")[1] ?? "" : "";
+  const inferredChannel = prerelease ? prerelease.split(".")[0] ?? "latest" : "latest";
+  autoUpdater.channel = inferredChannel;
+  const channel = autoUpdater.channel ?? inferredChannel;
+  const metadataFile =
+    process.platform === "darwin"
+      ? (channel === "latest" ? "latest-mac.yml" : `${channel}-mac.yml`)
+      : channel === "latest"
+        ? "latest.yml"
+        : `${channel}.yml`;
+
+  writeMainLog(`[Updater] App version: ${appVersion}`);
+  writeMainLog(`[Updater] Channel: ${channel} metadata: ${metadataFile}`);
+
+  if (channel !== "latest") {
+    autoUpdater.allowPrerelease = true;
+    writeMainLog("[Updater] allowPrerelease enabled");
+  }
+
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  // macOS + generic provider has shown flaky partial installs in our env;
+  // force full package downloads instead of differential/blockmap patches.
+  autoUpdater.disableDifferentialDownload = true;
+  writeMainLog("[Updater] Differential download disabled");
+
+  if (resolvedUpdateUrl) {
+    try {
+      autoUpdater.setFeedURL({ provider: "generic", url: resolvedUpdateUrl });
+      writeMainLog(`[Updater] Feed URL set: ${resolvedUpdateUrl}`);
+    } catch (error) {
+      writeMainLog(`[Updater] Failed to set feed URL: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  } else {
+    writeMainLog("[Updater] No update URL configured; using electron-builder publish config");
+  }
+
+  autoUpdater.on("checking-for-update", () => {
+    writeMainLog("[Updater] Checking for updates...");
+    sendUpdateStatus("checking");
+  });
+
+  autoUpdater.on("update-available", (info) => {
+    writeMainLog(`[Updater] Update available: ${info.version}`);
+    sendUpdateStatus("available", { info });
+  });
+
+  autoUpdater.on("update-not-available", (info) => {
+    writeMainLog(`[Updater] No updates available (current: ${info.version})`);
+    sendUpdateStatus("not-available", { info });
+  });
+
+  autoUpdater.on("error", (error) => {
+    writeMainLog(`[Updater] Error: ${error instanceof Error ? error.message : String(error)}`);
+    sendUpdateStatus("error", { error: error instanceof Error ? error.message : String(error) });
+  });
+
+  autoUpdater.on("download-progress", (progress) => {
+    sendUpdateStatus("download-progress", {
+      percent: progress.percent,
+      transferred: progress.transferred,
+      total: progress.total,
+      bytesPerSecond: progress.bytesPerSecond,
+    });
+  });
+
+  autoUpdater.on("update-downloaded", (info) => {
+    writeMainLog(`[Updater] Update downloaded: ${info.version}`);
+    sendUpdateStatus("downloaded", { info });
+    updateReady = true;
+    updateVersion = info.version ?? null;
+  });
+
+  void autoUpdater.checkForUpdates()
+    .then((result) => {
+      if (result?.updateInfo?.version) {
+        writeMainLog(`[Updater] checkForUpdates result: ${result.updateInfo.version}`);
+      } else {
+        writeMainLog("[Updater] checkForUpdates result: no update info");
+      }
+    })
+    .catch((error) => {
+      writeMainLog(`[Updater] checkForUpdates failed: ${error instanceof Error ? error.message : String(error)}`);
+    });
 }
 
 function ensureWindow(): void {
@@ -982,6 +1221,37 @@ function setupIpcHandlers(): void {
     };
   });
 
+  ipcMain.handle("updater-check", async () => {
+    try {
+      await autoUpdater.checkForUpdates();
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle("updater-install", () => {
+    try {
+      writeMainLog("[Updater] updater-install requested");
+      sendUpdateStatus("installing", { version: updateVersion });
+      updateInstalling = true;
+      setTimeout(() => {
+        writeMainLog("[Updater] Calling quitAndInstall");
+        autoUpdater.quitAndInstall(false, true);
+      }, 2000);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle("updater-status", () => {
+    return {
+      ready: updateReady,
+      version: updateVersion,
+    };
+  });
+
   // === Onboarding handlers ===
 
   // === Bustly OAuth handlers ===
@@ -1016,7 +1286,7 @@ function setupIpcHandlers(): void {
       console.log("[Bustly Login] OAuth state initialized, traceId:", oauthState.loginTraceId);
 
       // Start OAuth callback server
-      const oauthPort = startOAuthCallbackServer();
+      const oauthPort = await startOAuthCallbackServer();
       console.log("[Bustly Login] OAuth callback server started on port", oauthPort);
 
       // Generate login URL
@@ -1136,7 +1406,34 @@ function setupIpcHandlers(): void {
     }
   });
 
+  ipcMain.handle("bustly-reonboard", async () => {
+    try {
+      await stopGateway();
+      const stateDir = resolveElectronStateDir();
+      rmSync(stateDir, { recursive: true, force: true });
+      initResult = null;
+      gatewayToken = null;
+      gatewayProcess = null;
+      needsOnboardAtLaunch = true;
+      setTimeout(() => {
+        app.relaunch();
+        app.exit(0);
+      }, 50);
+      return { success: true };
+    } catch (error) {
+      console.error("[Reonboard] Error:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  });
+
   // === Onboarding handlers ===
+
+  ipcMain.handle("onboard-beta-openrouter-api-key", () => {
+    return process.env.BUSTLY_BETA_OPENROUTER_API_KEY ?? "";
+  });
 
   // List available providers
   ipcMain.handle("onboard-list-providers", () => {
@@ -1146,7 +1443,7 @@ function setupIpcHandlers(): void {
   // Authenticate with API key
   ipcMain.handle("onboard-auth-api-key", async (_event, provider: string, apiKey: string) => {
     try {
-      const result = await authenticateWithApiKey({ provider: provider as any, apiKey });
+      const result = await authenticateWithApiKey({ provider: provider as ProviderId, apiKey });
       return result;
     } catch (error) {
       return {
@@ -1161,7 +1458,7 @@ function setupIpcHandlers(): void {
   // Authenticate with token
   ipcMain.handle("onboard-auth-token", async (_event, provider: string, token: string) => {
     try {
-      const result = await authenticateWithToken({ provider: provider as any, token });
+      const result = await authenticateWithToken({ provider: provider as ProviderId, token });
       return result;
     } catch (error) {
       return {
@@ -1177,7 +1474,7 @@ function setupIpcHandlers(): void {
   ipcMain.handle("onboard-auth-oauth", async (_event, provider: string) => {
     try {
       const result = await authenticateWithOAuth({
-        provider: provider as any,
+        provider: provider as ProviderId,
         onPromptRequired: (message) => {
           // Send request to renderer to ask user for input
           if (mainWindow && !mainWindow.isDestroyed()) {
@@ -1433,7 +1730,7 @@ function setupIpcHandlers(): void {
           next = mergeWhatsAppConfig(next, { allowFrom: unique });
         } else {
           next = mergeWhatsAppConfig(next, { selfChatMode: false });
-          next = mergeWhatsAppConfig(next, { dmPolicy: payload.dmPolicy as DmPolicy });
+          next = mergeWhatsAppConfig(next, { dmPolicy: payload.dmPolicy });
           if (payload.dmPolicy === "open") {
             next = mergeWhatsAppConfig(next, { allowFrom: ["*"] });
           }
@@ -1500,10 +1797,41 @@ function setupIpcHandlers(): void {
     const open = toggleDevPanelWindow();
     return { success: true, open };
   });
+
+  ipcMain.handle("deep-link-consume-pending", () => {
+    const next = pendingDeepLink;
+    pendingDeepLink = null;
+    return next;
+  });
 }
 
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
+
+app.on("second-instance", (_event, argv) => {
+  const deepLinkArg = argv.find((value) => value.startsWith(`${APP_PROTOCOL}://`));
+  if (deepLinkArg) {
+    dispatchDeepLink(deepLinkArg);
+    return;
+  }
+  focusMainWindow();
+});
+
+app.on("open-url", (event, url) => {
+  event.preventDefault();
+  dispatchDeepLink(url);
+});
+
+const initialDeepLinkArg = process.argv.find((value) => value.startsWith(`${APP_PROTOCOL}://`));
+
 // App lifecycle
-app.whenReady().then(async () => {
+void app.whenReady().then(async () => {
+  registerProtocolClient();
+  if (initialDeepLinkArg) {
+    dispatchDeepLink(initialDeepLinkArg);
+  }
   powerSaveBlocker.start("prevent-app-suspension");
   // Load .env file at startup (must be after app is ready to get correct paths)
   const loadDotEnv = () => {
@@ -1543,6 +1871,7 @@ app.whenReady().then(async () => {
     }
   };
   loadDotEnv();
+  setupAutoUpdater();
 
   app.on("web-contents-created", (_event, contents) => {
     contents.setWindowOpenHandler(({ url }) => {
@@ -1579,7 +1908,6 @@ app.whenReady().then(async () => {
   writeMainLog(`resourcesPath=${process.resourcesPath}`);
   writeMainLog(`appVersion=${app.getVersion()} electron=${process.versions.electron}`);
 
-  const isDev = process.env.NODE_ENV === "development";
   const configPath = getConfigPath();
   console.log(`[Init] configPath=${configPath ?? "unresolved"}`);
   writeMainLog(`configPath=${configPath ?? "unresolved"}`);
@@ -1587,14 +1915,7 @@ app.whenReady().then(async () => {
   const fullyInitialized = isFullyInitialized();
   console.log(`[Init] fullyInitialized=${fullyInitialized}`);
   writeMainLog(`fullyInitialized=${fullyInitialized}`);
-  let needsInit = !fullyInitialized;
-  if (!needsInit) {
-    const checkConfig = loadGatewayConfig();
-    if (checkConfig && !checkConfig.token) {
-      console.log("[Init] Existing configuration is missing token, forcing re-initialization...");
-      needsInit = true;
-    }
-  }
+  const needsInit = !fullyInitialized;
   needsOnboardAtLaunch = needsInit;
 
   ensureWindow();
@@ -1663,6 +1984,11 @@ app.on("activate", () => {
 app.on("before-quit", async () => {
   console.log("[Lifecycle] App about to quit");
   writeMainLog("App about to quit");
+
+  if (updateInstalling) {
+    writeMainLog("[Updater] Update install in progress; skipping graceful gateway shutdown");
+    return;
+  }
 
   // Ensure gateway is stopped before quitting
   if (gatewayProcess) {

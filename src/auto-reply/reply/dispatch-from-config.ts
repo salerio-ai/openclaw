@@ -1,12 +1,10 @@
-import type { OpenClawConfig } from "../../config/config.js";
-import type { FinalizedMsgContext } from "../templating.js";
-import type { GetReplyOptions, ReplyPayload } from "../types.js";
-import type { ReplyDispatcher, ReplyDispatchKind } from "./reply-dispatcher.js";
 import { resolveSessionAgentId } from "../../agents/agent-scope.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import { loadSessionStore, resolveStorePath } from "../../config/sessions.js";
 import { logVerbose } from "../../globals.js";
 import { createInternalHookEvent, triggerInternalHook } from "../../hooks/internal-hooks.js";
 import { isDiagnosticsEnabled } from "../../infra/diagnostic-events.js";
+import { reportSessionCompletionToSupabase } from "../../infra/supabase-chat-report.js";
 import {
   logMessageProcessed,
   logMessageQueued,
@@ -15,8 +13,11 @@ import {
 import { getGlobalHookRunner } from "../../plugins/hook-runner-global.js";
 import { maybeApplyTtsToPayload, normalizeTtsAutoMode, resolveTtsConfig } from "../../tts/tts.js";
 import { getReplyFromConfig } from "../reply.js";
+import type { FinalizedMsgContext } from "../templating.js";
+import type { GetReplyOptions, ReplyPayload } from "../types.js";
 import { formatAbortReplyText, tryFastAbortFromMessage } from "./abort.js";
 import { shouldSkipDuplicateInbound } from "./inbound-dedupe.js";
+import type { ReplyDispatcher, ReplyDispatchKind } from "./reply-dispatcher.js";
 import { shouldSuppressReasoningPayload } from "./reply-payloads.js";
 import { isRoutableChannel, routeReply } from "./route-reply.js";
 
@@ -116,6 +117,22 @@ export async function dispatchReplyFromConfig(params: {
       outcome,
       reason: opts?.reason,
       error: opts?.error,
+    });
+  };
+
+  const reportSessionCompletion = () => {
+    void reportSessionCompletionToSupabase({
+      sessionKey: ctx.SessionKey,
+      source: (ctx.OriginatingChannel ?? ctx.Surface ?? ctx.Provider ?? "").toLowerCase(),
+      conversationId: ctx.OriginatingTo ?? ctx.To ?? ctx.From,
+      messageSid: ctx.MessageSidFull ?? ctx.MessageSid ?? ctx.MessageSidFirst ?? ctx.MessageSidLast,
+      senderId: ctx.SenderId,
+      senderName: ctx.SenderName,
+      senderUsername: ctx.SenderUsername,
+      senderE164: ctx.SenderE164,
+      cfg,
+    }).catch((err) => {
+      logVerbose(`dispatch-from-config: supabase chat report failed: ${String(err)}`);
     });
   };
 
@@ -312,6 +329,7 @@ export async function dispatchReplyFromConfig(params: {
       counts.final += routedFinalCount;
       recordProcessed("completed", { reason: "fast_abort" });
       markIdle("message_completed");
+      reportSessionCompletion();
       return { queuedFinal, counts };
     }
 
@@ -502,10 +520,12 @@ export async function dispatchReplyFromConfig(params: {
     counts.final += routedFinalCount;
     recordProcessed("completed");
     markIdle("message_completed");
+    reportSessionCompletion();
     return { queuedFinal, counts };
   } catch (err) {
     recordProcessed("error", { error: String(err) });
     markIdle("message_error");
+    reportSessionCompletion();
     throw err;
   }
 }

@@ -89,10 +89,43 @@ import type { NostrProfileFormState } from "./views/channels.nostr-profile-form.
 declare global {
   interface Window {
     __OPENCLAW_CONTROL_UI_BASE_PATH__?: string;
+    electronAPI?: {
+      onBustlyLoginRefresh?: (callback: () => void) => () => void;
+      onUpdateStatus?: (
+        callback: (data: { event: string; info?: { version?: string } }) => void,
+      ) => () => void;
+      updaterInstall?: () => void;
+      updaterStatus?: () => Promise<{ ready: boolean; version?: string | null }>;
+    };
   }
 }
 
 const bootAssistantIdentity = normalizeAssistantIdentity({});
+const DEFAULT_WEBUI_CHAT_DRAFT = `Help me launch one winning product.
+
+Find 10 products on AliExpress for [TARGET MARKET] in [NICHE].
+For each product, include the AliExpress source URL. Rank the top three by conversion potential and explain why.
+
+Then take the #1 product and:
+1) Create a Shopify draft listing
+2) Write a high-converting title, bullet points, and description
+3) Recommend a selling price (and compare-at price)
+4) Generate an SEO title and meta description
+
+Output a plan first. Do not execute any write actions until I confirm.`;
+const CHAT_DRAFT_ONCE_KEY = "openclaw.control.chat.default-draft.once.v1";
+
+function resolveInitialChatDraft(): string {
+  try {
+    if (localStorage.getItem(CHAT_DRAFT_ONCE_KEY) === "1") {
+      return "";
+    }
+    localStorage.setItem(CHAT_DRAFT_ONCE_KEY, "1");
+    return DEFAULT_WEBUI_CHAT_DRAFT;
+  } catch {
+    return DEFAULT_WEBUI_CHAT_DRAFT;
+  }
+}
 
 function resolveOnboardingMode(): boolean {
   if (!window.location.search) {
@@ -139,7 +172,7 @@ export class OpenClawApp extends LitElement {
   @state() sessionKey = this.settings.sessionKey;
   @state() chatLoading = false;
   @state() chatSending = false;
-  @state() chatMessage = "";
+  @state() chatMessage = resolveInitialChatDraft();
   @state() chatMessages: unknown[] = [];
   @state() chatToolMessages: unknown[] = [];
   @state() chatStream: string | null = null;
@@ -184,6 +217,9 @@ export class OpenClawApp extends LitElement {
   @state() configSaving = false;
   @state() configApplying = false;
   @state() updateRunning = false;
+  @state() updateReady = false;
+  @state() updateVersion: string | null = null;
+  @state() updateInstalling = false;
   @state() applySessionKey = this.settings.lastActiveSessionKey;
   @state() configSnapshot: ConfigSnapshot | null = null;
   @state() configSchema: unknown = null;
@@ -412,6 +448,7 @@ export class OpenClawApp extends LitElement {
       this.handleBustlyUserMenuClose(event);
     }
   };
+  private updateStatusUnsubscribe: (() => void) | null = null;
 
   createRenderRoot() {
     return this;
@@ -425,14 +462,31 @@ export class OpenClawApp extends LitElement {
     handleConnected(this as unknown as Parameters<typeof handleConnected>[0]);
     document.addEventListener("click", this.bustlyUserMenuCloseClickHandler);
 
-    const electronAPI = (
-      window as unknown as {
-        electronAPI?: { onBustlyLoginRefresh?: (callback: () => void) => () => void };
-      }
-    ).electronAPI;
+    const electronAPI = window.electronAPI;
     if (electronAPI?.onBustlyLoginRefresh) {
       this.bustlyLoginRefreshUnsubscribe = electronAPI.onBustlyLoginRefresh(() => {
         void this.checkBustlyLoginStatus();
+      });
+    }
+    if (electronAPI?.onUpdateStatus) {
+      this.updateStatusUnsubscribe = electronAPI.onUpdateStatus((data) => {
+        if (data.event === "downloaded") {
+          this.updateReady = true;
+          this.updateVersion = data.info?.version ?? null;
+          return;
+        }
+        if (data.event === "error") {
+          this.updateReady = false;
+          this.updateVersion = null;
+        }
+      });
+    }
+    if (electronAPI?.updaterStatus) {
+      void electronAPI.updaterStatus().then((status) => {
+        if (status?.ready) {
+          this.updateReady = true;
+          this.updateVersion = status.version ?? null;
+        }
       });
     }
   }
@@ -447,6 +501,10 @@ export class OpenClawApp extends LitElement {
     if (this.bustlyLoginRefreshUnsubscribe) {
       this.bustlyLoginRefreshUnsubscribe();
       this.bustlyLoginRefreshUnsubscribe = null;
+    }
+    if (this.updateStatusUnsubscribe) {
+      this.updateStatusUnsubscribe();
+      this.updateStatusUnsubscribe = null;
     }
     super.disconnectedCallback();
   }
@@ -496,6 +554,14 @@ export class OpenClawApp extends LitElement {
 
   async loadAssistantIdentity() {
     await loadAssistantIdentityInternal(this);
+  }
+
+  handleUpdateInstall() {
+    if (!window.electronAPI?.updaterInstall) {
+      return;
+    }
+    this.updateInstalling = true;
+    window.electronAPI.updaterInstall();
   }
 
   applySettings(next: UiSettings) {
@@ -877,6 +943,34 @@ export class OpenClawApp extends LitElement {
       return;
     }
     console.warn("[Bustly Auth] Settings link unavailable outside Electron.");
+  }
+
+  async handleBustlyReonboard() {
+    this.bustlyUserMenuOpen = false;
+    const confirmed = window.confirm(
+      "Reonboard will clear all local data and restart the app. Continue?",
+    );
+    if (!confirmed) {
+      return;
+    }
+    const electronAPI = (
+      window as unknown as {
+        electronAPI?: { bustlyReonboard?: () => Promise<{ success: boolean; error?: string }> };
+      }
+    ).electronAPI;
+    if (!electronAPI?.bustlyReonboard) {
+      console.warn("[Bustly Reonboard] Only available in Electron.");
+      return;
+    }
+    try {
+      const result = await electronAPI.bustlyReonboard();
+      if (!result?.success) {
+        throw new Error(result?.error ?? "Reonboard failed");
+      }
+    } catch (err) {
+      console.error("[Bustly Reonboard] Failed:", err);
+      window.alert(err instanceof Error ? err.message : String(err));
+    }
   }
 
   handleBustlyUserMenuClose(event: MouseEvent) {

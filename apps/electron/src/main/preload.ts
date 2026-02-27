@@ -1,4 +1,36 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
+
+type OpenClawInitOptions = {
+  gatewayPort?: number;
+  gatewayBind?: "loopback" | "lan" | "auto";
+  workspace?: string;
+  nodeManager?: "npm" | "pnpm" | "bun";
+  openrouterApiKey?: string;
+};
+
+type OnboardAuthResult = {
+  success: boolean;
+  provider: string;
+  method: string;
+  credential?: {
+    type: "api_key" | "token" | "oauth";
+    provider: string;
+    key?: string;
+    token?: string;
+    access?: string;
+    refresh?: string;
+    expires?: number;
+    email?: string;
+    projectId?: string;
+  };
+  defaultModel?: string;
+  error?: string;
+};
+
+type GatewayLogPayload = { stream: "stdout" | "stderr"; message: string };
+type GatewayExitPayload = { code: number | null; signal: string | null };
+type MainLogPayload = { message: string };
+type UpdateStatusPayload = { event: string };
 
 type WhatsAppConfigRequest =
   | {
@@ -18,7 +50,7 @@ type WhatsAppConfigRequest =
  */
 contextBridge.exposeInMainWorld("electronAPI", {
   // OpenClaw initialization
-  openclawInit: (options?: any) => ipcRenderer.invoke("openclaw-init", options),
+  openclawInit: (options?: OpenClawInitOptions) => ipcRenderer.invoke("openclaw-init", options),
   openclawIsInitialized: () => ipcRenderer.invoke("openclaw-is-initialized"),
   openclawReset: () => ipcRenderer.invoke("openclaw-reset"),
   openclawNeedsOnboard: () => ipcRenderer.invoke("openclaw-needs-onboard"),
@@ -30,6 +62,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // App info
   getAppInfo: () => ipcRenderer.invoke("get-app-info"),
+  updaterCheck: () => ipcRenderer.invoke("updater-check"),
+  updaterInstall: () => ipcRenderer.invoke("updater-install"),
+  updaterStatus: () => ipcRenderer.invoke("updater-status"),
 
   // Onboarding
   bustlyLogin: () => ipcRenderer.invoke("bustly-login"),
@@ -39,6 +74,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   bustlyOpenLogin: () => ipcRenderer.invoke("bustly-open-login"),
   bustlyOpenSettings: () => ipcRenderer.invoke("bustly-open-settings"),
   bustlyOpenProviderSetup: () => ipcRenderer.invoke("bustly-open-provider-setup"),
+  bustlyReonboard: () => ipcRenderer.invoke("bustly-reonboard"),
+  onboardBetaOpenRouterApiKey: () => ipcRenderer.invoke("onboard-beta-openrouter-api-key"),
   onboardListProviders: () => ipcRenderer.invoke("onboard-list-providers"),
   onboardAuthApiKey: (provider: string, apiKey: string) =>
     ipcRenderer.invoke("onboard-auth-api-key", provider, apiKey),
@@ -48,7 +85,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onboardAuthOAuthCancel: () => ipcRenderer.invoke("onboard-auth-oauth-cancel"),
   onboardOAuthSubmitCode: (code: string) => ipcRenderer.invoke("onboard-oauth-submit-code", code),
   onboardListModels: (provider: string) => ipcRenderer.invoke("onboard-list-models", provider),
-  onboardComplete: (authResult: any, options?: { model?: string; openControlUi?: boolean }) =>
+  onboardComplete: (authResult: OnboardAuthResult, options?: { model?: string; openControlUi?: boolean }) =>
     ipcRenderer.invoke("onboard-complete", authResult, options),
   onboardOpenUrl: (url: string) => ipcRenderer.invoke("onboard-open-url", url),
   onboardOpenControlUi: () => ipcRenderer.invoke("onboard-open-control-ui"),
@@ -59,32 +96,44 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("onboard-whatsapp-wait", options),
   onboardWhatsAppConfig: (payload: WhatsAppConfigRequest) =>
     ipcRenderer.invoke("onboard-whatsapp-config", payload),
+  consumePendingDeepLink: () => ipcRenderer.invoke("deep-link-consume-pending"),
 
   // Event listeners
-  onOAuthRequestCode: (callback: any) => {
-    const listener = (_event: any, message: any) => callback(message);
+  onOAuthRequestCode: (callback: (message: string) => void) => {
+    const listener = (_event: IpcRendererEvent, message: string) => callback(message);
     ipcRenderer.on("onboard-oauth-request-code", listener);
     return () => ipcRenderer.removeListener("onboard-oauth-request-code", listener);
   },
-  onGatewayLog: (callback: any) => {
-    const listener = (_event: any, data: any) => callback(data);
+  onGatewayLog: (callback: (data: GatewayLogPayload) => void) => {
+    const listener = (_event: IpcRendererEvent, data: GatewayLogPayload) => callback(data);
     ipcRenderer.on("gateway-log", listener);
     return () => ipcRenderer.removeListener("gateway-log", listener);
   },
 
-  onGatewayExit: (callback: any) => {
-    const listener = (_event: any, data: any) => callback(data);
+  onGatewayExit: (callback: (data: GatewayExitPayload) => void) => {
+    const listener = (_event: IpcRendererEvent, data: GatewayExitPayload) => callback(data);
     ipcRenderer.on("gateway-exit", listener);
     return () => ipcRenderer.removeListener("gateway-exit", listener);
   },
-  onMainLog: (callback: any) => {
-    const listener = (_event: any, data: any) => callback(data);
+  onMainLog: (callback: (data: MainLogPayload) => void) => {
+    const listener = (_event: IpcRendererEvent, data: MainLogPayload) => callback(data);
     ipcRenderer.on("main-log", listener);
     return () => ipcRenderer.removeListener("main-log", listener);
+  },
+  onUpdateStatus: (callback: (data: UpdateStatusPayload) => void) => {
+    const listener = (_event: IpcRendererEvent, data: UpdateStatusPayload) => callback(data);
+    ipcRenderer.on("update-status", listener);
+    return () => ipcRenderer.removeListener("update-status", listener);
   },
   onBustlyLoginRefresh: (callback: () => void) => {
     const listener = () => callback();
     ipcRenderer.on("bustly-login-refresh", listener);
     return () => ipcRenderer.removeListener("bustly-login-refresh", listener);
+  },
+  onDeepLink: (callback: (payload: { url: string; route: string | null }) => void) => {
+    const listener = (_event: unknown, payload: { url: string; route: string | null }) =>
+      callback(payload);
+    ipcRenderer.on("deep-link", listener);
+    return () => ipcRenderer.removeListener("deep-link", listener);
   },
 });

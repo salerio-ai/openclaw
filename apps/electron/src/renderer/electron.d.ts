@@ -53,6 +53,10 @@ interface GatewayExitData {
 interface MainLogData {
   message: string;
 }
+interface DeepLinkData {
+  url: string;
+  route: string | null;
+}
 
 // Bustly OAuth types
 interface BustlyUserInfo {
@@ -146,6 +150,7 @@ interface ElectronAPI {
   bustlyLogout: () => Promise<{ success: boolean; error?: string }>;
   bustlyOpenLogin: () => Promise<{ success: boolean; error?: string }>;
   bustlyOpenProviderSetup: () => Promise<{ success: boolean; error?: string }>;
+  onboardBetaOpenRouterApiKey: () => Promise<string>;
   onboardListProviders: () => Promise<ProviderConfig[]>;
   onboardAuthApiKey: (provider: string, apiKey: string) => Promise<AuthResult>;
   onboardAuthToken: (provider: string, token: string) => Promise<AuthResult>;
@@ -163,6 +168,8 @@ interface ElectronAPI {
   onboardWhatsAppStart: (options?: { force?: boolean }) => Promise<{ qrDataUrl?: string; message: string }>;
   onboardWhatsAppWait: (options?: { timeoutMs?: number }) => Promise<{ connected: boolean; message: string }>;
   onboardWhatsAppConfig: (payload: WhatsAppConfigRequest) => Promise<{ success: boolean; error?: string }>;
+  updaterStatus: () => Promise<{ ready: boolean; version?: string | null }>;
+  consumePendingDeepLink: () => Promise<DeepLinkData | null>;
 
   // Event listeners
   onOAuthRequestCode: (callback: (message: string) => void) => () => void;
@@ -170,6 +177,8 @@ interface ElectronAPI {
   onGatewayExit: (callback: (data: GatewayExitData) => void) => () => void;
   onMainLog: (callback: (data: MainLogData) => void) => () => void;
   onBustlyLoginRefresh: (callback: () => void) => () => void;
+  onUpdateStatus: (callback: (data: { event: string }) => void) => () => void;
+  onDeepLink: (callback: (data: DeepLinkData) => void) => () => void;
 }
 
 interface Window {

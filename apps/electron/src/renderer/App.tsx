@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { HashRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 // Types are defined in electron.d.ts
 import Onboard from "./components/Onboard";
@@ -21,14 +21,30 @@ function AppShell() {
   const [error, setError] = useState<string | null>(null);
   const [showOnboard, setShowOnboard] = useState(false);
   const [showOnboardLoading, setShowOnboardLoading] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [updateMessage, setUpdateMessage] = useState<string | null>(null);
   const location = useLocation();
+  const navigate = useNavigate();
   const pathname = location.pathname || "/";
   const logIdRef = useRef(0);
   const controlUiRequestedRef = useRef(false);
   const isDevPanelWindow = pathname === "/devpanel";
   const isBustlyLoginWindow = pathname === "/bustly-login";
   const isProviderSetupWindow = pathname === "/provider-setup";
+
+  const handleDeepLink = useCallback(
+    (data: { url: string; route: string | null } | null) => {
+      const route = data?.route;
+      if (!route) {
+        return;
+      }
+      if (route === "/") {
+        void navigate("/", { replace: true });
+        return;
+      }
+      void navigate(route, { replace: true });
+    },
+    [navigate],
+  );
 
   // Load initial data
   useEffect(() => {
@@ -48,7 +64,6 @@ function AppShell() {
         ]);
         setGatewayStatus(status);
         setAppInfo(info);
-        setIsInitialized(initialized);
 
         // Show onboarding only when needed and not already initialized
         if (needsOnboard && !initialized) {
@@ -62,7 +77,7 @@ function AppShell() {
       }
     };
 
-    loadInitialData();
+    void loadInitialData();
   }, []);
 
   // When onboarding is complete, ensure the Control UI is loaded into the main window.
@@ -111,7 +126,7 @@ function AppShell() {
 
   // Refresh gateway status periodically (handles auto-start and external changes)
   useEffect(() => {
-    if (!window.electronAPI) return;
+    if (!window.electronAPI) {return;}
     let cancelled = false;
     const tick = async () => {
       try {
@@ -121,7 +136,7 @@ function AppShell() {
         }
       } catch {}
     };
-    tick();
+    void tick();
     const interval = setInterval(tick, 2000);
     return () => {
       cancelled = true;
@@ -131,14 +146,14 @@ function AppShell() {
 
   // Setup gateway log listeners
   useEffect(() => {
-    if (!window.electronAPI) return;
+    if (!window.electronAPI) {return;}
 
     const unsubscribe = window.electronAPI.onGatewayLog((data) => {
       setLogs((prev) => [
         ...prev,
         {
           id: logIdRef.current++,
-          stream: data.stream as "stdout" | "stderr",
+          stream: data.stream,
           message: data.message,
           timestamp: new Date(),
         },
@@ -180,9 +195,42 @@ function AppShell() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!window.electronAPI?.onUpdateStatus) {
+      return;
+    }
+    const unsubscribe = window.electronAPI.onUpdateStatus((data) => {
+      if (data.event === "available" || data.event === "download-progress") {
+        setUpdateMessage("A new version was found. Updating now...");
+      } else if (data.event === "downloaded") {
+        setUpdateMessage("Find new version available.");
+      } else if (data.event === "error") {
+        setUpdateMessage(null);
+      }
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!window.electronAPI) {
+      return;
+    }
+    void window.electronAPI.consumePendingDeepLink().then((data) => {
+      handleDeepLink(data);
+    });
+    const unsubscribe = window.electronAPI.onDeepLink((data) => {
+      handleDeepLink(data);
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, [handleDeepLink]);
+
   // Gateway control handlers
   const handleStartGateway = useCallback(async () => {
-    if (!window.electronAPI) return;
+    if (!window.electronAPI) {return;}
     setError(null);
     const result = await window.electronAPI.gatewayStart();
     if (!result.success) {
@@ -195,7 +243,7 @@ function AppShell() {
   }, []);
 
   const handleStopGateway = useCallback(async () => {
-    if (!window.electronAPI) return;
+    if (!window.electronAPI) {return;}
     setError(null);
     const result = await window.electronAPI.gatewayStop();
     if (!result.success) {
@@ -222,7 +270,7 @@ function AppShell() {
   }, []);
 
   const handleReOnboard = useCallback(async () => {
-    if (!window.electronAPI) return;
+    if (!window.electronAPI) {return;}
     setError(null);
     const result = await window.electronAPI.openclawReset();
     if (!result.success) {
@@ -264,6 +312,9 @@ function AppShell() {
             <p className="onboard-loading-subtitle">
               Setting up the AI. This should only take a moment...
             </p>
+            {updateMessage ? (
+              <p className="onboard-loading-update">{updateMessage}</p>
+            ) : null}
           </div>
         </div>
       );

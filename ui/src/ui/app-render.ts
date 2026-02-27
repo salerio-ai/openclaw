@@ -1,10 +1,10 @@
 import { html, nothing } from "lit";
-import type { AppViewState } from "./app-view-state.ts";
 import { parseAgentSessionKey } from "../../../src/routing/session-key.js";
 import { t } from "../i18n/index.ts";
 import { refreshChatAvatar } from "./app-chat.ts";
 import { renderUsageTab } from "./app-render-usage-tab.ts";
 import { renderChatControls, renderTab, renderThemeToggle } from "./app-render.helpers.ts";
+import type { AppViewState } from "./app-view-state.ts";
 import { loadAgentFileContent, loadAgentFiles, saveAgentFile } from "./controllers/agent-files.ts";
 import { loadAgentIdentities, loadAgentIdentity } from "./controllers/agent-identity.ts";
 import { loadAgentSkills } from "./controllers/agent-skills.ts";
@@ -149,6 +149,7 @@ function renderBustlyUserSection(state: AppViewState) {
     handleBustlyUserMenuToggle: () => void;
     handleConfigureAiOpen: () => void;
     handleBustlyOpenSettings: () => void;
+    handleBustlyReonboard: () => void;
     handleBustlyLogout: () => void;
   };
 
@@ -181,15 +182,15 @@ function renderBustlyUserSection(state: AppViewState) {
             <div class="bustly-user-dropdown__divider"></div>
             <button
               class="bustly-user-dropdown__settings"
-              @click=${bustlyState.handleConfigureAiOpen}
-            >
-              Configure AI model
-            </button>
-            <button
-              class="bustly-user-dropdown__settings"
               @click=${bustlyState.handleBustlyOpenSettings}
             >
               Settings
+            </button>
+            <button
+              class="bustly-user-dropdown__settings"
+              @click=${bustlyState.handleBustlyReonboard}
+            >
+              Reonboard
             </button>
             <button
               class="bustly-user-dropdown__logout"
@@ -331,6 +332,20 @@ export function renderApp(state: AppViewState) {
           </div>
         </div>
         <div class="topbar-status">
+          ${
+            state.updateReady
+              ? html`
+                <button
+                  class="pill update-pill"
+                  title=${state.updateVersion ? `Update ${state.updateVersion} ready` : "Update ready"}
+                  @click=${state.handleUpdateInstall}
+                  ?disabled=${state.updateInstalling}
+                >
+                  ${state.updateInstalling ? "Preparing update..." : "Click to restart for update"}
+                </button>
+              `
+              : nothing
+          }
           <div class="pill">
             <span class="statusDot ${versionStatusClass}"></span>
             <span>${t("common.version")}</span>
