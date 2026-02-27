@@ -456,6 +456,9 @@ async function startGateway(): Promise<boolean> {
       "--port", String(gatewayPort),
       "--bind", gatewayBind,
       "--allow-unconfigured",
+      // Ensure stale local gateway listeners (often supervised service instances)
+      // do not cause token mismatches with the embedded Control UI.
+      "--force",
     ];
 
     // Store token for WS URL

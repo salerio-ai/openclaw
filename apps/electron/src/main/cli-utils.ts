@@ -17,6 +17,9 @@ export type CliInvocation = {
   nodePath?: string;
 };
 
+type SemVer = { major: number; minor: number; patch: number };
+const OPENCLAW_MIN_NODE: SemVer = { major: 22, minor: 12, patch: 0 };
+
 function uniqueExistingPaths(candidates: Array<string | null | undefined>): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
@@ -29,6 +32,46 @@ function uniqueExistingPaths(candidates: Array<string | null | undefined>): stri
     out.push(value);
   }
   return out;
+}
+
+function parseNodeVersion(raw: string | null | undefined): SemVer | null {
+  const value = raw?.trim();
+  if (!value) {
+    return null;
+  }
+  const match = value.match(/^v?(\d+)\.(\d+)\.(\d+)/);
+  if (!match) {
+    return null;
+  }
+  const major = Number(match[1]);
+  const minor = Number(match[2]);
+  const patch = Number(match[3]);
+  if (!Number.isFinite(major) || !Number.isFinite(minor) || !Number.isFinite(patch)) {
+    return null;
+  }
+  return { major, minor, patch };
+}
+
+function isAtLeast(version: SemVer, minimum: SemVer): boolean {
+  if (version.major !== minimum.major) {
+    return version.major > minimum.major;
+  }
+  if (version.minor !== minimum.minor) {
+    return version.minor >= minimum.minor;
+  }
+  return version.patch >= minimum.patch;
+}
+
+function readNodeVersion(nodePath: string): SemVer | null {
+  try {
+    const result = spawnSync(nodePath, ["-v"], { encoding: "utf-8" });
+    if (result.status !== 0) {
+      return null;
+    }
+    return parseNodeVersion(result.stdout);
+  } catch {
+    return null;
+  }
 }
 
 function normalizePlatform(value: string): "mac" | "windows" | "linux" | null {
@@ -124,6 +167,13 @@ export function resolveNodeBinary(options?: { includeBundled?: boolean }): strin
     .map((dir) => resolve(dir, "node"));
 
   const commonCandidates = [
+    process.env.OPENCLAW_NODE_PATH,
+    process.env.OPENCLAW_NODE_BIN,
+    process.env.OPENCLAW_NODE,
+    process.env.OPENCLAW_NODEJS_PATH,
+    resolve(process.env.HOME ?? "", ".nvm/versions/node/v22.17.1/bin/node"),
+    resolve(process.env.HOME ?? "", ".nvm/versions/node/v22.16.0/bin/node"),
+    resolve(process.env.HOME ?? "", ".nvm/versions/node/v22.15.0/bin/node"),
     "/opt/homebrew/bin/node",
     "/opt/homebrew/opt/node@22/bin/node",
     "/usr/local/bin/node",
@@ -136,8 +186,19 @@ export function resolveNodeBinary(options?: { includeBundled?: boolean }): strin
     ...pathEnvCandidates,
     ...commonCandidates,
   ]);
+  if (candidates.length === 0) {
+    return null;
+  }
 
-  return candidates[0] ?? null;
+  // Prefer a runtime that satisfies OpenClaw's minimum Node requirement.
+  for (const candidate of candidates) {
+    const version = readNodeVersion(candidate);
+    if (version && isAtLeast(version, OPENCLAW_MIN_NODE)) {
+      return candidate;
+    }
+  }
+
+  return candidates[0];
 }
 
 export function resolveCliInvocation(

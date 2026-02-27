@@ -9,10 +9,10 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { execFile } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 import type { PresetConfigOptions } from "../config/default-config.js";
 import { resolveConfigPath as resolveConfigPathFromSrc } from "../../../../src/config/paths";
-import { resolveCliInvocation, resolveOpenClawCliPath } from "./cli-utils.js";
+import { resolveCliInvocation, resolveNodeBinary, resolveOpenClawCliPath } from "./cli-utils.js";
 
 const __dirname = resolve(fileURLToPath(import.meta.url), "..");
 
@@ -86,13 +86,85 @@ async function runCliOnboard(options: InitializationOptions): Promise<void> {
     args.push("--auth-choice", "skip");
   }
 
-  const invocation = resolveCliInvocation(cliPath, args, { includeBundledNode: true });
-  if (!invocation) {
-    throw new Error("Node binary not found in bundled resources.");
+  const parseNodeVersion = (value: string | null | undefined): [number, number, number] | null => {
+    const match = value?.trim().match(/^v?(\d+)\.(\d+)\.(\d+)/);
+    if (!match) {
+      return null;
+    }
+    return [Number(match[1]), Number(match[2]), Number(match[3])];
+  };
+
+  const isNodeAtLeast = (nodePath: string, minimum: [number, number, number]): boolean => {
+    try {
+      const result = spawnSync(nodePath, ["-v"], { encoding: "utf-8" });
+      if (result.status !== 0) {
+        return false;
+      }
+      const parsed = parseNodeVersion(result.stdout);
+      if (!parsed) {
+        return false;
+      }
+      const [major, minor, patch] = parsed;
+      const [minMajor, minMinor, minPatch] = minimum;
+      if (major !== minMajor) {
+        return major > minMajor;
+      }
+      if (minor !== minMinor) {
+        return minor >= minMinor;
+      }
+      return patch >= minPatch;
+    } catch {
+      return false;
+    }
+  };
+
+  const minNode: [number, number, number] = [22, 12, 0];
+  const explicitNodeCandidates = [
+    process.env.OPENCLAW_NODE_PATH?.trim(),
+    process.env.OPENCLAW_NODE_BIN?.trim(),
+    process.env.OPENCLAW_NODE?.trim(),
+    join(homedir(), ".nvm/versions/node/v22.17.1/bin/node"),
+    join(homedir(), ".nvm/versions/node/v22.16.0/bin/node"),
+    join(homedir(), ".nvm/versions/node/v22.15.0/bin/node"),
+    "/opt/homebrew/opt/node@22/bin/node",
+  ].filter((candidate): candidate is string => Boolean(candidate && existsSync(candidate)));
+
+  const preferredNode = explicitNodeCandidates.find((candidate) => isNodeAtLeast(candidate, minNode));
+  const resolvedInvocation = resolveCliInvocation(cliPath, args, { includeBundledNode: true });
+  const resolvedNode =
+    preferredNode ??
+    (resolvedInvocation?.isMjs && resolvedInvocation.nodePath && isNodeAtLeast(resolvedInvocation.nodePath, minNode)
+      ? resolvedInvocation.nodePath
+      : resolveNodeBinary({ includeBundled: true }));
+
+  let command: string;
+  let commandArgs: string[];
+  if (cliPath.endsWith(".mjs")) {
+    const nodePath =
+      resolvedNode && isNodeAtLeast(resolvedNode, minNode) ? resolvedNode : preferredNode ?? null;
+    if (!nodePath) {
+      throw new Error("Compatible Node (>=22.12.0) not found for onboarding.");
+    }
+    command = nodePath;
+    commandArgs = [cliPath, ...args];
+  } else if (resolvedInvocation) {
+    command = resolvedInvocation.command;
+    commandArgs = resolvedInvocation.args;
+  } else {
+    throw new Error("OpenClaw CLI invocation could not be resolved.");
   }
-  const command = invocation.command;
-  const commandArgs = invocation.args;
+
+  try {
+    const version = spawnSync(command, ["-v"], { encoding: "utf-8" }).stdout?.trim();
+    console.log(`[Init] Onboard runtime: ${command} (${version ?? "unknown"})`);
+  } catch {
+    // ignore
+  }
+
   const env = { ...process.env };
+  if (cliPath.endsWith(".mjs")) {
+    env.OPENCLAW_NODE_PATH = command;
+  }
 
   await new Promise<void>((resolvePromise, rejectPromise) => {
     execFile(command, commandArgs, { env }, (error) => {

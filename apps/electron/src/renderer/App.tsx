@@ -19,6 +19,7 @@ function AppShell() {
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [, setIsInitialized] = useState(false);
   const [showOnboard, setShowOnboard] = useState(false);
   const [showOnboardLoading, setShowOnboardLoading] = useState(false);
   const [updateMessage, setUpdateMessage] = useState<string | null>(null);
@@ -65,9 +66,10 @@ function AppShell() {
         setGatewayStatus(status);
         setAppInfo(info);
 
-        // Show onboarding only when needed and not already initialized
-        if (needsOnboard && !initialized) {
+        // Fail safe: if initialization is incomplete, always send user through onboarding/setup.
+        if (!initialized || needsOnboard) {
           setShowOnboard(true);
+          setShowOnboardLoading(false);
         } else if (!isDevPanelWindow && !isBustlyLoginWindow && !isProviderSetupWindow) {
           setShowOnboardLoading(true);
         }
@@ -284,15 +286,23 @@ function AppShell() {
 
   // Onboard handlers
   const handleOnboardComplete = useCallback(async () => {
-    setShowOnboard(false);
-    setShowOnboardLoading(true);
-    setIsInitialized(true);
-    // Refresh status after onboarding
     if (window.electronAPI) {
+      const initialized = await window.electronAPI.openclawIsInitialized();
+      if (!initialized) {
+        setShowOnboard(false);
+        setShowOnboardLoading(false);
+        setIsInitialized(false);
+        await navigate("/provider-setup", { replace: true });
+        return;
+      }
+      // Refresh status after onboarding
       const status = await window.electronAPI.gatewayStatus();
       setGatewayStatus(status);
     }
-  }, []);
+    setShowOnboard(false);
+    setShowOnboardLoading(true);
+    setIsInitialized(true);
+  }, [navigate]);
 
   const handleOnboardCancel = useCallback(() => {
     setShowOnboard(false);
