@@ -152,10 +152,11 @@ export function resolveModelFallbackOptions(run: FollowupRun["run"]) {
     provider: run.provider,
     model: run.model,
     agentDir: run.agentDir,
-    fallbacksOverride: resolveAgentModelFallbacksOverride(
-      run.config,
-      resolveAgentIdFromSessionKey(run.sessionKey),
-    ),
+    fallbacksOverride: resolveRunModelFallbacksOverride({
+      cfg: run.config,
+      agentId: run.agentId,
+      sessionKey: run.sessionKey,
+    }),
   };
 }
 

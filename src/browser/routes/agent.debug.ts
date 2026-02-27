@@ -1,5 +1,4 @@
 import crypto from "node:crypto";
-import fs from "node:fs/promises";
 import path from "node:path";
 import type { BrowserRouteContext } from "../server-context.js";
 import type { BrowserRouteRegistrar } from "./types.js";
@@ -120,19 +119,17 @@ export function registerBrowserAgentDebugRoutes(
       feature: "trace stop",
       run: async ({ cdpUrl, tab, pw }) => {
         const id = crypto.randomUUID();
-        const dir = DEFAULT_TRACE_DIR;
-        await fs.mkdir(dir, { recursive: true });
-        const tracePathResult = resolvePathWithinRoot({
-          rootDir: dir,
+        const tracePath = await resolveWritableOutputPathOrRespond({
+          res,
+          rootDir: DEFAULT_TRACE_DIR,
           requestedPath: out,
           scopeLabel: "trace directory",
           defaultFileName: `browser-trace-${id}.zip`,
+          ensureRootDir: true,
         });
-        if (!tracePathResult.ok) {
-          res.status(400).json({ error: tracePathResult.error });
+        if (!tracePath) {
           return;
         }
-        const tracePath = tracePathResult.path;
         await pw.traceStopViaPlaywright({
           cdpUrl,
           targetId: tab.targetId,

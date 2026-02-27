@@ -30,7 +30,10 @@ export function createGatewayHooksRequestHandler(params: {
   };
 
   const dispatchAgentHook = (value: HookAgentDispatchPayload) => {
-    const sessionKey = value.sessionKey.trim();
+    const sessionKey = normalizeHookDispatchSessionKey({
+      sessionKey: value.sessionKey,
+      targetAgentId: value.agentId,
+    });
     const mainSessionKey = resolveMainSessionKeyFromConfig();
     const jobId = randomUUID();
     const now = Date.now();

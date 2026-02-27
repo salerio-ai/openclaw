@@ -43,7 +43,10 @@ export function createExecApprovalHandlers(
       const p = params as {
         id?: string;
         command: string;
+        commandArgv?: string[];
+        env?: Record<string, string>;
         cwd?: string;
+        systemRunPlanV2?: unknown;
         nodeId?: string;
         host?: string;
         security?: string;
@@ -51,6 +54,10 @@ export function createExecApprovalHandlers(
         agentId?: string;
         resolvedPath?: string;
         sessionKey?: string;
+        turnSourceChannel?: string;
+        turnSourceTo?: string;
+        turnSourceAccountId?: string;
+        turnSourceThreadId?: string | number;
         timeoutMs?: number;
         twoPhase?: boolean;
       };
@@ -60,6 +67,20 @@ export function createExecApprovalHandlers(
       const explicitId = typeof p.id === "string" && p.id.trim().length > 0 ? p.id.trim() : null;
       const host = typeof p.host === "string" ? p.host.trim() : "";
       const nodeId = typeof p.nodeId === "string" ? p.nodeId.trim() : "";
+      const approvalContext = resolveSystemRunApprovalRequestContext({
+        host,
+        command: p.command,
+        commandArgv: p.commandArgv,
+        systemRunPlanV2: p.systemRunPlanV2,
+        cwd: p.cwd,
+        agentId: p.agentId,
+        sessionKey: p.sessionKey,
+      });
+      const effectiveCommandArgv = approvalContext.commandArgv;
+      const effectiveCwd = approvalContext.cwd;
+      const effectiveAgentId = approvalContext.agentId;
+      const effectiveSessionKey = approvalContext.sessionKey;
+      const effectiveCommandText = approvalContext.commandText;
       if (host === "node" && !nodeId) {
         respond(
           false,
@@ -68,6 +89,27 @@ export function createExecApprovalHandlers(
         );
         return;
       }
+      if (
+        host === "node" &&
+        (!Array.isArray(effectiveCommandArgv) || effectiveCommandArgv.length === 0)
+      ) {
+        respond(
+          false,
+          undefined,
+          errorShape(ErrorCodes.INVALID_REQUEST, "commandArgv is required for host=node"),
+        );
+        return;
+      }
+      const systemRunBindingV1 =
+        host === "node"
+          ? buildSystemRunApprovalBindingV1({
+              argv: effectiveCommandArgv,
+              cwd: effectiveCwd,
+              agentId: effectiveAgentId,
+              sessionKey: effectiveSessionKey,
+              env: p.env,
+            })
+          : null;
       if (explicitId && manager.getSnapshot(explicitId)) {
         respond(
           false,
@@ -77,15 +119,25 @@ export function createExecApprovalHandlers(
         return;
       }
       const request = {
-        command: p.command,
-        cwd: p.cwd ?? null,
+        command: effectiveCommandText,
+        commandArgv: effectiveCommandArgv,
+        envKeys: systemRunBindingV1?.envKeys?.length ? systemRunBindingV1.envKeys : undefined,
+        systemRunBindingV1: systemRunBindingV1?.binding ?? null,
+        systemRunPlanV2: approvalContext.planV2,
+        cwd: effectiveCwd ?? null,
         nodeId: host === "node" ? nodeId : null,
         host: host || null,
         security: p.security ?? null,
         ask: p.ask ?? null,
-        agentId: p.agentId ?? null,
+        agentId: effectiveAgentId ?? null,
         resolvedPath: p.resolvedPath ?? null,
-        sessionKey: p.sessionKey ?? null,
+        sessionKey: effectiveSessionKey ?? null,
+        turnSourceChannel:
+          typeof p.turnSourceChannel === "string" ? p.turnSourceChannel.trim() || null : null,
+        turnSourceTo: typeof p.turnSourceTo === "string" ? p.turnSourceTo.trim() || null : null,
+        turnSourceAccountId:
+          typeof p.turnSourceAccountId === "string" ? p.turnSourceAccountId.trim() || null : null,
+        turnSourceThreadId: p.turnSourceThreadId ?? null,
       };
       const record = manager.create(request, timeoutMs, explicitId);
       record.requestedByConnId = client?.connId ?? null;

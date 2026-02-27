@@ -252,6 +252,32 @@ export async function handleInlineActions(params: {
     await opts.onBlockReply(reply);
   };
 
+  const isStopLikeInbound = isAbortRequestText(command.rawBodyNormalized);
+  if (!isStopLikeInbound && sessionEntry) {
+    const cutoff = readAbortCutoffFromSessionEntry(sessionEntry);
+    const incoming = resolveAbortCutoffFromContext(ctx);
+    const shouldSkip = cutoff
+      ? shouldSkipMessageByAbortCutoff({
+          cutoffMessageSid: cutoff.messageSid,
+          cutoffTimestamp: cutoff.timestamp,
+          messageSid: incoming?.messageSid,
+          timestamp: incoming?.timestamp,
+        })
+      : false;
+    if (shouldSkip) {
+      typing.cleanup();
+      return { kind: "reply", reply: undefined };
+    }
+    if (cutoff) {
+      await clearAbortCutoffInSession({
+        sessionEntry,
+        sessionStore,
+        sessionKey,
+        storePath,
+      });
+    }
+  }
+
   const inlineCommand =
     allowTextCommands && command.isAuthorizedSender
       ? extractInlineSimpleCommand(cleanedBody)

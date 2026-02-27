@@ -282,13 +282,21 @@ function patchConfigForScopedAccount(params: {
   ensureEnabled: boolean;
 }): OpenClawConfig {
   const { cfg, channel, accountId, patch, ensureEnabled } = params;
-  const channelConfig = (cfg.channels?.[channel] as Record<string, unknown> | undefined) ?? {};
+  const seededCfg =
+    accountId === DEFAULT_ACCOUNT_ID
+      ? cfg
+      : moveSingleAccountChannelSectionToDefaultAccount({
+          cfg,
+          channelKey: channel,
+        });
+  const channelConfig =
+    (seededCfg.channels?.[channel] as Record<string, unknown> | undefined) ?? {};
 
   if (accountId === DEFAULT_ACCOUNT_ID) {
     return {
-      ...cfg,
+      ...seededCfg,
       channels: {
-        ...cfg.channels,
+        ...seededCfg.channels,
         [channel]: {
           ...channelConfig,
           ...(ensureEnabled ? { enabled: true } : {}),
@@ -303,9 +311,9 @@ function patchConfigForScopedAccount(params: {
   const existingAccount = accounts[accountId] ?? {};
 
   return {
-    ...cfg,
+    ...seededCfg,
     channels: {
-      ...cfg.channels,
+      ...seededCfg.channels,
       [channel]: {
         ...channelConfig,
         ...(ensureEnabled ? { enabled: true } : {}),

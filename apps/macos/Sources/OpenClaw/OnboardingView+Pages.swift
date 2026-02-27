@@ -12,8 +12,6 @@ extension OnboardingView {
             self.welcomePage()
         case 1:
             self.connectionPage()
-        case 2:
-            self.anthropicAuthPage()
         case 3:
             self.wizardPage()
         case 5:

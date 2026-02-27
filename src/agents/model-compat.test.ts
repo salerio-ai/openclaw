@@ -1,4 +1,5 @@
 import type { Api, Model } from "@mariozechner/pi-ai";
+import type { ModelRegistry } from "@mariozechner/pi-coding-agent";
 import { describe, expect, it } from "vitest";
 import type { ModelRegistry } from "./pi-model-discovery.js";
 import { isModernModelRef } from "./live-model-filter.js";

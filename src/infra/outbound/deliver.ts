@@ -37,6 +37,8 @@ import { normalizeReplyPayloadsForDelivery } from "./payloads.js";
 export type { NormalizedOutboundPayload } from "./payloads.js";
 export { normalizeOutboundPayloads } from "./payloads.js";
 
+const log = createSubsystemLogger("outbound/deliver");
+
 type SendMatrixMessage = (
   to: string,
   text: string,
@@ -207,8 +209,8 @@ type DeliverOutboundPayloadsCoreParams = {
   bestEffort?: boolean;
   onError?: (err: unknown, payload: NormalizedOutboundPayload) => void;
   onPayload?: (payload: NormalizedOutboundPayload) => void;
-  /** Active agent id for media local-root scoping. */
-  agentId?: string;
+  /** Session/agent context used for hooks and media local-root scoping. */
+  session?: OutboundSessionContext;
   mirror?: {
     sessionKey: string;
     agentId?: string;
@@ -216,8 +218,6 @@ type DeliverOutboundPayloadsCoreParams = {
     mediaUrls?: string[];
   };
   silent?: boolean;
-  /** Session key for internal hook dispatch (when `mirror` is not needed). */
-  sessionKey?: string;
 };
 
 type DeliverOutboundPayloadsParams = DeliverOutboundPayloadsCoreParams & {
@@ -296,7 +296,7 @@ async function deliverOutboundPayloadsCore(
   const sendSignal = params.deps?.sendSignal ?? sendMessageSignal;
   const mediaLocalRoots = getAgentScopedMediaLocalRoots(
     cfg,
-    params.agentId ?? params.mirror?.agentId,
+    params.session?.agentId ?? params.mirror?.agentId,
   );
   const results: OutboundDeliveryResult[] = [];
   const handler = await createChannelHandler({
@@ -446,7 +446,21 @@ async function deliverOutboundPayloadsCore(
     return normalized ? [normalized] : [];
   });
   const hookRunner = getGlobalHookRunner();
-  const sessionKeyForInternalHooks = params.mirror?.sessionKey ?? params.sessionKey;
+  const sessionKeyForInternalHooks = params.mirror?.sessionKey ?? params.session?.key;
+  if (
+    hookRunner?.hasHooks("message_sent") &&
+    params.session?.agentId &&
+    !sessionKeyForInternalHooks
+  ) {
+    log.warn(
+      "deliverOutboundPayloads: session.agentId present without session key; internal message:sent hook will be skipped",
+      {
+        channel,
+        to,
+        agentId: params.session.agentId,
+      },
+    );
+  }
   for (const payload of normalizedPayloads) {
     const payloadSummary: NormalizedOutboundPayload = {
       text: payload.text ?? "",

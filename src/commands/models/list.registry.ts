@@ -98,7 +98,6 @@ function loadAvailableModels(registry: ModelRegistry): Model<Api>[] {
 export async function loadModelRegistry(cfg: OpenClawConfig) {
   await ensureOpenClawModelsJson(cfg);
   const agentDir = resolveOpenClawAgentDir();
-  await ensurePiAuthJsonFromAuthProfiles(agentDir);
   const authStorage = discoverAuthStorage(agentDir);
   const registry = discoverModels(authStorage, agentDir);
   const models = registry.getAll();

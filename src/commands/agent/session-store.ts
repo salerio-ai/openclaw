@@ -58,10 +58,12 @@ export async function updateSessionStoreAfterAgentRun(params: {
     ...entry,
     sessionId,
     updatedAt: Date.now(),
-    modelProvider: providerUsed,
-    model: modelUsed,
     contextTokens,
   };
+  setSessionRuntimeModel(next, {
+    provider: providerUsed,
+    model: modelUsed,
+  });
   if (isCliProvider(providerUsed, cfg)) {
     const cliSessionId = result.meta.agentMeta?.sessionId?.trim();
     if (cliSessionId) {
@@ -88,8 +90,10 @@ export async function updateSessionStoreAfterAgentRun(params: {
   if (compactionsThisRun > 0) {
     next.compactionCount = (entry.compactionCount ?? 0) + compactionsThisRun;
   }
-  sessionStore[sessionKey] = next;
-  await updateSessionStore(storePath, (store) => {
-    store[sessionKey] = next;
+  const persisted = await updateSessionStore(storePath, (store) => {
+    const merged = mergeSessionEntry(store[sessionKey], next);
+    store[sessionKey] = merged;
+    return merged;
   });
+  sessionStore[sessionKey] = persisted;
 }

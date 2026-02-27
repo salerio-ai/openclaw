@@ -1,4 +1,8 @@
+import crypto from "node:crypto";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { DEFAULT_UPLOAD_DIR } from "./paths.js";
 import {
   installPwToolsCoreTestHooks,
   setPwToolsCoreCurrentPage,
@@ -9,6 +13,15 @@ const mod = await import("./pw-tools-core.js");
 
 describe("pw-tools-core", () => {
   it("last file-chooser arm wins", async () => {
+    const firstPath = path.join(DEFAULT_UPLOAD_DIR, `vitest-arm-1-${crypto.randomUUID()}.txt`);
+    const secondPath = path.join(DEFAULT_UPLOAD_DIR, `vitest-arm-2-${crypto.randomUUID()}.txt`);
+    await fs.mkdir(DEFAULT_UPLOAD_DIR, { recursive: true });
+    await Promise.all([
+      fs.writeFile(firstPath, "1", "utf8"),
+      fs.writeFile(secondPath, "2", "utf8"),
+    ]);
+    const secondCanonicalPath = await fs.realpath(secondPath);
+
     let resolve1: ((value: unknown) => void) | null = null;
     let resolve2: ((value: unknown) => void) | null = null;
 
@@ -44,15 +57,20 @@ describe("pw-tools-core", () => {
       paths: ["/tmp/2"],
     });
 
-    if (!resolve1 || !resolve2) {
-      throw new Error("file chooser handlers were not registered");
-    }
-    (resolve1 as (value: unknown) => void)(fc1);
-    (resolve2 as (value: unknown) => void)(fc2);
-    await Promise.resolve();
+      if (!resolve1 || !resolve2) {
+        throw new Error("file chooser handlers were not registered");
+      }
+      (resolve1 as (value: unknown) => void)(fc1);
+      (resolve2 as (value: unknown) => void)(fc2);
+      await Promise.resolve();
 
-    expect(fc1.setFiles).not.toHaveBeenCalled();
-    expect(fc2.setFiles).toHaveBeenCalledWith(["/tmp/2"]);
+      expect(fc1.setFiles).not.toHaveBeenCalled();
+      await vi.waitFor(() => {
+        expect(fc2.setFiles).toHaveBeenCalledWith([secondCanonicalPath]);
+      });
+    } finally {
+      await Promise.all([fs.rm(firstPath, { force: true }), fs.rm(secondPath, { force: true })]);
+    }
   });
   it("arms the next dialog and accepts/dismisses (default timeout)", async () => {
     const accept = vi.fn(async () => {});

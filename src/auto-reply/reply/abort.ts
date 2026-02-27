@@ -23,6 +23,8 @@ import { normalizeCommandBody, type CommandNormalizeOptions } from "../commands-
 import { stripMentions, stripStructuralPrefixes } from "./mentions.js";
 import { clearSessionQueues } from "./queue.js";
 
+export { resolveAbortCutoffFromContext, shouldSkipMessageByAbortCutoff } from "./abort-cutoff.js";
+
 const ABORT_TRIGGERS = new Set([
   "stop",
   "esc",
@@ -302,8 +304,15 @@ export async function tryFastAbortFromMessage(params: {
         `abort: cleared followups=${cleared.followupCleared} lane=${cleared.laneCleared} keys=${cleared.keys.join(",")}`,
       );
     }
+    const abortCutoff = shouldPersistAbortCutoff({
+      commandSessionKey: ctx.SessionKey,
+      targetSessionKey: key ?? targetKey,
+    })
+      ? resolveAbortCutoffFromContext(ctx)
+      : undefined;
     if (entry && key) {
       entry.abortedLastRun = true;
+      applyAbortCutoffToSessionEntry(entry, abortCutoff);
       entry.updatedAt = Date.now();
       store[key] = entry;
       await updateSessionStore(storePath, (nextStore) => {
@@ -312,6 +321,7 @@ export async function tryFastAbortFromMessage(params: {
           return;
         }
         nextEntry.abortedLastRun = true;
+        applyAbortCutoffToSessionEntry(nextEntry, abortCutoff);
         nextEntry.updatedAt = Date.now();
         nextStore[key] = nextEntry;
       });
