@@ -19,21 +19,18 @@
     "check:main-deps": "node scripts/check-main-deps.js",
     "prepare:openclaw-deps": "node scripts/prepare-openclaw-deps.js",
     "prepare:node": "node scripts/prepare-node.js",
+    "fetch:node": "node scripts/fetch-node-binaries.js",
     "upload:test": "node scripts/upload-oss.js --env test",
     "upload:prod": "node scripts/upload-oss.js --env prod",
     "preview": "vite preview",
     "lint": "oxlint",
     "format": "oxfmt",
-    "pack:dmg": "pnpm run prepare:openclaw-deps && pnpm run prepare:node && pnpm run build && CSC_IDENTITY_AUTO_DISCOVERY=false PUBLISH_URL=$(node scripts/resolve-publish-url.js) pnpm dlx electron-builder --mac dmg --publish=always -c.publish.provider=generic -c.publish.url=$PUBLISH_URL -c.mac.identity=null",
+    "pack:dmg": "pnpm run prepare:openclaw-deps && pnpm run prepare:node -- --platform mac --arch arm64 && pnpm run build && CSC_IDENTITY_AUTO_DISCOVERY=false BUSTLY_UPDATE_PLATFORM=mac BUSTLY_UPDATE_ARCH=arm64 PUBLISH_URL=$(node scripts/resolve-publish-url.js) pnpm dlx electron-builder --mac dmg --arm64 --publish=always -c.publish.provider=generic -c.publish.url=$PUBLISH_URL -c.mac.identity=null",
+    "pack:dmg:x64": "pnpm run prepare:openclaw-deps && pnpm run prepare:node -- --platform mac --arch x64 && pnpm run build && CSC_IDENTITY_AUTO_DISCOVERY=false BUSTLY_UPDATE_PLATFORM=mac BUSTLY_UPDATE_ARCH=x64 PUBLISH_URL=$(node scripts/resolve-publish-url.js) pnpm dlx electron-builder --mac dmg --x64 --publish=always -c.publish.provider=generic -c.publish.url=$PUBLISH_URL -c.mac.identity=null",
     "pack:release": "node scripts/build-release.js",
-    "pack:release:test:mac": "node scripts/build-release.js --env test --platform mac",
-    "pack:release:prod:mac": "node scripts/build-release.js --env prod --platform mac",
-    "pack:release:test:mac-x64": "node scripts/build-release.js --env test --platform mac --arch x64",
-    "pack:release:prod:mac-x64": "node scripts/build-release.js --env prod --platform mac --arch x64",
-    "pack:release:test:windows": "node scripts/build-release.js --env test --platform windows",
-    "pack:release:prod:windows": "node scripts/build-release.js --env prod --platform windows",
-    "pack:release:test:linux": "node scripts/build-release.js --env test --platform linux",
-    "pack:release:prod:linux": "node scripts/build-release.js --env prod --platform linux"
+    "pack:release:mac": "node scripts/build-release.js --platform mac",
+    "pack:release:mac-x64": "node scripts/build-release.js --platform mac --arch x64",
+    "pack:release:windows": "node scripts/build-release.js --platform windows"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock": "3.848.0",
@@ -72,6 +69,7 @@
   "build": {
     "appId": "bustly",
     "productName": "Bustly",
+    "afterPack": "./scripts/after-pack-prune-node.js",
     "protocols": [
       {
         "name": "Bustly Deep Link",

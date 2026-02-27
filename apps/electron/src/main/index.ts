@@ -475,7 +475,7 @@ async function startGateway(): Promise<boolean> {
 
     const invocation = resolveCliInvocation(cliPath, args, { includeBundledNode: true });
     if (!invocation) {
-      writeMainLog("Failed to locate node binary. Set OPENCLAW_NODE_PATH or bundle node.");
+      writeMainLog("Failed to locate node binary in bundled resources.");
       reject(new Error("Node binary not found for OpenClaw CLI"));
       return;
     }
@@ -654,7 +654,7 @@ async function startGateway(): Promise<boolean> {
       mainWindow?.webContents.send("gateway-exit", { code, signal });
     });
 
-    const startupTimeoutMs = 20_000;
+    const startupTimeoutMs = 45_000;
     const exitPromise = new Promise<never>((_resolve, rejectExit) => {
       gatewayProcess?.once("exit", (code, signal) => {
         rejectExit(

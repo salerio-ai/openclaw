@@ -1,6 +1,5 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const __dirname = resolve(fileURLToPath(import.meta.url), "..");
@@ -16,6 +15,19 @@ export type CliInvocation = {
   isMjs: boolean;
   nodePath?: string;
 };
+
+function normalizePlatform(value: string): "mac" | "windows" | "linux" | null {
+  if (value === "darwin") return "mac";
+  if (value === "win32") return "windows";
+  if (value === "linux") return "linux";
+  return null;
+}
+
+function normalizeArch(value: string): "arm64" | "x64" | null {
+  if (value === "arm64") return "arm64";
+  if (value === "x64") return "x64";
+  return null;
+}
 
 function getOpenClawCliCandidates(): string[] {
   return [
@@ -42,52 +54,28 @@ export function resolveOpenClawCliPath(logger?: CliLogger): string | null {
 }
 
 export function resolveNodeBinary(options?: { includeBundled?: boolean }): string | null {
-  const envPath = process.env.OPENCLAW_NODE_PATH?.trim();
-  if (envPath && existsSync(envPath)) {
-    return envPath;
-  }
-
   if (options?.includeBundled ?? true) {
+    const platform = normalizePlatform(process.platform);
+    const arch = normalizeArch(process.arch);
+    const binaryName = process.platform === "win32" ? "node.exe" : "node";
+    const targetKey = platform && arch ? `${platform}-${arch}` : null;
     const bundledCandidates = [
+      ...(targetKey
+        ? [
+            resolve(process.resourcesPath, "node", targetKey, "bin", binaryName),
+            resolve(process.resourcesPath, "node", targetKey, binaryName),
+          ]
+        : []),
+      resolve(process.resourcesPath, "node", "bin", binaryName),
       resolve(process.resourcesPath, "node", "bin", "node"),
+      resolve(process.resourcesPath, "node", "bin", "node.exe"),
+      resolve(process.resourcesPath, "node", binaryName),
       resolve(process.resourcesPath, "node"),
     ];
     for (const candidate of bundledCandidates) {
       if (existsSync(candidate)) {
         return candidate;
       }
-    }
-  }
-
-  try {
-    const which = spawnSync("/usr/bin/which", ["node"], { encoding: "utf-8" });
-    const path = which.stdout?.trim();
-    if (path && existsSync(path)) {
-      return path;
-    }
-  } catch {
-    // ignore
-  }
-
-  try {
-    const shell = process.env.SHELL?.trim() || "/bin/zsh";
-    const resolved = spawnSync(shell, ["-lc", "command -v node"], { encoding: "utf-8" });
-    const path = resolved.stdout?.trim();
-    if (path && existsSync(path)) {
-      return path;
-    }
-  } catch {
-    // ignore
-  }
-
-  const commonCandidates = [
-    "/opt/homebrew/bin/node",
-    "/usr/local/bin/node",
-    "/usr/bin/node",
-  ];
-  for (const candidate of commonCandidates) {
-    if (existsSync(candidate)) {
-      return candidate;
     }
   }
 

@@ -33,7 +33,6 @@ const normalizeArch = (value) => {
   return null;
 };
 
-const envName = (getArg("--env") || "test").toLowerCase();
 const platform = normalizePlatform(getArg("--platform") || process.platform);
 const arch = normalizeArch(getArg("--arch") || (platform === "mac" ? process.arch : null));
 const signMode = (getArg("--sign") || "auto").toLowerCase();
@@ -43,10 +42,6 @@ if (!platform) {
   process.exit(1);
 }
 
-if (envName !== "test" && envName !== "prod") {
-  console.error("[build-release] Unknown env. Use --env test|prod.");
-  process.exit(1);
-}
 if (!["auto", "on", "off"].includes(signMode)) {
   console.error("[build-release] Unknown sign mode. Use --sign auto|on|off.");
   process.exit(1);
@@ -79,7 +74,23 @@ const capture = (cmd, cmdArgs, opts = {}) => {
 };
 
 run(pnpmCmd, ["run", "prepare:openclaw-deps"]);
-run(pnpmCmd, ["run", "prepare:node"]);
+
+const prepareNodeForTarget = (targetPlatform, targetArch) => {
+  const args = ["run", "prepare:node", "--", "--platform", targetPlatform, "--arch", targetArch];
+  run(pnpmCmd, args);
+};
+
+if (platform === "mac" && arch === "universal") {
+  prepareNodeForTarget("mac", "arm64");
+  prepareNodeForTarget("mac", "x64");
+} else if (platform === "mac") {
+  prepareNodeForTarget("mac", arch === "x64" ? "x64" : "arm64");
+} else if (platform === "windows") {
+  prepareNodeForTarget("windows", arch === "arm64" ? "arm64" : "x64");
+} else {
+  prepareNodeForTarget("linux", arch === "arm64" ? "arm64" : "x64");
+}
+
 run(pnpmCmd, ["run", "build"]);
 
 const updatePlatformKey =
@@ -124,13 +135,13 @@ builderArgs.push(
 );
 
 const extraEnv = {};
-if (signMode === "off" || (signMode === "auto" && envName === "test")) {
+if (signMode === "off") {
   extraEnv.CSC_IDENTITY_AUTO_DISCOVERY = "false";
   builderArgs.push("-c.mac.identity=null");
 }
 
 run(pnpmCmd, ["dlx", "electron-builder", ...builderArgs], { env: extraEnv });
 
-if (envName === "prod" && platform === "mac") {
+if (platform === "mac") {
   run(nodeCmd, ["scripts/notarize-mac-artifacts.js", "--dir", outputDir]);
 }
