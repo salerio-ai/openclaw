@@ -432,6 +432,18 @@ img.chat-avatar {
   animation: chat-flow-tool-shimmer 1.8s linear infinite;
 }
 
+:root[data-theme="light"] .chat-flow-tool-summary--running {
+  color: var(--text);
+  background-image: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--muted) 92%, transparent) 0%,
+    color-mix(in srgb, var(--muted) 92%, transparent) 36%,
+    color-mix(in srgb, white 82%, var(--text) 18%) 50%,
+    color-mix(in srgb, var(--muted) 92%, transparent) 64%,
+    color-mix(in srgb, var(--muted) 92%, transparent) 100%
+  );
+}
+
 .chat-flow-item--tool summary::-webkit-details-marker {
   display: none;
 }
@@ -483,6 +495,18 @@ img.chat-avatar {
   background-clip: text;
   -webkit-text-fill-color: transparent;
   animation: chat-flow-tool-shimmer 1.8s linear infinite;
+}
+
+:root[data-theme="light"] .chat-flow-thinking-live {
+  color: var(--muted);
+  background-image: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--muted) 95%, transparent) 0%,
+    color-mix(in srgb, var(--muted) 95%, transparent) 36%,
+    color-mix(in srgb, white 88%, var(--text) 12%) 50%,
+    color-mix(in srgb, var(--muted) 95%, transparent) 64%,
+    color-mix(in srgb, var(--muted) 95%, transparent) 100%
+  );
 }
 
 .chat-flow-item.is-running {

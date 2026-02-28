@@ -300,6 +300,12 @@
   line-height: 1.45;
 }
 
+.chat-compose .chat-compose__field textarea:focus,
+.chat-compose .chat-compose__field textarea:focus-visible {
+  box-shadow: none;
+  outline: none;
+}
+
 .chat-compose__field textarea:disabled {
   opacity: 0.7;
   cursor: not-allowed;

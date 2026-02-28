@@ -1410,7 +1410,10 @@ function setupIpcHandlers(): void {
     try {
       await stopGateway();
       const stateDir = resolveElectronStateDir();
-      rmSync(stateDir, { recursive: true, force: true });
+      const configPath = resolveElectronConfigPath();
+      const mainAgentDir = resolve(stateDir, "agents", "main", "agent");
+      rmSync(configPath, { force: true });
+      rmSync(mainAgentDir, { recursive: true, force: true });
       initResult = null;
       gatewayToken = null;
       gatewayProcess = null;

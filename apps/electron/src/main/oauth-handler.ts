@@ -17,7 +17,7 @@ let oauthPromptResolver: ((value: string) => void) | null = null;
 // ============================================================================
 
 /** Default port for OAuth callback server (separate from gateway to avoid conflicts). */
-const DEFAULT_OAUTH_CALLBACK_PORT = 18790;
+const DEFAULT_OAUTH_CALLBACK_PORT = 17900;
 
 let oauthServer: ReturnType<typeof createServer> | null = null;
 let oauthServerPort: number | null = null;
