@@ -76,6 +76,10 @@ export async function loadChatHistory(state: ChatState) {
     );
     state.chatMessages = Array.isArray(res.messages) ? res.messages : [];
     state.chatThinkingLevel = res.thinkingLevel ?? null;
+    console.log("[webui] chat.history loaded", {
+      sessionKey: state.sessionKey,
+      count: state.chatMessages.length,
+    });
   } catch (err) {
     state.lastError = String(err);
   } finally {

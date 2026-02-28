@@ -115,6 +115,7 @@ type TimelineNode =
 
 const COMPACTION_TOAST_DURATION_MS = 5000;
 const FALLBACK_TOAST_DURATION_MS = 8000;
+const TEXT_STREAM_ACTIVE_WINDOW_MS = 500;
 
 function adjustTextareaHeight(el: HTMLTextAreaElement) {
   el.style.height = "auto";
@@ -478,12 +479,17 @@ export function renderChat(props: ChatProps) {
   const activeRunningToolKey = resolveActiveRunningToolKey(timeline);
   const hasRunningTool = timeline.some((item) => item.kind === "tool" && item.running);
   const hasStreamingText = props.stream !== null && props.stream.trim().length > 0;
+  const textStreamUpdatedAt = props.streamUpdatedAt ?? props.streamStartedAt;
+  const hasActiveStreamingText =
+    hasStreamingText &&
+    typeof textStreamUpdatedAt === "number" &&
+    Date.now() - textStreamUpdatedAt < TEXT_STREAM_ACTIVE_WINDOW_MS;
   const hasThinkingStream = Boolean(
     typeof props.thinkingStream === "string" && props.thinkingStream.trim().length > 0,
   );
   const thinkingLiveText = hasThinkingStream ? props.thinkingStream.trim() : "Thinking…";
   const hasInFlightTurn = Boolean(props.canAbort) || props.sending || props.streamStartedAt != null;
-  const showLiveThinking = hasInFlightTurn && !hasStreamingText && !hasRunningTool;
+  const showLiveThinking = hasInFlightTurn && !hasActiveStreamingText && !hasRunningTool;
   const thread = html`
     <div
       class="chat-thread"

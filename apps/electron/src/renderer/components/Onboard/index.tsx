@@ -13,7 +13,7 @@ type Step = "bustly-login" | "connect-whatsapp";
 const BETA_AUTO_BOOTSTRAP = {
   providerId: "openrouter",
   // model: "openrouter/anthropic/claude-opus-4.6",
-  model: "openrouter/z-ai/glm-4.7-flash",
+  model: "openrouter/minimax/minimax-m2.5",
 } as const;
 
 export default function Onboard({ onComplete, onCancel: _onCancel }: OnboardProps) {

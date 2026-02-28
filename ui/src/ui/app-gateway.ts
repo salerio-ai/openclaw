@@ -289,6 +289,9 @@ function handleChatGatewayEvent(host: GatewayHost, payload: ChatEventPayload | u
 }
 
 function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
+  if (evt.event === "agent" || evt.event === "chat") {
+    console.log("[webui] received message", evt.event, evt.payload);
+  }
   host.eventLogBuffer = [
     { ts: Date.now(), event: evt.event, payload: evt.payload },
     ...host.eventLogBuffer,
@@ -311,17 +314,21 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
             : typeof payload.data?.text === "string"
               ? payload.data.text
               : typeof payload.data?.delta === "string"
-            ? (() => {
-                const current = (host as unknown as { chatThinkingStream: string | null })
-                  .chatThinkingStream;
-                return `${current ?? ""}${payload.data.delta}`;
-              })()
-            : null;
+                ? (() => {
+                    const current = (host as unknown as { chatThinkingStream: string | null })
+                      .chatThinkingStream;
+                    return `${current ?? ""}${payload.data.delta}`;
+                  })()
+                : null;
       const runMatches =
         !host.chatRunId || !payload.runId || String(payload.runId) === String(host.chatRunId);
       const hasExplicitReasoningField =
         typeof payload.data?.thinking === "string" || typeof payload.data?.reasoning === "string";
-      if (thinkingText && runMatches && (payload.stream === "thinking" || hasExplicitReasoningField)) {
+      if (
+        thinkingText &&
+        runMatches &&
+        (payload.stream === "thinking" || hasExplicitReasoningField)
+      ) {
         (host as unknown as { chatThinkingStream: string | null }).chatThinkingStream =
           thinkingText;
       }
