@@ -371,9 +371,11 @@ function renderTimelineNode(item: TimelineNode, activeRunningToolKey: string | n
           ${renderCopyAsMarkdownButton(item.text)}
           ${unsafeHTML(toSanitizedMarkdownHtml(item.text))}
         </div>
-        ${timeLabel
-          ? html`<div class="chat-flow-user-time" aria-label="Message time">${timeLabel}</div>`
-          : nothing}
+        ${
+          timeLabel
+            ? html`<div class="chat-flow-user-time" aria-label="Message time">${timeLabel}</div>`
+            : nothing
+        }
       </div>
     `;
   }
@@ -479,11 +481,8 @@ export function renderChat(props: ChatProps) {
   const hasThinkingStream = Boolean(
     typeof props.thinkingStream === "string" && props.thinkingStream.trim().length > 0,
   );
-  const thinkingLiveText =
-    hasThinkingStream
-      ? props.thinkingStream.trim()
-      : "Thinking…";
-  const hasInFlightTurn = Boolean(props.canAbort) || props.sending;
+  const thinkingLiveText = hasThinkingStream ? props.thinkingStream.trim() : "Thinking…";
+  const hasInFlightTurn = Boolean(props.canAbort) || props.sending || props.streamStartedAt != null;
   const showLiveThinking =
     (hasInFlightTurn || hasThinkingStream) && !hasStreamingText && !hasRunningTool;
   const thread = html`
@@ -775,9 +774,7 @@ function buildTimelineNodes(props: ChatProps): TimelineNode[] {
     seenMessageKeys.add(key);
     const role = normalized.role.toLowerCase();
     const stopReason =
-      typeof (msg as Record<string, unknown>)?.stopReason === "string"
-        ? ((msg as Record<string, unknown>).stopReason as string).toLowerCase()
-        : "";
+      typeof msg?.stopReason === "string" ? (msg.stopReason as string).toLowerCase() : "";
     const isFinalMessage = role === "assistant" && stopReason === "stop";
     const thinking = extractThinkingCached(msg);
     if (thinking) {
@@ -856,6 +853,27 @@ function buildTimelineNodes(props: ChatProps): TimelineNode[] {
       props.streamStartedAt ??
       fallbackBaseTs + history.length + tools.length;
     if (props.stream.trim().length > 0) {
+      const normalizedStreamText = normalizeComparableText(props.stream);
+      const hasRecentAssistantDuplicate = nodes.some((entry) => {
+        if (entry.node.kind !== "text") {
+          return false;
+        }
+        if (entry.node.tone !== "assistant" || entry.node.streaming) {
+          return false;
+        }
+        if (Math.abs(entry.timestamp - streamTimestamp) > 15_000) {
+          return false;
+        }
+        return normalizeComparableText(entry.node.text) === normalizedStreamText;
+      });
+      if (hasRecentAssistantDuplicate) {
+        const ordered = nodes
+          .toSorted((a, b) =>
+            a.timestamp === b.timestamp ? a.order - b.order : a.timestamp - b.timestamp,
+          )
+          .map((entry) => entry.node);
+        return dedupeAdjacentAssistantTextNodes(moveActiveRunningToolToEnd(ordered));
+      }
       const key = `stream:${props.sessionKey}:${props.streamStartedAt ?? "live"}:text`;
       pushNode(
         {
@@ -876,7 +894,37 @@ function buildTimelineNodes(props: ChatProps): TimelineNode[] {
       a.timestamp === b.timestamp ? a.order - b.order : a.timestamp - b.timestamp,
     )
     .map((entry) => entry.node);
-  return moveActiveRunningToolToEnd(ordered);
+  return dedupeAdjacentAssistantTextNodes(moveActiveRunningToolToEnd(ordered));
+}
+
+function normalizeComparableText(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function dedupeAdjacentAssistantTextNodes(nodes: TimelineNode[]): TimelineNode[] {
+  const out: TimelineNode[] = [];
+  for (const node of nodes) {
+    const prev = out[out.length - 1];
+    if (
+      prev &&
+      prev.kind === "text" &&
+      node.kind === "text" &&
+      prev.tone === "assistant" &&
+      node.tone === "assistant" &&
+      !prev.streaming &&
+      !node.streaming &&
+      normalizeComparableText(prev.text) === normalizeComparableText(node.text) &&
+      Math.abs(prev.timestamp - node.timestamp) <= 15_000
+    ) {
+      // Prefer the richer terminal snapshot when both messages are equivalent.
+      if (!prev.final && node.final) {
+        out[out.length - 1] = node;
+      }
+      continue;
+    }
+    out.push(node);
+  }
+  return out;
 }
 
 function resolveActiveRunningToolKey(nodes: TimelineNode[]): string | null {
@@ -1027,8 +1075,7 @@ function toToolNodes(
       extractTextCached(message) ??
       (typeof m.text === "string" ? m.text : "");
     const rawToolCallId =
-      messageToolCallId ??
-      (typeof callItems[0]?.id === "string" ? callItems[0]?.id : undefined);
+      messageToolCallId ?? (typeof callItems[0]?.id === "string" ? callItems[0]?.id : undefined);
     nodes.push(
       buildNode({
         name,

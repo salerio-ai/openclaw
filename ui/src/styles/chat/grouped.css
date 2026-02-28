@@ -582,7 +582,9 @@ img.chat-avatar {
   color: var(--text-strong);
 }
 
-.chat-flow-item--final {}
+.chat-flow-item--final {
+  max-width: 70%;
+}
 
 .chat-flow-item--error {
   color: var(--danger);
