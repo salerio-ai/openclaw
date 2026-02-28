@@ -27,9 +27,12 @@ export async function resolveWorkspaceTemplateDir(opts?: {
     const moduleUrl = opts?.moduleUrl ?? import.meta.url;
     const argv1 = opts?.argv1 ?? process.argv[1];
     const cwd = opts?.cwd ?? process.cwd();
+    const argv1Dir = argv1 ? path.dirname(path.resolve(argv1)) : null;
 
     const packageRoot = await resolveOpenClawPackageRoot({ moduleUrl, argv1, cwd });
     const candidates = [
+      // Packaged/electron runtime: openclaw.mjs is placed under Resources/.
+      argv1Dir ? path.join(argv1Dir, "docs", "reference", "templates") : null,
       packageRoot ? path.join(packageRoot, "docs", "reference", "templates") : null,
       cwd ? path.resolve(cwd, "docs", "reference", "templates") : null,
       FALLBACK_TEMPLATE_DIR,

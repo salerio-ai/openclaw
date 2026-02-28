@@ -1957,12 +1957,13 @@ void app.whenReady().then(async () => {
     });
   });
 
-  // If no Bustly OAuth state exists, remove the config/state directory.
+  // Missing Bustly OAuth state should not wipe OpenClaw config/state.
+  // Users can complete onboarding via non-Bustly auth flows, which do not
+  // necessarily create bustlyOauth.json.
   const stateDir = resolveElectronStateDir();
   const bustlyOauthPath = resolve(stateDir, "bustlyOauth.json");
   if (!existsSync(bustlyOauthPath)) {
-    writeMainLog(`[Init] bustlyOauth.json missing; clearing stateDir=${stateDir}`);
-    rmSync(stateDir, { recursive: true, force: true });
+    writeMainLog(`[Init] bustlyOauth.json missing; keeping stateDir=${stateDir}`);
   } else {
     writeMainLog(`[Init] bustlyOauth.json found at ${bustlyOauthPath}`);
   }
