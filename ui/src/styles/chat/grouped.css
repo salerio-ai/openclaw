@@ -329,6 +329,7 @@ img.chat-avatar {
   background: var(--bg-muted);
   border: 1px solid transparent;
   color: var(--text);
+  margin: 10px 0;
 }
 
 .chat-flow-user-bubble.has-copy {
@@ -434,14 +435,12 @@ img.chat-avatar {
 
 :root[data-theme="light"] .chat-flow-tool-summary--running {
   color: var(--text);
-  background-image: linear-gradient(
-    100deg,
-    color-mix(in srgb, var(--muted) 92%, transparent) 0%,
-    color-mix(in srgb, var(--muted) 92%, transparent) 36%,
-    color-mix(in srgb, white 82%, var(--text) 18%) 50%,
-    color-mix(in srgb, var(--muted) 92%, transparent) 64%,
-    color-mix(in srgb, var(--muted) 92%, transparent) 100%
-  );
+  background-image: linear-gradient(100deg,
+      color-mix(in srgb, var(--muted) 92%, transparent) 0%,
+      color-mix(in srgb, var(--muted) 92%, transparent) 36%,
+      color-mix(in srgb, white 82%, var(--text) 18%) 50%,
+      color-mix(in srgb, var(--muted) 92%, transparent) 64%,
+      color-mix(in srgb, var(--muted) 92%, transparent) 100%);
 }
 
 .chat-flow-item--tool summary::-webkit-details-marker {
@@ -450,6 +449,58 @@ img.chat-avatar {
 
 .chat-flow-item--tool[open] summary {
   color: var(--text);
+}
+
+.chat-flow-item--processed {
+  max-width: 70%;
+  color: var(--muted);
+}
+
+.chat-flow-item--processed summary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  transition: color 160ms ease;
+}
+
+.chat-flow-item--processed summary::-webkit-details-marker {
+  display: none;
+}
+
+.chat-flow-item--processed:hover summary,
+.chat-flow-item--processed[open] summary {
+  color: var(--text);
+}
+
+.chat-flow-item--processed:hover .chat-flow-tool-chevron,
+.chat-flow-item--processed[open] .chat-flow-tool-chevron {
+  opacity: 1;
+}
+
+.chat-flow-item--processed[open] .chat-flow-tool-chevron {
+  transform: translateX(0) rotate(90deg);
+}
+
+.chat-flow-processed-line {
+  flex: 1 1 auto;
+  min-width: 24px;
+  height: 1px;
+  background: var(--border);
+  opacity: 0.75;
+}
+
+.chat-flow-processed-summary {
+  font-size: 14px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.chat-flow-processed-body {
+  margin-top: 6px;
 }
 
 .chat-flow-tool-detail {
@@ -499,14 +550,12 @@ img.chat-avatar {
 
 :root[data-theme="light"] .chat-flow-thinking-live {
   color: var(--muted);
-  background-image: linear-gradient(
-    100deg,
-    color-mix(in srgb, var(--muted) 95%, transparent) 0%,
-    color-mix(in srgb, var(--muted) 95%, transparent) 36%,
-    color-mix(in srgb, white 88%, var(--text) 12%) 50%,
-    color-mix(in srgb, var(--muted) 95%, transparent) 64%,
-    color-mix(in srgb, var(--muted) 95%, transparent) 100%
-  );
+  background-image: linear-gradient(100deg,
+      color-mix(in srgb, var(--muted) 95%, transparent) 0%,
+      color-mix(in srgb, var(--muted) 95%, transparent) 36%,
+      color-mix(in srgb, white 88%, var(--text) 12%) 50%,
+      color-mix(in srgb, var(--muted) 95%, transparent) 64%,
+      color-mix(in srgb, var(--muted) 95%, transparent) 100%);
 }
 
 .chat-flow-item.is-running {
@@ -521,6 +570,8 @@ img.chat-avatar {
 .chat-flow-item--text {
   color: var(--text-strong);
 }
+
+.chat-flow-item--final {}
 
 .chat-flow-item--error {
   color: var(--danger);

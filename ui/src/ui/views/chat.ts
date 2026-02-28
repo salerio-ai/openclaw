@@ -91,6 +91,7 @@ type TimelineNode =
       text: string;
       tone: "user" | "assistant" | "thinking" | "system";
       streaming?: boolean;
+      final?: boolean;
     }
   | {
       kind: "tool";
@@ -102,6 +103,13 @@ type TimelineNode =
       hasOutput: boolean;
       completed: boolean;
       running?: boolean;
+    }
+  | {
+      kind: "processed";
+      key: string;
+      timestamp: number;
+      durationMs: number | null;
+      items: TimelineNode[];
     }
   | { kind: "divider"; key: string; label: string; timestamp: number };
 
@@ -260,6 +268,163 @@ function renderAttachmentPreview(props: ChatProps) {
   `;
 }
 
+function formatProcessedDuration(durationMs: number | null | undefined): string {
+  if (typeof durationMs !== "number" || !Number.isFinite(durationMs) || durationMs < 1000) {
+    return "";
+  }
+  const totalSeconds = Math.floor(durationMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes <= 0) {
+    return `${seconds}s`;
+  }
+  return `${minutes}m ${seconds}s`;
+}
+
+function renderTimelineNode(item: TimelineNode, activeRunningToolKey: string | null) {
+  if (item.kind === "divider") {
+    return html`
+      <div class="chat-divider" role="separator" data-ts=${String(item.timestamp)}>
+        <span class="chat-divider__line"></span>
+        <span class="chat-divider__label">${item.label}</span>
+        <span class="chat-divider__line"></span>
+      </div>
+    `;
+  }
+  if (item.kind === "tool") {
+    const running = item.running && item.key === activeRunningToolKey;
+    return html`
+      <details class="chat-flow-item chat-flow-item--tool ${running ? "is-running" : ""}">
+        <summary>
+          <span class="chat-flow-tool-summary ${running ? "chat-flow-tool-summary--running" : "chat-flow-tool-summary--done"}">
+            ${running ? `Running ${item.summary}` : `Completed ${item.summary}`}
+          </span>
+          <span class="chat-flow-tool-chevron" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="m9 6 6 6-6 6" />
+            </svg>
+          </span>
+        </summary>
+        <pre class="chat-flow-tool-detail mono">${item.detail}</pre>
+      </details>
+    `;
+  }
+  if (item.kind === "processed") {
+    const duration = formatProcessedDuration(item.durationMs);
+    const summary = duration ? `Processed ${duration}` : "Processed";
+    return html`
+      <details class="chat-flow-item chat-flow-item--processed">
+        <summary>
+          <span class="chat-flow-processed-line" aria-hidden="true"></span>
+          <span class="chat-flow-processed-summary">${summary}</span>
+          <span class="chat-flow-tool-chevron" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="m9 6 6 6-6 6" />
+            </svg>
+          </span>
+          <span class="chat-flow-processed-line" aria-hidden="true"></span>
+        </summary>
+        <div class="chat-flow-processed-body">
+          ${repeat(
+            item.items,
+            (entry) => entry.key,
+            (entry) => renderTimelineNode(entry, activeRunningToolKey),
+          )}
+        </div>
+      </details>
+    `;
+  }
+  if (item.tone === "user") {
+    return html`
+      <div class="chat-flow-item chat-flow-item--user-bubble">
+        <div class="chat-flow-user-bubble has-copy">
+          ${renderCopyAsMarkdownButton(item.text)}
+          ${unsafeHTML(toSanitizedMarkdownHtml(item.text))}
+        </div>
+      </div>
+    `;
+  }
+  const className =
+    item.tone === "thinking"
+      ? "chat-flow-item chat-flow-item--thinking"
+      : "chat-flow-item chat-flow-item--text";
+  const isErrorText = item.tone !== "user" && /^(error:|err:)/i.test(item.text.trim());
+  return html`
+    <div class="${className} ${item.streaming ? "is-running" : ""} ${isErrorText ? "chat-flow-item--error" : ""} ${item.final ? "chat-flow-item--final" : ""}">
+      ${unsafeHTML(toSanitizedMarkdownHtml(item.text))}
+    </div>
+  `;
+}
+
+function collapseProcessedTurn(nodes: TimelineNode[]): TimelineNode[] {
+  if (nodes.length === 0) {
+    return nodes;
+  }
+  const finalIndices: number[] = [];
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i];
+    if (node.kind === "text" && node.tone === "assistant" && node.final) {
+      finalIndices.push(i);
+    }
+  }
+  if (finalIndices.length === 0) {
+    return nodes;
+  }
+
+  const result: TimelineNode[] = [];
+  let cursor = 0;
+
+  for (const finalIndex of finalIndices) {
+    if (finalIndex < cursor) {
+      continue;
+    }
+    const finalNode = nodes[finalIndex];
+    let turnStart = cursor;
+    for (let i = finalIndex - 1; i >= cursor; i--) {
+      const node = nodes[i];
+      if (node.kind === "text" && node.tone === "user") {
+        turnStart = i + 1;
+        break;
+      }
+    }
+
+    // Keep non-collapsed nodes before this turn.
+    if (turnStart > cursor) {
+      result.push(...nodes.slice(cursor, turnStart));
+    }
+
+    const collapsedItems = nodes
+      .slice(turnStart, finalIndex)
+      .filter((node) => node.kind !== "divider");
+    if (collapsedItems.length > 0) {
+      const estimatedDurationMs =
+        finalNode.timestamp >= collapsedItems[0].timestamp
+          ? finalNode.timestamp - collapsedItems[0].timestamp
+          : null;
+      result.push({
+        kind: "processed",
+        key: `processed:${finalNode.key}`,
+        timestamp: collapsedItems[0]?.timestamp ?? finalNode.timestamp,
+        durationMs: estimatedDurationMs,
+        items: collapsedItems,
+      });
+    } else if (finalIndex > cursor && turnStart === cursor) {
+      // No collapsible content; preserve raw nodes before final.
+      result.push(...nodes.slice(cursor, finalIndex));
+    }
+
+    // Final assistant message remains visible.
+    result.push(finalNode);
+    cursor = finalIndex + 1;
+  }
+
+  if (cursor < nodes.length) {
+    result.push(...nodes.slice(cursor));
+  }
+
+  return result;
+}
+
 export function renderChat(props: ChatProps) {
   const canCompose = props.connected;
   const isBusy = props.sending || props.stream !== null;
@@ -274,7 +439,7 @@ export function renderChat(props: ChatProps) {
 
   const splitRatio = props.splitRatio ?? 0.6;
   const sidebarOpen = Boolean(props.sidebarOpen && props.onCloseSidebar);
-  const timeline = buildTimelineNodes(props);
+  const timeline = collapseProcessedTurn(buildTimelineNodes(props));
   const activeRunningToolKey = resolveActiveRunningToolKey(timeline);
   const hasRunningTool = timeline.some((item) => item.kind === "tool" && item.running);
   const hasStreamingText = props.stream !== null && props.stream.trim().length > 0;
@@ -300,61 +465,13 @@ export function renderChat(props: ChatProps) {
       ${repeat(
         timeline,
         (item) => item.key,
-        (item) => {
-          if (item.kind === "divider") {
-            return html`
-              <div class="chat-divider" role="separator" data-ts=${String(item.timestamp)}>
-                <span class="chat-divider__line"></span>
-                <span class="chat-divider__label">${item.label}</span>
-                <span class="chat-divider__line"></span>
-              </div>
-            `;
-          }
-          if (item.kind === "tool") {
-            const running = item.running && item.key === activeRunningToolKey;
-            return html`
-              <details class="chat-flow-item chat-flow-item--tool ${running ? "is-running" : ""}">
-                <summary>
-                  <span class="chat-flow-tool-summary ${running ? "chat-flow-tool-summary--running" : "chat-flow-tool-summary--done"}">
-                    ${running ? `Running ${item.summary}` : `Completed ${item.summary}`}
-                  </span>
-                  <span class="chat-flow-tool-chevron" aria-hidden="true">
-                    <svg viewBox="0 0 24 24">
-                      <path d="m9 6 6 6-6 6" />
-                    </svg>
-                  </span>
-                </summary>
-                <pre class="chat-flow-tool-detail mono">${item.detail}</pre>
-              </details>
-            `;
-          }
-          if (item.tone === "user") {
-            return html`
-              <div class="chat-flow-item chat-flow-item--user-bubble">
-                <div class="chat-flow-user-bubble has-copy">
-                  ${renderCopyAsMarkdownButton(item.text)}
-                  ${unsafeHTML(toSanitizedMarkdownHtml(item.text))}
-                </div>
-              </div>
-            `;
-          }
-          const className =
-            item.tone === "thinking"
-              ? "chat-flow-item chat-flow-item--thinking"
-              : "chat-flow-item chat-flow-item--text";
-          const isErrorText = item.tone !== "user" && /^(error:|err:)/i.test(item.text.trim());
-          return html`
-            <div class="${className} ${item.streaming ? "is-running" : ""} ${isErrorText ? "chat-flow-item--error" : ""}">
-              ${unsafeHTML(toSanitizedMarkdownHtml(item.text))}
-            </div>
-          `;
-        },
+        (item) => renderTimelineNode(item, activeRunningToolKey),
       )}
       ${
         showLiveThinking
           ? html`
               <div class="chat-flow-item chat-flow-item--thinking-live">
-                <span class="chat-flow-thinking-live">${thinkingLiveText}</span>
+                <p class="chat-flow-thinking-live">${thinkingLiveText}</p>
               </div>
             `
           : nothing
@@ -619,6 +736,11 @@ function buildTimelineNodes(props: ChatProps): TimelineNode[] {
     const key = messageKey(rawEntry, i);
     seenMessageKeys.add(key);
     const role = normalized.role.toLowerCase();
+    const stopReason =
+      typeof (msg as Record<string, unknown>)?.stopReason === "string"
+        ? ((msg as Record<string, unknown>).stopReason as string).toLowerCase()
+        : "";
+    const isFinalMessage = role === "assistant" && stopReason === "stop";
     const thinking = extractThinkingCached(msg);
     if (thinking) {
       pushNode(
@@ -667,6 +789,7 @@ function buildTimelineNodes(props: ChatProps): TimelineNode[] {
         timestamp,
         text,
         tone: role === "user" ? "user" : role === "assistant" ? "assistant" : "system",
+        final: isFinalMessage,
       },
       timestamp,
     );
