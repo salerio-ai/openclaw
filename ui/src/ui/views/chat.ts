@@ -44,6 +44,10 @@ export type ChatProps = {
   toolMessages: unknown[];
   stream: string | null;
   thinkingStream?: string | null;
+  streamSeq?: number | null;
+  thinkingStreamSeq?: number | null;
+  thinkingStreamStartedAt?: number | null;
+  thinkingStreamUpdatedAt?: number | null;
   streamStartedAt: number | null;
   streamUpdatedAt?: number | null;
   assistantAvatarUrl?: string | null;
@@ -115,7 +119,7 @@ type TimelineNode =
 
 const COMPACTION_TOAST_DURATION_MS = 5000;
 const FALLBACK_TOAST_DURATION_MS = 8000;
-const TEXT_STREAM_ACTIVE_WINDOW_MS = 500;
+const STREAM_ACTIVITY_WINDOW_MS = 500;
 
 function adjustTextareaHeight(el: HTMLTextAreaElement) {
   el.style.height = "auto";
@@ -483,13 +487,17 @@ export function renderChat(props: ChatProps) {
   const hasActiveStreamingText =
     hasStreamingText &&
     typeof textStreamUpdatedAt === "number" &&
-    Date.now() - textStreamUpdatedAt < TEXT_STREAM_ACTIVE_WINDOW_MS;
-  const hasThinkingStream = Boolean(
-    typeof props.thinkingStream === "string" && props.thinkingStream.trim().length > 0,
-  );
-  const thinkingLiveText = hasThinkingStream ? props.thinkingStream.trim() : "Thinking…";
+    Date.now() - textStreamUpdatedAt < STREAM_ACTIVITY_WINDOW_MS;
+  const hasStreamingThinking =
+    typeof props.thinkingStream === "string" && props.thinkingStream.trim().length > 0;
+  const thinkingStreamUpdatedAt = props.thinkingStreamUpdatedAt ?? props.thinkingStreamStartedAt;
+  const hasActiveThinkingText =
+    hasStreamingThinking &&
+    typeof thinkingStreamUpdatedAt === "number" &&
+    Date.now() - thinkingStreamUpdatedAt < STREAM_ACTIVITY_WINDOW_MS;
   const hasInFlightTurn = Boolean(props.canAbort) || props.sending || props.streamStartedAt != null;
-  const showLiveThinking = hasInFlightTurn && !hasActiveStreamingText && !hasRunningTool;
+  const showLoading =
+    hasInFlightTurn && !hasRunningTool && !hasActiveStreamingText && !hasActiveThinkingText;
   const thread = html`
     <div
       class="chat-thread"
@@ -510,10 +518,10 @@ export function renderChat(props: ChatProps) {
         (item) => renderTimelineNode(item, activeRunningToolKey),
       )}
       ${
-        showLiveThinking
+        showLoading
           ? html`
               <div class="chat-flow-item chat-flow-item--thinking-live">
-                <p class="chat-flow-thinking-live">${thinkingLiveText}</p>
+                <p class="chat-flow-thinking-live">Thinking...</p>
               </div>
             `
           : nothing
@@ -689,17 +697,22 @@ export function renderChat(props: ChatProps) {
 const CHAT_HISTORY_RENDER_LIMIT = 200;
 
 function buildTimelineNodes(props: ChatProps): TimelineNode[] {
-  const nodes: Array<{ node: TimelineNode; timestamp: number; order: number }> = [];
+  const nodes: Array<{ node: TimelineNode; timestamp: number; seq: number | null; order: number }> =
+    [];
   let order = 0;
-  const pushNode = (node: TimelineNode, timestamp: number) => {
-    nodes.push({ node, timestamp, order: order++ });
+  const pushNode = (node: TimelineNode, timestamp: number, seq: number | null = null) => {
+    nodes.push({ node, timestamp, seq, order: order++ });
   };
-  const upsertToolNode = (toolNode: Extract<TimelineNode, { kind: "tool" }>, timestamp: number) => {
+  const upsertToolNode = (
+    toolNode: Extract<TimelineNode, { kind: "tool" }>,
+    timestamp: number,
+    seq: number | null,
+  ) => {
     const existing = nodes.find(
       (entry) => entry.node.kind === "tool" && entry.node.mergeKey === toolNode.mergeKey,
     );
     if (!existing) {
-      pushNode(toolNode, timestamp);
+      pushNode(toolNode, timestamp, seq);
       return;
     }
     const current = existing.node as Extract<TimelineNode, { kind: "tool" }>;
@@ -716,6 +729,11 @@ function buildTimelineNodes(props: ChatProps): TimelineNode[] {
       timestamp: Math.min(current.timestamp, toolNode.timestamp),
     };
     existing.timestamp = Math.min(existing.timestamp, timestamp);
+    if (typeof existing.seq === "number" && typeof seq === "number") {
+      existing.seq = Math.min(existing.seq, seq);
+    } else if (typeof seq === "number") {
+      existing.seq = seq;
+    }
   };
   const seenMessageKeys = new Set<string>();
   const history = Array.isArray(props.messages) ? props.messages : [];
@@ -739,6 +757,7 @@ function buildTimelineNodes(props: ChatProps): TimelineNode[] {
     const { message: msg, envelope } = unwrapMessageEnvelope(rawEntry);
     const normalized = normalizeMessage(msg);
     const timestamp = resolveMessageTimestamp(msg, envelope, fallbackBaseTs + i);
+    const seq = resolveMessageSeq(msg, envelope);
     const marker =
       (envelope.__openclaw as Record<string, unknown> | undefined) ??
       (msg.__openclaw as Record<string, unknown> | undefined);
@@ -754,6 +773,7 @@ function buildTimelineNodes(props: ChatProps): TimelineNode[] {
           timestamp,
         },
         timestamp,
+        seq,
       );
       continue;
     }
@@ -791,11 +811,12 @@ function buildTimelineNodes(props: ChatProps): TimelineNode[] {
           tone: "thinking",
         },
         timestamp,
+        seq,
       );
     }
     const toolNodes = toToolNodes(msg, key, timestamp);
     for (const toolNode of toolNodes) {
-      upsertToolNode(toolNode, timestamp);
+      upsertToolNode(toolNode, timestamp, seq);
     }
 
     const isToolRole = (() => {
@@ -817,6 +838,7 @@ function buildTimelineNodes(props: ChatProps): TimelineNode[] {
             tone: "thinking",
           },
           timestamp,
+          seq,
         );
       }
       continue;
@@ -831,6 +853,7 @@ function buildTimelineNodes(props: ChatProps): TimelineNode[] {
         final: isFinalMessage,
       },
       timestamp,
+      seq,
     );
   }
 
@@ -842,12 +865,13 @@ function buildTimelineNodes(props: ChatProps): TimelineNode[] {
       continue;
     }
     const timestamp = resolveMessageTimestamp(msg, envelope, fallbackBaseTs + history.length + i);
+    const seq = resolveMessageSeq(msg, envelope);
     const toolNodes = toToolNodes(msg, key, timestamp);
     if (toolNodes.length === 0) {
       continue;
     }
     for (const toolNode of toolNodes) {
-      upsertToolNode(toolNode, timestamp);
+      upsertToolNode(toolNode, timestamp, seq);
     }
   }
 
@@ -872,11 +896,17 @@ function buildTimelineNodes(props: ChatProps): TimelineNode[] {
       });
       if (hasRecentAssistantDuplicate) {
         const ordered = nodes
-          .toSorted((a, b) =>
-            a.timestamp === b.timestamp ? a.order - b.order : a.timestamp - b.timestamp,
-          )
+          .toSorted((a, b) => {
+            if (typeof a.seq === "number" && typeof b.seq === "number") {
+              return a.seq === b.seq ? a.order - b.order : a.seq - b.seq;
+            }
+            if (a.timestamp === b.timestamp) {
+              return a.order - b.order;
+            }
+            return a.timestamp - b.timestamp;
+          })
           .map((entry) => entry.node);
-        return dedupeAdjacentAssistantTextNodes(moveActiveRunningToolToEnd(ordered));
+        return dedupeAdjacentAssistantTextNodes(ordered);
       }
       const key = `stream:${props.sessionKey}:${props.streamStartedAt ?? "live"}:text`;
       pushNode(
@@ -889,16 +919,45 @@ function buildTimelineNodes(props: ChatProps): TimelineNode[] {
           streaming: true,
         },
         streamTimestamp,
+        props.streamSeq ?? null,
+      );
+    }
+  }
+
+  if (props.thinkingStream !== null) {
+    const thinkingTimestamp =
+      props.thinkingStreamUpdatedAt ??
+      props.thinkingStreamStartedAt ??
+      fallbackBaseTs + history.length + tools.length + 1;
+    if (props.thinkingStream.trim().length > 0) {
+      const key = `stream:${props.sessionKey}:${props.thinkingStreamStartedAt ?? "live"}:thinking`;
+      pushNode(
+        {
+          kind: "text",
+          key,
+          timestamp: thinkingTimestamp,
+          text: props.thinkingStream,
+          tone: "thinking",
+          streaming: true,
+        },
+        thinkingTimestamp,
+        props.thinkingStreamSeq ?? null,
       );
     }
   }
 
   const ordered = nodes
-    .toSorted((a, b) =>
-      a.timestamp === b.timestamp ? a.order - b.order : a.timestamp - b.timestamp,
-    )
+    .toSorted((a, b) => {
+      if (typeof a.seq === "number" && typeof b.seq === "number") {
+        return a.seq === b.seq ? a.order - b.order : a.seq - b.seq;
+      }
+      if (a.timestamp === b.timestamp) {
+        return a.order - b.order;
+      }
+      return a.timestamp - b.timestamp;
+    })
     .map((entry) => entry.node);
-  return dedupeAdjacentAssistantTextNodes(moveActiveRunningToolToEnd(ordered));
+  return dedupeAdjacentAssistantTextNodes(ordered);
 }
 
 function normalizeComparableText(text: string): string {
@@ -940,21 +999,6 @@ function resolveActiveRunningToolKey(nodes: TimelineNode[]): string | null {
     return null;
   }
   return running[running.length - 1].key;
-}
-
-function moveActiveRunningToolToEnd(nodes: TimelineNode[]): TimelineNode[] {
-  const activeKey = resolveActiveRunningToolKey(nodes);
-  if (!activeKey) {
-    return nodes;
-  }
-  const idx = nodes.findIndex((node) => node.kind === "tool" && node.key === activeKey);
-  if (idx < 0 || idx === nodes.length - 1) {
-    return nodes;
-  }
-  const next = [...nodes];
-  const [activeNode] = next.splice(idx, 1);
-  next.push(activeNode);
-  return next;
 }
 
 function extractAssistantErrorFallback(message: unknown): string | null {
@@ -1023,9 +1067,11 @@ function toToolNodes(
     const summary = detail
       ? `${display.name || params.name} ${detail}`
       : display.name || params.name;
+    // Only merge lifecycle updates for the same concrete tool call id.
+    // Signature-based merges cause different tool invocations to collapse together.
     const mergeKey = params.rawToolCallId
       ? `tool:${params.rawToolCallId}`
-      : `sig:${display.name || params.name}:${safeJson(params.args ?? null)}`;
+      : `node:${key}:${params.keySuffix}`;
     const detailText = [
       `Tool: ${display.label}`,
       detail ? `Detail: ${detail}` : null,
@@ -1147,6 +1193,39 @@ function resolveMessageTimestamp(
   fallback: number,
 ): number {
   return parseTimestamp(message.timestamp) ?? parseTimestamp(envelope.timestamp) ?? fallback;
+}
+
+function parseSeq(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return null;
+}
+
+function resolveMessageSeq(
+  message: Record<string, unknown>,
+  envelope: Record<string, unknown>,
+): number | null {
+  const messageMeta =
+    message.__openclaw && typeof message.__openclaw === "object"
+      ? (message.__openclaw as Record<string, unknown>)
+      : null;
+  const envelopeMeta =
+    envelope.__openclaw && typeof envelope.__openclaw === "object"
+      ? (envelope.__openclaw as Record<string, unknown>)
+      : null;
+  return (
+    parseSeq(messageMeta?.seq) ??
+    parseSeq(envelopeMeta?.seq) ??
+    parseSeq(message.seq) ??
+    parseSeq(envelope.seq)
+  );
 }
 
 function parseToolDetailSections(detail: string): Record<string, string> {

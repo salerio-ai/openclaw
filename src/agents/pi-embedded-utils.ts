@@ -255,7 +255,7 @@ export function formatReasoningMessage(text: string): string {
     .split("\n")
     .map((line) => (line ? `_${line}_` : line))
     .join("\n");
-  return `Reasoning:\n${italicLines}`;
+  return italicLines;
 }
 
 type ThinkTaggedSplitBlock =

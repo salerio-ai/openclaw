@@ -1,7 +1,7 @@
 import { html, nothing } from "lit";
 import { parseAgentSessionKey } from "../../../src/routing/session-key.js";
 import { t } from "../i18n/index.ts";
-import { refreshChatAvatar } from "./app-chat.ts";
+import { refreshChat } from "./app-chat.ts";
 import { renderUsageTab } from "./app-render-usage-tab.ts";
 import { renderChatControls, renderTab, renderThemeToggle } from "./app-render.helpers.ts";
 import type { AppViewState } from "./app-view-state.ts";
@@ -10,7 +10,6 @@ import { loadAgentIdentities, loadAgentIdentity } from "./controllers/agent-iden
 import { loadAgentSkills } from "./controllers/agent-skills.ts";
 import { loadAgents, loadToolsCatalog } from "./controllers/agents.ts";
 import { loadChannels } from "./controllers/channels.ts";
-import { loadChatHistory } from "./controllers/chat.ts";
 import {
   applyConfig,
   loadConfig,
@@ -1054,6 +1053,10 @@ export function renderApp(state: AppViewState) {
                   state.chatAttachments = [];
                   state.chatStream = null;
                   state.chatThinkingStream = null;
+                  state.chatStreamSeq = null;
+                  state.chatThinkingStreamSeq = null;
+                  state.chatThinkingStreamStartedAt = null;
+                  state.chatThinkingStreamUpdatedAt = null;
                   state.chatStreamStartedAt = null;
                   state.chatStreamUpdatedAt = null;
                   state.chatRunId = null;
@@ -1066,8 +1069,7 @@ export function renderApp(state: AppViewState) {
                     lastActiveSessionKey: next,
                   });
                   void state.loadAssistantIdentity();
-                  void loadChatHistory(state);
-                  void refreshChatAvatar(state);
+                  void refreshChat(state, { scheduleScroll: true });
                 },
                 thinkingLevel: state.chatThinkingLevel,
                 showThinking,
@@ -1080,6 +1082,10 @@ export function renderApp(state: AppViewState) {
                 toolMessages: state.chatToolMessages,
                 stream: state.chatStream,
                 thinkingStream: state.chatThinkingStream,
+                streamSeq: state.chatStreamSeq,
+                thinkingStreamSeq: state.chatThinkingStreamSeq,
+                thinkingStreamStartedAt: state.chatThinkingStreamStartedAt,
+                thinkingStreamUpdatedAt: state.chatThinkingStreamUpdatedAt,
                 streamStartedAt: state.chatStreamStartedAt,
                 streamUpdatedAt: state.chatStreamUpdatedAt,
                 draft: state.chatMessage,
@@ -1092,7 +1098,7 @@ export function renderApp(state: AppViewState) {
                 focusMode: chatFocus,
                 onRefresh: () => {
                   state.resetToolStream();
-                  return Promise.all([loadChatHistory(state), refreshChatAvatar(state)]);
+                  return refreshChat(state, { scheduleScroll: false });
                 },
                 onToggleFocusMode: () => {
                   if (state.onboarding) {

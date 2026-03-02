@@ -4,19 +4,17 @@ import {
 } from "../../../src/gateway/events.js";
 import { CHAT_SESSIONS_ACTIVE_MINUTES, flushChatQueueForEvent } from "./app-chat.ts";
 import type { EventLogEntry } from "./app-events.ts";
-import {
-  applySettings,
-  loadCron,
-  refreshActiveTab,
-  setLastActiveSessionKey,
-} from "./app-settings.ts";
+import { applySettings, loadCron, refreshActiveTab } from "./app-settings.ts";
 import { handleAgentEvent, resetToolStream, type AgentEventPayload } from "./app-tool-stream.ts";
 import type { OpenClawApp } from "./app.ts";
-import { shouldReloadHistoryForFinalEvent } from "./chat-event-reload.ts";
 import { loadAgents, loadToolsCatalog } from "./controllers/agents.ts";
 import { loadAssistantIdentity } from "./controllers/assistant-identity.ts";
-import { loadChatHistory } from "./controllers/chat.ts";
-import { handleChatEvent, type ChatEventPayload } from "./controllers/chat.ts";
+import {
+  handleChatEvent,
+  loadChatHistory,
+  type ChatEventPayload,
+  type ChatState,
+} from "./controllers/chat.ts";
 import { loadDevices } from "./controllers/devices.ts";
 import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
 import {
@@ -84,27 +82,6 @@ type SessionDefaultsSnapshot = {
   mainSessionKey?: string;
   scope?: string;
 };
-
-const chatHistoryReloadTimers = new WeakMap<object, number>();
-
-function scheduleChatHistoryReload(host: GatewayHost, delayMs: number, opts?: { force?: boolean }) {
-  const key = host as unknown as object;
-  const existing = chatHistoryReloadTimers.get(key);
-  if (existing != null && opts?.force) {
-    window.clearTimeout(existing);
-  }
-  if (existing != null && !opts?.force) {
-    return;
-  }
-  const timer = window.setTimeout(
-    () => {
-      chatHistoryReloadTimers.delete(key);
-      void loadChatHistory(host as unknown as OpenClawApp);
-    },
-    Math.max(0, delayMs),
-  );
-  chatHistoryReloadTimers.set(key, timer);
-}
 
 function normalizeSessionKeyForDefaults(
   value: string | undefined,
@@ -188,6 +165,14 @@ export function connectGateway(host: GatewayHost) {
       host.chatRunId = null;
       (host as unknown as { chatStream: string | null }).chatStream = null;
       (host as unknown as { chatThinkingStream: string | null }).chatThinkingStream = null;
+      (host as unknown as { chatStreamSeq: number | null }).chatStreamSeq = null;
+      (host as unknown as { chatThinkingStreamSeq: number | null }).chatThinkingStreamSeq = null;
+      (
+        host as unknown as { chatThinkingStreamStartedAt: number | null }
+      ).chatThinkingStreamStartedAt = null;
+      (
+        host as unknown as { chatThinkingStreamUpdatedAt: number | null }
+      ).chatThinkingStreamUpdatedAt = null;
       (host as unknown as { chatStreamStartedAt: number | null }).chatStreamStartedAt = null;
       (host as unknown as { chatStreamUpdatedAt: number | null }).chatStreamUpdatedAt = null;
       resetToolStream(host as unknown as Parameters<typeof resetToolStream>[0]);
@@ -246,48 +231,6 @@ export function handleGatewayEvent(host: GatewayHost, evt: GatewayEventFrame) {
   }
 }
 
-function handleTerminalChatEvent(
-  host: GatewayHost,
-  payload: ChatEventPayload | undefined,
-  state: ReturnType<typeof handleChatEvent>,
-) {
-  if (state !== "final" && state !== "error" && state !== "aborted") {
-    return;
-  }
-  void flushChatQueueForEvent(host as unknown as Parameters<typeof flushChatQueueForEvent>[0]);
-  // Force transcript resync after terminal events so UI reflects persisted state
-  // even if websocket event ordering/fields vary across runs.
-  scheduleChatHistoryReload(host, 120, { force: true });
-  const runId = payload?.runId;
-  if (!runId || !host.refreshSessionsAfterChat.has(runId)) {
-    return;
-  }
-  host.refreshSessionsAfterChat.delete(runId);
-  if (state === "final") {
-    void loadSessions(host as unknown as OpenClawApp, {
-      activeMinutes: CHAT_SESSIONS_ACTIVE_MINUTES,
-    });
-  }
-}
-
-function handleChatGatewayEvent(host: GatewayHost, payload: ChatEventPayload | undefined) {
-  if (payload?.sessionKey) {
-    setLastActiveSessionKey(
-      host as unknown as Parameters<typeof setLastActiveSessionKey>[0],
-      payload.sessionKey,
-    );
-  }
-  const state = handleChatEvent(host as unknown as OpenClawApp, payload);
-  if (state === "delta") {
-    // Keep UI moving with persisted transcript during long runs.
-    scheduleChatHistoryReload(host, 450);
-  }
-  handleTerminalChatEvent(host, payload, state);
-  if (state === "final" && shouldReloadHistoryForFinalEvent(payload)) {
-    void loadChatHistory(host as unknown as OpenClawApp);
-  }
-}
-
 function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
   if (evt.event === "agent" || evt.event === "chat") {
     console.log("[webui] received message", evt.event, evt.payload);
@@ -305,45 +248,278 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
       return;
     }
     const payload = evt.payload as AgentEventPayload | undefined;
+    const normalizeThinkingText = (value: string): string =>
+      value.replace(/^Reasoning:\s*\n?/i, "").trimStart();
+    const mergeMonotonicStream = (params: {
+      current: string;
+      text: string | null;
+      delta: string | null;
+    }): string | null => {
+      const { current, text, delta } = params;
+      if (typeof text === "string") {
+        return !current || text.length >= current.length ? text : current;
+      }
+      if (typeof delta === "string") {
+        return `${current}${delta}`;
+      }
+      return null;
+    };
+    const resetLiveSnapshotState = () => {
+      (host as unknown as { chatLiveSnapshotRunId: string | null }).chatLiveSnapshotRunId = null;
+      (host as unknown as { chatLastAssistantSnapshot: string | null }).chatLastAssistantSnapshot =
+        null;
+      (host as unknown as { chatLastThinkingSnapshot: string | null }).chatLastThinkingSnapshot =
+        null;
+    };
+    const ensureLiveSnapshotState = (runId: string) => {
+      const currentRunId = (host as unknown as { chatLiveSnapshotRunId: string | null })
+        .chatLiveSnapshotRunId;
+      if (currentRunId === runId) {
+        return;
+      }
+      (host as unknown as { chatLiveSnapshotRunId: string | null }).chatLiveSnapshotRunId = runId;
+      (host as unknown as { chatLastAssistantSnapshot: string | null }).chatLastAssistantSnapshot =
+        null;
+      (host as unknown as { chatLastThinkingSnapshot: string | null }).chatLastThinkingSnapshot =
+        null;
+    };
+    const appendLiveSnapshot = (role: "assistant" | "thinking", text: string, seq?: number) => {
+      const trimmed = text.trim();
+      if (!trimmed) {
+        return;
+      }
+      const lastKey =
+        role === "assistant" ? "chatLastAssistantSnapshot" : "chatLastThinkingSnapshot";
+      const last = (host as unknown as Record<string, string | null>)[lastKey];
+      if (last === trimmed) {
+        return;
+      }
+      (host as unknown as Record<string, string | null>)[lastKey] = trimmed;
+      (host as unknown as { chatMessages: unknown[] }).chatMessages = [
+        ...(host as unknown as { chatMessages: unknown[] }).chatMessages,
+        {
+          role,
+          content: [{ type: "text", text: trimmed }],
+          __openclaw: typeof seq === "number" ? { seq } : undefined,
+          seq: typeof seq === "number" ? seq : undefined,
+          timestamp: Date.now(),
+        },
+      ];
+    };
+    handleAgentEvent(host as unknown as Parameters<typeof handleAgentEvent>[0], payload);
     if (payload) {
-      const thinkingText =
+      const runMatchesActive =
+        Boolean(host.chatRunId) &&
+        Boolean(payload.runId) &&
+        String(payload.runId) === String(host.chatRunId);
+      const stream = typeof payload.stream === "string" ? payload.stream.toLowerCase() : "";
+      if (runMatchesActive && payload.runId) {
+        ensureLiveSnapshotState(String(payload.runId));
+      }
+      if (runMatchesActive && stream === "tool") {
+        const currentThinking = (
+          (host as unknown as { chatThinkingStream: string | null }).chatThinkingStream ?? ""
+        ).trim();
+        const currentAssistant = (
+          (host as unknown as { chatStream: string | null }).chatStream ?? ""
+        ).trim();
+        if (currentThinking) {
+          appendLiveSnapshot("thinking", currentThinking, payload.seq);
+        }
+        if (currentAssistant) {
+          appendLiveSnapshot("assistant", currentAssistant, payload.seq);
+        }
+        (host as unknown as { chatThinkingStream: string | null }).chatThinkingStream = null;
+        (host as unknown as { chatThinkingStreamSeq: number | null }).chatThinkingStreamSeq = null;
+        (
+          host as unknown as { chatThinkingStreamStartedAt: number | null }
+        ).chatThinkingStreamStartedAt = null;
+        (
+          host as unknown as { chatThinkingStreamUpdatedAt: number | null }
+        ).chatThinkingStreamUpdatedAt = null;
+        (host as unknown as { chatStream: string | null }).chatStream = null;
+        (host as unknown as { chatStreamSeq: number | null }).chatStreamSeq = null;
+        (host as unknown as { chatStreamStartedAt: number | null }).chatStreamStartedAt = null;
+        (host as unknown as { chatStreamUpdatedAt: number | null }).chatStreamUpdatedAt = null;
+      }
+      const explicitThinkingText =
         typeof payload.data?.thinking === "string"
           ? payload.data.thinking
           : typeof payload.data?.reasoning === "string"
             ? payload.data.reasoning
-            : typeof payload.data?.text === "string"
-              ? payload.data.text
-              : typeof payload.data?.delta === "string"
-                ? (() => {
-                    const current = (host as unknown as { chatThinkingStream: string | null })
-                      .chatThinkingStream;
-                    return `${current ?? ""}${payload.data.delta}`;
-                  })()
-                : null;
-      const runMatches =
-        !host.chatRunId || !payload.runId || String(payload.runId) === String(host.chatRunId);
-      const hasExplicitReasoningField =
-        typeof payload.data?.thinking === "string" || typeof payload.data?.reasoning === "string";
-      if (
-        thinkingText &&
-        runMatches &&
-        (payload.stream === "thinking" || hasExplicitReasoningField)
-      ) {
-        (host as unknown as { chatThinkingStream: string | null }).chatThinkingStream =
-          thinkingText;
+            : null;
+      if (runMatchesActive && (stream === "thinking" || explicitThinkingText != null)) {
+        const currentAssistant = (
+          (host as unknown as { chatStream: string | null }).chatStream ?? ""
+        ).trim();
+        if (currentAssistant) {
+          appendLiveSnapshot("assistant", currentAssistant, payload.seq);
+          (host as unknown as { chatStream: string | null }).chatStream = null;
+          (host as unknown as { chatStreamSeq: number | null }).chatStreamSeq = null;
+          (host as unknown as { chatStreamStartedAt: number | null }).chatStreamStartedAt = null;
+          (host as unknown as { chatStreamUpdatedAt: number | null }).chatStreamUpdatedAt = null;
+        }
+        const text =
+          explicitThinkingText ??
+          (stream === "thinking" && typeof payload.data?.text === "string"
+            ? payload.data.text
+            : null);
+        const delta =
+          stream === "thinking" && typeof payload.data?.delta === "string"
+            ? payload.data.delta
+            : null;
+        const current =
+          (host as unknown as { chatThinkingStream: string | null }).chatThinkingStream ?? "";
+        const next = mergeMonotonicStream({ current, text, delta });
+        if (next != null) {
+          (host as unknown as { chatThinkingStream: string | null }).chatThinkingStream =
+            normalizeThinkingText(next);
+          (host as unknown as { chatThinkingStreamSeq: number | null }).chatThinkingStreamSeq =
+            typeof payload.seq === "number" ? payload.seq : null;
+          if (
+            (host as unknown as { chatThinkingStreamStartedAt: number | null })
+              .chatThinkingStreamStartedAt == null
+          ) {
+            (
+              host as unknown as { chatThinkingStreamStartedAt: number | null }
+            ).chatThinkingStreamStartedAt =
+              typeof payload.ts === "number" ? payload.ts : Date.now();
+          }
+          (
+            host as unknown as { chatThinkingStreamUpdatedAt: number | null }
+          ).chatThinkingStreamUpdatedAt = Date.now();
+        }
+      }
+      if (runMatchesActive && stream === "assistant") {
+        const currentThinking = (
+          (host as unknown as { chatThinkingStream: string | null }).chatThinkingStream ?? ""
+        ).trim();
+        if (currentThinking) {
+          appendLiveSnapshot("thinking", currentThinking, payload.seq);
+          (host as unknown as { chatThinkingStream: string | null }).chatThinkingStream = null;
+          (host as unknown as { chatThinkingStreamSeq: number | null }).chatThinkingStreamSeq =
+            null;
+          (
+            host as unknown as { chatThinkingStreamStartedAt: number | null }
+          ).chatThinkingStreamStartedAt = null;
+          (
+            host as unknown as { chatThinkingStreamUpdatedAt: number | null }
+          ).chatThinkingStreamUpdatedAt = null;
+        }
+        const text = typeof payload.data?.text === "string" ? payload.data.text : null;
+        const delta = typeof payload.data?.delta === "string" ? payload.data.delta : null;
+        const current = (host as unknown as { chatStream: string | null }).chatStream ?? "";
+        const next = mergeMonotonicStream({ current, text, delta });
+        if (typeof next === "string") {
+          (host as unknown as { chatStream: string | null }).chatStream = next;
+          (host as unknown as { chatStreamSeq: number | null }).chatStreamSeq =
+            typeof payload.seq === "number" ? payload.seq : null;
+          if (
+            (host as unknown as { chatStreamStartedAt: number | null }).chatStreamStartedAt == null
+          ) {
+            (host as unknown as { chatStreamStartedAt: number | null }).chatStreamStartedAt =
+              typeof payload.ts === "number" ? payload.ts : Date.now();
+          }
+          (host as unknown as { chatStreamUpdatedAt: number | null }).chatStreamUpdatedAt =
+            Date.now();
+        }
+      }
+      const phase =
+        stream === "lifecycle" && typeof payload.data?.phase === "string"
+          ? payload.data.phase.toLowerCase()
+          : "";
+      const isTerminal = phase === "end" || phase === "error";
+      if (runMatchesActive && isTerminal) {
+        const thinkingText = (
+          (host as unknown as { chatThinkingStream: string | null }).chatThinkingStream ?? ""
+        ).trim();
+        const streamText = (
+          (host as unknown as { chatStream: string | null }).chatStream ?? ""
+        ).trim();
+        if (thinkingText) {
+          appendLiveSnapshot("thinking", thinkingText, payload.seq);
+        }
+        if (streamText) {
+          (host as unknown as { chatMessages: unknown[] }).chatMessages = [
+            ...(host as unknown as { chatMessages: unknown[] }).chatMessages,
+            {
+              role: "assistant",
+              content: [{ type: "text", text: streamText }],
+              __openclaw: typeof payload.seq === "number" ? { seq: payload.seq } : undefined,
+              seq: typeof payload.seq === "number" ? payload.seq : undefined,
+              timestamp: Date.now(),
+              stopReason: phase === "error" ? "error" : "stop",
+            },
+          ];
+        } else if (phase === "error") {
+          const error =
+            typeof payload.data?.error === "string" ? payload.data.error.trim() : "chat error";
+          if (error) {
+            (host as unknown as { chatMessages: unknown[] }).chatMessages = [
+              ...(host as unknown as { chatMessages: unknown[] }).chatMessages,
+              {
+                role: "assistant",
+                content: [
+                  { type: "text", text: /^(error:|err:)/i.test(error) ? error : `Error: ${error}` },
+                ],
+                __openclaw: typeof payload.seq === "number" ? { seq: payload.seq } : undefined,
+                seq: typeof payload.seq === "number" ? payload.seq : undefined,
+                timestamp: Date.now(),
+                stopReason: "error",
+              },
+            ];
+          }
+        }
+        (host as unknown as { chatStream: string | null }).chatStream = null;
+        (host as unknown as { chatThinkingStream: string | null }).chatThinkingStream = null;
+        (host as unknown as { chatStreamSeq: number | null }).chatStreamSeq = null;
+        (host as unknown as { chatThinkingStreamSeq: number | null }).chatThinkingStreamSeq = null;
+        (
+          host as unknown as { chatThinkingStreamStartedAt: number | null }
+        ).chatThinkingStreamStartedAt = null;
+        (
+          host as unknown as { chatThinkingStreamUpdatedAt: number | null }
+        ).chatThinkingStreamUpdatedAt = null;
+        (host as unknown as { chatStreamStartedAt: number | null }).chatStreamStartedAt = null;
+        (host as unknown as { chatStreamUpdatedAt: number | null }).chatStreamUpdatedAt = null;
+        host.chatRunId = null;
+        resetLiveSnapshotState();
+        void flushChatQueueForEvent(
+          host as unknown as Parameters<typeof flushChatQueueForEvent>[0],
+        );
+        if (phase === "end") {
+          void loadChatHistory(host as unknown as OpenClawApp);
+        }
+        if (payload.runId && host.refreshSessionsAfterChat.has(payload.runId)) {
+          host.refreshSessionsAfterChat.delete(payload.runId);
+          if (phase === "end") {
+            void loadSessions(host as unknown as OpenClawApp, {
+              activeMinutes: CHAT_SESSIONS_ACTIVE_MINUTES,
+            });
+          }
+        }
       }
     }
-    handleAgentEvent(host as unknown as Parameters<typeof handleAgentEvent>[0], payload);
-    // Keep transcript-driven nodes (thinking/toolCall records) fresh even when
-    // chat.delta carries only plain assistant text.
-    // Fallback: sync on any agent event so providers with different stream shapes
-    // (e.g. non-continuous thinking/tool deltas) still appear promptly.
-    scheduleChatHistoryReload(host, 300);
     return;
   }
 
   if (evt.event === "chat") {
-    handleChatGatewayEvent(host, evt.payload as ChatEventPayload | undefined);
+    const payload = evt.payload as ChatEventPayload | undefined;
+    // Real-time chat should be single-channel (agent stream only).
+    // Ignore chat events for the currently active run to avoid dual-path duplicates.
+    if (payload?.runId && host.chatRunId && String(payload.runId) === String(host.chatRunId)) {
+      return;
+    }
+    const next = handleChatEvent(host as unknown as ChatState, payload);
+    if (next === "final" || next === "aborted" || next === "error") {
+      void flushChatQueueForEvent(host as unknown as Parameters<typeof flushChatQueueForEvent>[0]);
+    }
+    if (next === "final" && payload?.runId && host.refreshSessionsAfterChat.has(payload.runId)) {
+      host.refreshSessionsAfterChat.delete(payload.runId);
+      void loadSessions(host as unknown as OpenClawApp, {
+        activeMinutes: CHAT_SESSIONS_ACTIVE_MINUTES,
+      });
+    }
     return;
   }
 

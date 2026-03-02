@@ -18,6 +18,8 @@ export type SubscribeEmbeddedPiSessionParams = {
   shouldEmitToolOutput?: () => boolean;
   onToolResult?: (payload: { text?: string; mediaUrls?: string[] }) => void | Promise<void>;
   onReasoningStream?: (payload: { text?: string; mediaUrls?: string[] }) => void | Promise<void>;
+  /** Emit reasoning/thinking updates into the agent-event stream (`stream: "thinking"`). */
+  emitReasoningAgentEvents?: boolean;
   /** Called when a thinking/reasoning block ends (</think> tag processed). */
   onReasoningEnd?: () => void | Promise<void>;
   onBlockReply?: (payload: BlockReplyPayload) => void | Promise<void>;

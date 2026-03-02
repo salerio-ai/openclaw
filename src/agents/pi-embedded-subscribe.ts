@@ -1,15 +1,10 @@
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
-import type { InlineCodeState } from "../markdown/code-spans.js";
-import type {
-  EmbeddedPiSubscribeContext,
-  EmbeddedPiSubscribeState,
-} from "./pi-embedded-subscribe.handlers.types.js";
-import type { SubscribeEmbeddedPiSessionParams } from "./pi-embedded-subscribe.types.js";
 import { parseReplyDirectives } from "../auto-reply/reply/reply-directives.js";
 import { createStreamingDirectiveAccumulator } from "../auto-reply/reply/streaming-directives.js";
 import { formatToolAggregate } from "../auto-reply/tool-meta.js";
 import { emitAgentEvent } from "../infra/agent-events.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
+import type { InlineCodeState } from "../markdown/code-spans.js";
 import { buildCodeSpanIndex, createInlineCodeState } from "../markdown/code-spans.js";
 import { EmbeddedBlockChunker } from "./pi-embedded-block-chunker.js";
 import {
@@ -17,7 +12,12 @@ import {
   normalizeTextForComparison,
 } from "./pi-embedded-helpers.js";
 import { createEmbeddedPiSessionEventHandler } from "./pi-embedded-subscribe.handlers.js";
+import type {
+  EmbeddedPiSubscribeContext,
+  EmbeddedPiSubscribeState,
+} from "./pi-embedded-subscribe.handlers.types.js";
 import { filterToolResultMediaUrls } from "./pi-embedded-subscribe.tools.js";
+import type { SubscribeEmbeddedPiSessionParams } from "./pi-embedded-subscribe.types.js";
 import { formatReasoningMessage, stripDowngradedToolCallText } from "./pi-embedded-utils.js";
 import { hasNonzeroUsage, normalizeUsage, type UsageLike } from "./usage.js";
 
@@ -45,7 +45,8 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     reasoningMode,
     includeReasoning: reasoningMode === "on",
     shouldEmitPartialReplies: !(reasoningMode === "on" && !params.onBlockReply),
-    streamReasoning: reasoningMode === "stream" && typeof params.onReasoningStream === "function",
+    streamReasoning: reasoningMode === "stream",
+    emitReasoningAgentEvents: params.emitReasoningAgentEvents ?? Boolean(params.onAgentEvent),
     deltaBuffer: "",
     blockBuffer: "",
     // Track if a streamed chunk opened a <think> block (stateful across chunks).
@@ -541,9 +542,6 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
   };
 
   const emitReasoningStream = (text: string) => {
-    if (!state.streamReasoning || !params.onReasoningStream) {
-      return;
-    }
     const formatted = formatReasoningMessage(text);
     if (!formatted) {
       return;
@@ -557,19 +555,23 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     const delta = formatted.startsWith(prior) ? formatted.slice(prior.length) : formatted;
     state.lastStreamedReasoning = formatted;
 
-    // Broadcast thinking event to WebSocket clients in real-time
-    emitAgentEvent({
-      runId: params.runId,
-      stream: "thinking",
-      data: {
-        text: formatted,
-        delta,
-      },
-    });
+    if (state.emitReasoningAgentEvents) {
+      // Broadcast thinking event to WebSocket clients in real-time when explicitly enabled.
+      emitAgentEvent({
+        runId: params.runId,
+        stream: "thinking",
+        data: {
+          text: formatted,
+          delta,
+        },
+      });
+    }
 
-    void params.onReasoningStream({
-      text: formatted,
-    });
+    if (state.streamReasoning) {
+      void params.onReasoningStream?.({
+        text: formatted,
+      });
+    }
   };
 
   const resetForCompactionRetry = () => {

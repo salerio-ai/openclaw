@@ -1,5 +1,4 @@
 import type { AgentEvent, AgentMessage } from "@mariozechner/pi-agent-core";
-import type { EmbeddedPiSubscribeContext } from "./pi-embedded-subscribe.handlers.types.js";
 import { parseReplyDirectives } from "../auto-reply/reply/reply-directives.js";
 import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { emitAgentEvent } from "../infra/agent-events.js";
@@ -8,6 +7,7 @@ import {
   isMessagingToolDuplicateNormalized,
   normalizeTextForComparison,
 } from "./pi-embedded-helpers.js";
+import type { EmbeddedPiSubscribeContext } from "./pi-embedded-subscribe.handlers.types.js";
 import { appendRawStream } from "./pi-embedded-subscribe.raw-stream.js";
 import {
   extractAssistantText,
@@ -109,11 +109,9 @@ export function handleMessageUpdate(
       delta: thinkingDelta,
       content: thinkingContent,
     });
-    if (ctx.state.streamReasoning) {
-      // Prefer full partial-message thinking when available; fall back to event payloads.
-      const partialThinking = extractAssistantThinking(msg);
-      ctx.emitReasoningStream(partialThinking || thinkingContent || thinkingDelta);
-    }
+    // Prefer full partial-message thinking when available; fall back to event payloads.
+    const partialThinking = extractAssistantThinking(msg);
+    ctx.emitReasoningStream(partialThinking || thinkingContent || thinkingDelta);
     if (evtType === "thinking_end") {
       if (!ctx.state.reasoningStreamOpen) {
         ctx.state.reasoningStreamOpen = true;
@@ -168,10 +166,8 @@ export function handleMessageUpdate(
     }
   }
 
-  if (ctx.state.streamReasoning) {
-    // Handle partial <think> tags: stream whatever reasoning is visible so far.
-    ctx.emitReasoningStream(extractThinkingFromTaggedStream(ctx.state.deltaBuffer));
-  }
+  // Handle partial <think> tags: stream whatever reasoning is visible so far.
+  ctx.emitReasoningStream(extractThinkingFromTaggedStream(ctx.state.deltaBuffer));
 
   const next = ctx
     .stripBlockTags(ctx.state.deltaBuffer, {
@@ -418,7 +414,7 @@ export function handleMessageEnd(
   if (!shouldEmitReasoningBeforeAnswer) {
     maybeEmitReasoning();
   }
-  if (ctx.state.streamReasoning && rawThinking) {
+  if (rawThinking) {
     ctx.emitReasoningStream(rawThinking);
   }
 

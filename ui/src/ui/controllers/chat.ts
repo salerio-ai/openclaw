@@ -16,6 +16,10 @@ export type ChatState = {
   chatRunId: string | null;
   chatStream: string | null;
   chatThinkingStream: string | null;
+  chatStreamSeq?: number | null;
+  chatThinkingStreamSeq?: number | null;
+  chatThinkingStreamStartedAt?: number | null;
+  chatThinkingStreamUpdatedAt?: number | null;
   chatStreamStartedAt: number | null;
   chatStreamUpdatedAt: number | null;
   lastError: string | null;
@@ -190,6 +194,10 @@ export async function sendChatMessage(
   state.chatRunId = runId;
   state.chatStream = "";
   state.chatThinkingStream = null;
+  state.chatStreamSeq = null;
+  state.chatThinkingStreamSeq = null;
+  state.chatThinkingStreamStartedAt = null;
+  state.chatThinkingStreamUpdatedAt = null;
   state.chatStreamStartedAt = now;
   state.chatStreamUpdatedAt = now;
 
@@ -224,6 +232,10 @@ export async function sendChatMessage(
     state.chatRunId = null;
     state.chatStream = null;
     state.chatThinkingStream = null;
+    state.chatStreamSeq = null;
+    state.chatThinkingStreamSeq = null;
+    state.chatThinkingStreamStartedAt = null;
+    state.chatThinkingStreamUpdatedAt = null;
     state.chatStreamStartedAt = null;
     state.chatStreamUpdatedAt = null;
     state.lastError = error;
@@ -284,14 +296,23 @@ export function handleChatEvent(state: ChatState, payload?: ChatEventPayload) {
     const thinking = extractThinking(payload.message);
     if (typeof thinking === "string" && thinking.trim()) {
       state.chatThinkingStream = thinking;
+      state.chatThinkingStreamSeq = Date.now();
+      if (state.chatThinkingStreamStartedAt == null) {
+        state.chatThinkingStreamStartedAt = Date.now();
+      }
+      state.chatThinkingStreamUpdatedAt = Date.now();
     }
     const next = extractText(payload.message);
     if (typeof next === "string") {
       const current = state.chatStream ?? "";
       if (!current || next.length >= current.length) {
         state.chatStream = next;
+        state.chatStreamSeq = Date.now();
         if (next.trim().length > 0) {
           state.chatThinkingStream = null;
+          state.chatThinkingStreamSeq = null;
+          state.chatThinkingStreamStartedAt = null;
+          state.chatThinkingStreamUpdatedAt = null;
         }
         state.chatStreamUpdatedAt = Date.now();
       }
@@ -303,6 +324,10 @@ export function handleChatEvent(state: ChatState, payload?: ChatEventPayload) {
     }
     state.chatStream = null;
     state.chatThinkingStream = null;
+    state.chatStreamSeq = null;
+    state.chatThinkingStreamSeq = null;
+    state.chatThinkingStreamStartedAt = null;
+    state.chatThinkingStreamUpdatedAt = null;
     state.chatRunId = null;
     state.chatStreamStartedAt = null;
     state.chatStreamUpdatedAt = null;
@@ -325,12 +350,20 @@ export function handleChatEvent(state: ChatState, payload?: ChatEventPayload) {
     }
     state.chatStream = null;
     state.chatThinkingStream = null;
+    state.chatStreamSeq = null;
+    state.chatThinkingStreamSeq = null;
+    state.chatThinkingStreamStartedAt = null;
+    state.chatThinkingStreamUpdatedAt = null;
     state.chatRunId = null;
     state.chatStreamStartedAt = null;
     state.chatStreamUpdatedAt = null;
   } else if (payload.state === "error") {
     state.chatStream = null;
     state.chatThinkingStream = null;
+    state.chatStreamSeq = null;
+    state.chatThinkingStreamSeq = null;
+    state.chatThinkingStreamStartedAt = null;
+    state.chatThinkingStreamUpdatedAt = null;
     state.chatRunId = null;
     state.chatStreamStartedAt = null;
     state.chatStreamUpdatedAt = null;

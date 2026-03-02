@@ -33,6 +33,8 @@ export type GetReplyOptions = {
   suppressToolErrorWarnings?: boolean;
   onPartialReply?: (payload: ReplyPayload) => Promise<void> | void;
   onReasoningStream?: (payload: ReplyPayload) => Promise<void> | void;
+  /** Emit reasoning/thinking updates as agent events (`stream: "thinking"`). */
+  emitReasoningAgentEvents?: boolean;
   /** Called when a thinking/reasoning block ends. */
   onReasoningEnd?: () => Promise<void> | void;
   /** Called when a new assistant message starts (e.g., after tool call or thinking block). */

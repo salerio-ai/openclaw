@@ -569,10 +569,6 @@ img.chat-avatar {
       color-mix(in srgb, var(--muted) 95%, transparent) 100%);
 }
 
-.chat-flow-item.is-running {
-  color: var(--text);
-}
-
 .chat-flow-item--text,
 .chat-flow-item--thinking {
   max-width: 100%;

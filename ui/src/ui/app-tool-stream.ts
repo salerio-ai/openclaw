@@ -17,6 +17,7 @@ export type ToolStreamEntry = {
   toolCallId: string;
   runId: string;
   sessionKey?: string;
+  seq: number;
   name: string;
   args?: unknown;
   output?: string;
@@ -188,6 +189,7 @@ function buildToolStreamMessage(entry: ToolStreamEntry): Record<string, unknown>
     role: "assistant",
     toolCallId: entry.toolCallId,
     runId: entry.runId,
+    __openclaw: { seq: entry.seq },
     content,
     timestamp: entry.startedAt,
   };
@@ -400,6 +402,12 @@ export function handleAgentEvent(host: ToolStreamHost, payload?: AgentEventPaylo
     return;
   }
 
+  // Only tool stream events should mutate tool cards.
+  // Some providers may include tool-like identifiers on non-tool streams.
+  if (payload.stream !== "tool") {
+    return;
+  }
+
   const accepted = resolveAcceptedSession(host, payload);
   if (!accepted.accepted) {
     return;
@@ -428,6 +436,7 @@ export function handleAgentEvent(host: ToolStreamHost, payload?: AgentEventPaylo
       toolCallId,
       runId: payload.runId,
       sessionKey,
+      seq: typeof payload.seq === "number" ? payload.seq : Number.MAX_SAFE_INTEGER,
       name,
       args,
       output: output || undefined,
