@@ -1030,6 +1030,11 @@ function toToolNodes(
   timestamp: number,
 ): Array<Extract<TimelineNode, { kind: "tool" }>> {
   const m = message as Record<string, unknown>;
+  const marker =
+    m.__openclaw && typeof m.__openclaw === "object"
+      ? (m.__openclaw as Record<string, unknown>)
+      : undefined;
+  const toolPhase = typeof marker?.toolPhase === "string" ? marker.toolPhase.toLowerCase() : "";
   const content = Array.isArray(m.content) ? (m.content as Array<Record<string, unknown>>) : [];
   const role = typeof m.role === "string" ? m.role.toLowerCase() : "";
   const messageToolCallId =
@@ -1046,7 +1051,14 @@ function toToolNodes(
     const type = (typeof entry.type === "string" ? entry.type : "").toLowerCase();
     return type === "toolresult" || type === "tool_result";
   });
-  if (!hasToolId && !hasToolRole && callItems.length === 0 && resultItems.length === 0) {
+  const hasResultPhase = toolPhase === "result" || toolPhase === "completed";
+  if (
+    !hasToolId &&
+    !hasToolRole &&
+    callItems.length === 0 &&
+    resultItems.length === 0 &&
+    !hasResultPhase
+  ) {
     return [];
   }
 
@@ -1112,7 +1124,7 @@ function toToolNodes(
     );
   }
 
-  if (hasToolId || hasToolRole || resultItems.length > 0) {
+  if (hasToolRole || resultItems.length > 0 || hasResultPhase) {
     const name =
       (typeof resultItems[0]?.name === "string" ? resultItems[0]?.name : undefined) ??
       (typeof m.toolName === "string" ? m.toolName : undefined) ??

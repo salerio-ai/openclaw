@@ -2,6 +2,7 @@ import { truncateText } from "./format.ts";
 
 const TOOL_STREAM_LIMIT = 50;
 const TOOL_OUTPUT_CHAR_LIMIT = 120_000;
+const TOOL_RUNNING_MIN_VISIBLE_MS = 600;
 
 export type AgentEventPayload = {
   runId: string;
@@ -18,8 +19,11 @@ export type ToolStreamEntry = {
   sessionKey?: string;
   seq: number;
   name: string;
+  phase: "start" | "update" | "result";
   args?: unknown;
   output?: string;
+  pendingResultOutput?: string;
+  pendingResultTimer?: number | null;
   startedAt: number;
   updatedAt: number;
   message: Record<string, unknown>;
@@ -188,7 +192,7 @@ function buildToolStreamMessage(entry: ToolStreamEntry): Record<string, unknown>
     role: "assistant",
     toolCallId: entry.toolCallId,
     runId: entry.runId,
-    __openclaw: { seq: entry.seq },
+    __openclaw: { seq: entry.seq, toolPhase: entry.phase },
     content,
     timestamp: entry.startedAt,
   };
@@ -201,6 +205,10 @@ function trimToolStream(host: ToolStreamHost) {
   const overflow = host.toolStreamOrder.length - TOOL_STREAM_LIMIT;
   const removed = host.toolStreamOrder.splice(0, overflow);
   for (const id of removed) {
+    const entry = host.toolStreamById.get(id);
+    if (entry?.pendingResultTimer != null) {
+      window.clearTimeout(entry.pendingResultTimer);
+    }
     host.toolStreamById.delete(id);
   }
 }
@@ -228,6 +236,11 @@ export function scheduleToolStreamSync(host: ToolStreamHost, force = false) {
 }
 
 export function resetToolStream(host: ToolStreamHost) {
+  for (const entry of host.toolStreamById.values()) {
+    if (entry.pendingResultTimer != null) {
+      window.clearTimeout(entry.pendingResultTimer);
+    }
+  }
   host.toolStreamById.clear();
   host.toolStreamOrder = [];
   host.chatToolMessages = [];
@@ -431,6 +444,7 @@ export function handleAgentEvent(host: ToolStreamHost, payload?: AgentEventPaylo
       sessionKey,
       seq: typeof payload.seq === "number" ? payload.seq : Number.MAX_SAFE_INTEGER,
       name,
+      phase: phase === "result" ? "result" : phase === "update" ? "update" : "start",
       args,
       output: output || undefined,
       startedAt: typeof payload.ts === "number" ? payload.ts : now,
@@ -441,8 +455,43 @@ export function handleAgentEvent(host: ToolStreamHost, payload?: AgentEventPaylo
     host.toolStreamOrder.push(toolCallId);
   } else {
     entry.name = name;
+    if (entry.pendingResultTimer != null) {
+      window.clearTimeout(entry.pendingResultTimer);
+      entry.pendingResultTimer = null;
+    }
     if (args !== undefined) {
       entry.args = args;
+    }
+    if (phase === "result") {
+      const elapsed = Math.max(0, now - entry.startedAt);
+      const remaining = TOOL_RUNNING_MIN_VISIBLE_MS - elapsed;
+      if (remaining > 0) {
+        entry.phase = "update";
+        entry.pendingResultOutput = output || undefined;
+        entry.updatedAt = now;
+        entry.message = buildToolStreamMessage(entry);
+        scheduleToolStreamSync(host, false);
+        const toolCallId = entry.toolCallId;
+        entry.pendingResultTimer = window.setTimeout(() => {
+          const current = host.toolStreamById.get(toolCallId);
+          if (!current) {
+            return;
+          }
+          current.pendingResultTimer = null;
+          current.phase = "result";
+          if (current.pendingResultOutput !== undefined) {
+            current.output = current.pendingResultOutput;
+          }
+          current.pendingResultOutput = undefined;
+          current.updatedAt = Date.now();
+          current.message = buildToolStreamMessage(current);
+          scheduleToolStreamSync(host, true);
+        }, remaining);
+        return;
+      }
+      entry.phase = "result";
+    } else {
+      entry.phase = phase === "update" ? "update" : "start";
     }
     if (output !== undefined) {
       entry.output = output || undefined;

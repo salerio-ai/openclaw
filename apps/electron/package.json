@@ -1,6 +1,6 @@
 {
   "name": "bustly",
-  "version": "0.0.3-beta.glm",
+  "version": "0.0.3-beta.mm",
   "description": "OpenClaw Electron Desktop Client",
   "main": "dist/main/index.js",
   "private": true,

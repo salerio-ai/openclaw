@@ -407,13 +407,12 @@ img.chat-avatar {
   color: var(--text);
 }
 
-.chat-flow-item--tool:hover .chat-flow-tool-chevron,
-.chat-flow-item--tool[open] .chat-flow-tool-chevron {
+.chat-flow-item--tool summary:hover .chat-flow-tool-chevron {
   opacity: 1;
   transform: translateX(0) rotate(0deg);
 }
 
-.chat-flow-item--tool[open] .chat-flow-tool-chevron {
+.chat-flow-item--tool[open] summary:hover .chat-flow-tool-chevron {
   transform: translateX(0) rotate(90deg);
 }
 
@@ -487,12 +486,12 @@ img.chat-avatar {
   color: var(--text);
 }
 
-.chat-flow-item--processed:hover .chat-flow-tool-chevron,
-.chat-flow-item--processed[open] .chat-flow-tool-chevron {
+.chat-flow-item--processed:hover > summary .chat-flow-tool-chevron,
+.chat-flow-item--processed[open] > summary .chat-flow-tool-chevron {
   opacity: 1;
 }
 
-.chat-flow-item--processed[open] .chat-flow-tool-chevron {
+.chat-flow-item--processed[open] > summary .chat-flow-tool-chevron {
   transform: translateX(0) rotate(90deg);
 }
 
