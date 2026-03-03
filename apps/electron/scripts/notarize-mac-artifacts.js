@@ -10,28 +10,22 @@ const artifactDir = resolve(dirArg || process.env.ARTIFACT_DIR || "dist/electron
 
 const keychainProfile = process.env.NOTARYTOOL_PROFILE?.trim() || "bustly-notary";
 
-const walk = (dir, results) => {
-  const entries = readdirSync(dir);
-  for (const entry of entries) {
-    const fullPath = join(dir, entry);
-    let stat;
-    try {
-      stat = statSync(fullPath);
-    } catch {
-      continue;
-    }
-    if (stat.isDirectory()) {
-      walk(fullPath, results);
-      continue;
-    }
-    if (entry.endsWith(".dmg") || entry.endsWith(".zip")) {
-      results.push(fullPath);
-    }
-  }
-};
-
 const artifacts = [];
-walk(artifactDir, artifacts);
+for (const entry of readdirSync(artifactDir)) {
+  const fullPath = join(artifactDir, entry);
+  let stat;
+  try {
+    stat = statSync(fullPath);
+  } catch {
+    continue;
+  }
+  if (!stat.isFile()) {
+    continue;
+  }
+  if (entry.endsWith(".dmg") || entry.endsWith(".zip")) {
+    artifacts.push(fullPath);
+  }
+}
 
 if (artifacts.length === 0) {
   console.error(`[notarize-mac] No .dmg/.zip artifacts found in ${artifactDir}`);

@@ -13,16 +13,15 @@ Use the standalone Node entrypoint directly (no `npm install`, no `tsx`):
 
 Use **shopify-api** for **write** operations (mutations) or admin actions that must go through Shopify Admin GraphQL.
 
-## Request Body
+## Inputs
 
-```ts
-interface RequestBody {
-  workspace_id: string;
-  shopify_api_version?: string; // Optional, defaults to 2025-01
-  query: string; // GraphQL query string
-  variables?: Record<string, unknown>; // GraphQL variables
-}
-```
+`scripts/run.js` accepts:
+
+- GraphQL query (inline string) or `--file <query.graphql>`
+- `--vars <json>` or `--vars-file <vars.json>`
+- `--version <YYYY-MM>` (maps to `shopify_api_version`)
+
+The script injects `workspace_id` from local config (`SEARCH_DATA_WORKSPACE_ID` / `WORKSPACE_ID`) when calling the Edge Function.
 
 ## Configuration
 
