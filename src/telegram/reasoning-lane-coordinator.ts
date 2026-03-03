@@ -1,5 +1,4 @@
 import type { ReplyPayload } from "../auto-reply/types.js";
-import { formatReasoningMessage } from "../agents/pi-embedded-utils.js";
 import { findCodeRegions, isInsideCode } from "../shared/text/code-regions.js";
 import { stripReasoningTagsFromText } from "../shared/text/reasoning-tags.js";
 
@@ -82,7 +81,7 @@ export function splitTelegramReasoningText(text?: string): TelegramReasoningSpli
     return { answerText: text };
   }
 
-  const reasoningText = taggedReasoning ? formatReasoningMessage(taggedReasoning) : undefined;
+  const reasoningText = taggedReasoning || undefined;
   const answerText = strippedAnswer || undefined;
   return { reasoningText, answerText };
 }

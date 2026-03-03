@@ -248,6 +248,35 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
       return;
     }
     const payload = evt.payload as AgentEventPayload | undefined;
+    const sessionKeyVariants = (value: unknown): Set<string> => {
+      const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+      const variants = new Set<string>();
+      if (!normalized) {
+        return variants;
+      }
+      variants.add(normalized);
+      const match = /^agent:[^:]+:(.+)$/.exec(normalized);
+      if (match?.[1]) {
+        variants.add(match[1]);
+      }
+      if (normalized === "main") {
+        variants.add("agent:main:main");
+      }
+      return variants;
+    };
+    const sessionKeysMatch = (a: unknown, b: unknown): boolean => {
+      const aSet = sessionKeyVariants(a);
+      const bSet = sessionKeyVariants(b);
+      if (aSet.size === 0 || bSet.size === 0) {
+        return false;
+      }
+      for (const key of aSet) {
+        if (bSet.has(key)) {
+          return true;
+        }
+      }
+      return false;
+    };
     const mergeMonotonicStream = (params: {
       current: string;
       text: string | null;
@@ -426,7 +455,9 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
           ? payload.data.phase.toLowerCase()
           : "";
       const isTerminal = phase === "end" || phase === "error";
-      if (runMatchesActive && isTerminal) {
+      const isAbortedLifecycle = phase === "end" && payload.data?.aborted === true;
+      const sessionMatchesCurrent = sessionKeysMatch(payload.sessionKey, host.sessionKey);
+      if ((runMatchesActive && isTerminal) || (isAbortedLifecycle && sessionMatchesCurrent)) {
         const thinkingText = (
           (host as unknown as { chatThinkingStream: string | null }).chatThinkingStream ?? ""
         ).trim();
@@ -446,6 +477,23 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
               seq: typeof payload.seq === "number" ? payload.seq : undefined,
               timestamp: Date.now(),
               stopReason: phase === "error" ? "error" : "stop",
+            },
+          ];
+        } else if (phase === "end" && payload.data?.aborted === true) {
+          const abortedMessage =
+            typeof payload.data?.error === "string" && payload.data.error.trim().length > 0
+              ? payload.data.error.trim()
+              : "Request was aborted.";
+          (host as unknown as { chatMessages: unknown[] }).chatMessages = [
+            ...(host as unknown as { chatMessages: unknown[] }).chatMessages,
+            {
+              role: "assistant",
+              content: [],
+              errorMessage: abortedMessage,
+              __openclaw: typeof payload.seq === "number" ? { seq: payload.seq } : undefined,
+              seq: typeof payload.seq === "number" ? payload.seq : undefined,
+              timestamp: Date.now(),
+              stopReason: "aborted",
             },
           ];
         } else if (phase === "error") {

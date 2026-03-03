@@ -1,10 +1,9 @@
 import type { AssistantMessage } from "@mariozechner/pi-ai";
-import type { ReasoningLevel, VerboseLevel } from "../../../auto-reply/thinking.js";
-import type { OpenClawConfig } from "../../../config/config.js";
-import type { ToolResultFormat } from "../../pi-embedded-subscribe.js";
 import { parseReplyDirectives } from "../../../auto-reply/reply/reply-directives.js";
+import type { ReasoningLevel, VerboseLevel } from "../../../auto-reply/thinking.js";
 import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../../../auto-reply/tokens.js";
 import { formatToolAggregate } from "../../../auto-reply/tool-meta.js";
+import type { OpenClawConfig } from "../../../config/config.js";
 import {
   BILLING_ERROR_USER_MESSAGE,
   formatAssistantErrorText,
@@ -13,11 +12,8 @@ import {
   isRawApiErrorPayload,
   normalizeTextForComparison,
 } from "../../pi-embedded-helpers.js";
-import {
-  extractAssistantText,
-  extractAssistantThinking,
-  formatReasoningMessage,
-} from "../../pi-embedded-utils.js";
+import type { ToolResultFormat } from "../../pi-embedded-subscribe.js";
+import { extractAssistantText, extractAssistantThinking } from "../../pi-embedded-utils.js";
 import { isLikelyMutatingToolName } from "../../tool-mutation.js";
 
 type ToolMetaEntry = { toolName: string; meta?: string };
@@ -186,7 +182,7 @@ export function buildEmbeddedRunPayloads(params: {
 
   const reasoningText =
     params.lastAssistant && params.reasoningLevel === "on"
-      ? formatReasoningMessage(extractAssistantThinking(params.lastAssistant))
+      ? extractAssistantThinking(params.lastAssistant)
       : "";
   if (reasoningText) {
     replyItems.push({ text: reasoningText, isReasoning: true });

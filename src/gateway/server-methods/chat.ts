@@ -9,6 +9,7 @@ import { createReplyDispatcher } from "../../auto-reply/reply/reply-dispatcher.j
 import type { MsgContext } from "../../auto-reply/templating.js";
 import { createReplyPrefixOptions } from "../../channels/reply-prefix.js";
 import { resolveSessionFilePath } from "../../config/sessions.js";
+import { emitAgentEvent } from "../../infra/agent-events.js";
 import { saveMediaBuffer } from "../../media/store.js";
 import { resolveSendPolicy } from "../../sessions/send-policy.js";
 import {
@@ -516,6 +517,7 @@ function broadcastChatError(params: {
   runId: string;
   sessionKey: string;
   errorMessage?: string;
+  emitAgentLifecycleError?: boolean;
 }) {
   const seq = nextChatSeq({ agentRunSeq: params.context.agentRunSeq }, params.runId);
   const payload = {
@@ -527,6 +529,18 @@ function broadcastChatError(params: {
   };
   params.context.broadcast("chat", payload);
   params.context.nodeSendToSession(params.sessionKey, "chat", payload);
+  if (params.emitAgentLifecycleError) {
+    emitAgentEvent({
+      runId: params.runId,
+      sessionKey: params.sessionKey,
+      stream: "lifecycle",
+      data: {
+        phase: "error",
+        error: params.errorMessage,
+        endedAt: Date.now(),
+      },
+    });
+  }
   params.context.agentRunSeq.delete(params.runId);
 }
 
@@ -972,6 +986,9 @@ export const chatHandlers: GatewayRequestHandlers = {
             runId: clientRunId,
             sessionKey: rawSessionKey,
             errorMessage: String(err),
+            // If the agent run never started, WebUI single-channel mode won't receive
+            // any lifecycle terminal event unless we emit one here.
+            emitAgentLifecycleError: !agentRunStarted,
           });
         })
         .finally(() => {

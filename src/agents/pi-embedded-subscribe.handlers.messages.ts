@@ -14,7 +14,6 @@ import {
   extractAssistantThinking,
   extractThinkingFromTaggedStream,
   extractThinkingFromTaggedText,
-  formatReasoningMessage,
   promoteThinkingTagsToBlocks,
 } from "./pi-embedded-utils.js";
 
@@ -297,7 +296,7 @@ export function handleMessageEnd(
     ctx.state.includeReasoning || ctx.state.streamReasoning
       ? extractAssistantThinking(assistantMessage) || extractThinkingFromTaggedText(rawText)
       : "";
-  const formattedReasoning = rawThinking ? formatReasoningMessage(rawThinking) : "";
+  const formattedReasoning = rawThinking;
   const trimmedText = text.trim();
   const parsedText = trimmedText ? parseReplyDirectives(stripTrailingDirective(trimmedText)) : null;
   let cleanedText = parsedText?.text ?? "";

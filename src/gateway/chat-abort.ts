@@ -1,4 +1,5 @@
 import { isAbortRequestText } from "../auto-reply/reply/abort.js";
+import { emitAgentEvent } from "../infra/agent-events.js";
 
 export type ChatAbortControllerEntry = {
   controller: AbortController;
@@ -89,6 +90,7 @@ export function abortChatRunById(
 
   const bufferedText = ops.chatRunBuffers.get(runId);
   const partialText = bufferedText && bufferedText.trim() ? bufferedText : undefined;
+  const endedAt = Date.now();
   ops.chatAbortedRuns.set(runId, Date.now());
   active.controller.abort();
   ops.chatAbortControllers.delete(runId);
@@ -96,6 +98,18 @@ export function abortChatRunById(
   ops.chatDeltaSentAt.delete(runId);
   const removed = ops.removeChatRun(runId, runId, sessionKey);
   broadcastChatAborted(ops, { runId, sessionKey, stopReason, partialText });
+  // Keep agent-stream consumers (WebUI single-channel mode) in sync on manual stop.
+  emitAgentEvent({
+    runId,
+    stream: "lifecycle",
+    sessionKey,
+    data: {
+      phase: "end",
+      aborted: true,
+      stopReason,
+      endedAt,
+    },
+  });
   ops.agentRunSeq.delete(runId);
   if (removed?.clientRunId) {
     ops.agentRunSeq.delete(removed.clientRunId);

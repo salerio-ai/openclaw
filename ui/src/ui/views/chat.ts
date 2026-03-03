@@ -480,8 +480,9 @@ export function renderChat(props: ChatProps) {
   const splitRatio = props.splitRatio ?? 0.6;
   const sidebarOpen = Boolean(props.sidebarOpen && props.onCloseSidebar);
   const timeline = collapseProcessedTurn(buildTimelineNodes(props));
-  const activeRunningToolKey = resolveActiveRunningToolKey(timeline);
-  const hasRunningTool = timeline.some((item) => item.kind === "tool" && item.running);
+  const currentTurnStartedAt = props.streamStartedAt ?? null;
+  const activeRunningToolKey = resolveActiveRunningToolKey(timeline, currentTurnStartedAt);
+  const hasRunningTool = hasRunningToolInCurrentTurn(timeline, currentTurnStartedAt);
   const hasStreamingText = props.stream !== null && props.stream.trim().length > 0;
   const textStreamUpdatedAt = props.streamUpdatedAt ?? props.streamStartedAt;
   const hasActiveStreamingText =
@@ -823,7 +824,7 @@ function buildTimelineNodes(props: ChatProps): TimelineNode[] {
       const lower = role.toLowerCase();
       return lower === "toolresult" || lower === "tool_result" || lower === "tool";
     })();
-    const text = extractTextCached(msg) ?? extractAssistantErrorFallback(msg);
+    const text = extractTextCached(msg) ?? extractAssistantTerminalFallback(msg);
     if (!text?.trim() || isToolRole) {
       continue;
     }
@@ -990,10 +991,27 @@ function dedupeAdjacentAssistantTextNodes(nodes: TimelineNode[]): TimelineNode[]
   return out;
 }
 
-function resolveActiveRunningToolKey(nodes: TimelineNode[]): string | null {
+function hasRunningToolInCurrentTurn(
+  nodes: TimelineNode[],
+  currentTurnStartedAt: number | null,
+): boolean {
+  return nodes.some(
+    (node) =>
+      node.kind === "tool" &&
+      node.running === true &&
+      (currentTurnStartedAt == null || node.timestamp >= currentTurnStartedAt),
+  );
+}
+
+function resolveActiveRunningToolKey(
+  nodes: TimelineNode[],
+  currentTurnStartedAt: number | null,
+): string | null {
   const running = nodes.filter(
     (node): node is Extract<TimelineNode, { kind: "tool" }> =>
-      node.kind === "tool" && node.running === true,
+      node.kind === "tool" &&
+      node.running === true &&
+      (currentTurnStartedAt == null || node.timestamp >= currentTurnStartedAt),
   );
   if (running.length === 0) {
     return null;
@@ -1001,7 +1019,7 @@ function resolveActiveRunningToolKey(nodes: TimelineNode[]): string | null {
   return running[running.length - 1].key;
 }
 
-function extractAssistantErrorFallback(message: unknown): string | null {
+function extractAssistantTerminalFallback(message: unknown): string | null {
   if (!message || typeof message !== "object") {
     return null;
   }
@@ -1018,10 +1036,13 @@ function extractAssistantErrorFallback(message: unknown): string | null {
   if (!error) {
     return null;
   }
-  if (stopReason && stopReason !== "error") {
-    return null;
+  if (stopReason === "aborted") {
+    return error;
   }
-  return /^(error:|err:)/i.test(error) ? error : `Error: ${error}`;
+  if (!stopReason || stopReason === "error") {
+    return /^(error:|err:)/i.test(error) ? error : `Error: ${error}`;
+  }
+  return null;
 }
 
 function toToolNodes(
