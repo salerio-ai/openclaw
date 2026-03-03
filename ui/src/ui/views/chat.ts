@@ -499,6 +499,7 @@ export function renderChat(props: ChatProps) {
   const hasInFlightTurn = Boolean(props.canAbort) || props.sending || props.streamStartedAt != null;
   const showLoading =
     hasInFlightTurn && !hasRunningTool && !hasActiveStreamingText && !hasActiveThinkingText;
+
   const thread = html`
     <div
       class="chat-thread"
@@ -995,11 +996,12 @@ function hasRunningToolInCurrentTurn(
   nodes: TimelineNode[],
   currentTurnStartedAt: number | null,
 ): boolean {
+  if (currentTurnStartedAt == null) {
+    return false;
+  }
   return nodes.some(
     (node) =>
-      node.kind === "tool" &&
-      node.running === true &&
-      (currentTurnStartedAt == null || node.timestamp >= currentTurnStartedAt),
+      node.kind === "tool" && node.running === true && node.timestamp >= currentTurnStartedAt,
   );
 }
 
@@ -1007,11 +1009,12 @@ function resolveActiveRunningToolKey(
   nodes: TimelineNode[],
   currentTurnStartedAt: number | null,
 ): string | null {
+  if (currentTurnStartedAt == null) {
+    return null;
+  }
   const running = nodes.filter(
     (node): node is Extract<TimelineNode, { kind: "tool" }> =>
-      node.kind === "tool" &&
-      node.running === true &&
-      (currentTurnStartedAt == null || node.timestamp >= currentTurnStartedAt),
+      node.kind === "tool" && node.running === true && node.timestamp >= currentTurnStartedAt,
   );
   if (running.length === 0) {
     return null;
