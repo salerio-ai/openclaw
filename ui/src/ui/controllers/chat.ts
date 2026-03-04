@@ -148,6 +148,18 @@ function normalizeFinalAssistantMessage(message: unknown): Record<string, unknow
   });
 }
 
+function clearChatRunState(state: ChatState) {
+  state.chatRunId = null;
+  state.chatStream = null;
+  state.chatThinkingStream = null;
+  state.chatStreamSeq = null;
+  state.chatThinkingStreamSeq = null;
+  state.chatThinkingStreamStartedAt = null;
+  state.chatThinkingStreamUpdatedAt = null;
+  state.chatStreamStartedAt = null;
+  state.chatStreamUpdatedAt = null;
+}
+
 export async function sendChatMessage(
   state: ChatState,
   message: string,
@@ -229,15 +241,7 @@ export async function sendChatMessage(
     return runId;
   } catch (err) {
     const error = String(err);
-    state.chatRunId = null;
-    state.chatStream = null;
-    state.chatThinkingStream = null;
-    state.chatStreamSeq = null;
-    state.chatThinkingStreamSeq = null;
-    state.chatThinkingStreamStartedAt = null;
-    state.chatThinkingStreamUpdatedAt = null;
-    state.chatStreamStartedAt = null;
-    state.chatStreamUpdatedAt = null;
+    clearChatRunState(state);
     state.lastError = error;
     state.chatMessages = [
       ...state.chatMessages,
@@ -259,10 +263,15 @@ export async function abortChatRun(state: ChatState): Promise<boolean> {
   }
   const runId = state.chatRunId;
   try {
-    await state.client.request(
+    const response = await state.client.request<{ ok?: boolean; aborted?: boolean }>(
       "chat.abort",
       runId ? { sessionKey: state.sessionKey, runId } : { sessionKey: state.sessionKey },
     );
+    if (response?.aborted === false) {
+      clearChatRunState(state);
+      state.lastError = null;
+      return true;
+    }
     return true;
   } catch (err) {
     state.lastError = String(err);
@@ -322,15 +331,7 @@ export function handleChatEvent(state: ChatState, payload?: ChatEventPayload) {
     if (finalMessage) {
       state.chatMessages = [...state.chatMessages, finalMessage];
     }
-    state.chatStream = null;
-    state.chatThinkingStream = null;
-    state.chatStreamSeq = null;
-    state.chatThinkingStreamSeq = null;
-    state.chatThinkingStreamStartedAt = null;
-    state.chatThinkingStreamUpdatedAt = null;
-    state.chatRunId = null;
-    state.chatStreamStartedAt = null;
-    state.chatStreamUpdatedAt = null;
+    clearChatRunState(state);
   } else if (payload.state === "aborted") {
     const normalizedMessage = normalizeAbortedAssistantMessage(payload.message);
     if (normalizedMessage) {
@@ -348,25 +349,9 @@ export function handleChatEvent(state: ChatState, payload?: ChatEventPayload) {
         ];
       }
     }
-    state.chatStream = null;
-    state.chatThinkingStream = null;
-    state.chatStreamSeq = null;
-    state.chatThinkingStreamSeq = null;
-    state.chatThinkingStreamStartedAt = null;
-    state.chatThinkingStreamUpdatedAt = null;
-    state.chatRunId = null;
-    state.chatStreamStartedAt = null;
-    state.chatStreamUpdatedAt = null;
+    clearChatRunState(state);
   } else if (payload.state === "error") {
-    state.chatStream = null;
-    state.chatThinkingStream = null;
-    state.chatStreamSeq = null;
-    state.chatThinkingStreamSeq = null;
-    state.chatThinkingStreamStartedAt = null;
-    state.chatThinkingStreamUpdatedAt = null;
-    state.chatRunId = null;
-    state.chatStreamStartedAt = null;
-    state.chatStreamUpdatedAt = null;
+    clearChatRunState(state);
     const errorMessage = payload.errorMessage ?? "chat error";
     state.lastError = errorMessage;
     const trimmed = errorMessage.trim();

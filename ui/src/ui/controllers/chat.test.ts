@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { handleChatEvent, type ChatEventPayload, type ChatState } from "./chat.ts";
+import { abortChatRun, handleChatEvent, type ChatEventPayload, type ChatState } from "./chat.ts";
 
 function createState(overrides: Partial<ChatState> = {}): ChatState {
   return {
@@ -302,5 +302,53 @@ describe("handleChatEvent", () => {
     expect(state.chatStream).toBe(null);
     expect(state.chatStreamStartedAt).toBe(null);
     expect(state.chatMessages).toEqual([existingMessage]);
+  });
+});
+
+describe("abortChatRun", () => {
+  it("treats aborted:false as success and clears run state", async () => {
+    const request = vi.fn().mockResolvedValue({ ok: true, aborted: false });
+    const state = createState({
+      connected: true,
+      client: { request } as unknown as ChatState["client"],
+      sessionKey: "main",
+      chatRunId: "run-1",
+      chatStream: "in progress",
+      chatThinkingStream: "thinking",
+      chatStreamSeq: 10,
+      chatThinkingStreamSeq: 20,
+      chatThinkingStreamStartedAt: 1,
+      chatThinkingStreamUpdatedAt: 2,
+      chatStreamStartedAt: 3,
+      chatStreamUpdatedAt: 4,
+    });
+
+    const ok = await abortChatRun(state);
+    expect(ok).toBe(true);
+    expect(request).toHaveBeenCalledWith("chat.abort", { sessionKey: "main", runId: "run-1" });
+    expect(state.chatRunId).toBe(null);
+    expect(state.chatStream).toBe(null);
+    expect(state.chatThinkingStream).toBe(null);
+    expect(state.chatStreamSeq).toBe(null);
+    expect(state.chatThinkingStreamSeq).toBe(null);
+    expect(state.chatThinkingStreamStartedAt).toBe(null);
+    expect(state.chatThinkingStreamUpdatedAt).toBe(null);
+    expect(state.chatStreamStartedAt).toBe(null);
+    expect(state.chatStreamUpdatedAt).toBe(null);
+    expect(state.lastError).toBe(null);
+  });
+
+  it("returns true when backend confirms abort", async () => {
+    const request = vi.fn().mockResolvedValue({ ok: true, aborted: true });
+    const state = createState({
+      connected: true,
+      client: { request } as unknown as ChatState["client"],
+      sessionKey: "main",
+      chatRunId: "run-1",
+    });
+
+    const ok = await abortChatRun(state);
+    expect(ok).toBe(true);
+    expect(request).toHaveBeenCalledWith("chat.abort", { sessionKey: "main", runId: "run-1" });
   });
 });
