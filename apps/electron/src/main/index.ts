@@ -66,6 +66,7 @@ const __dirname = resolve(fileURLToPath(import.meta.url), "..");
 const autoUpdater = updater.autoUpdater;
 const APP_PROTOCOL = "bustly";
 const DEEP_LINK_CHANNEL = "deep-link";
+const ELECTRON_OPENCLAW_PROFILE = process.env.BUSTLY_OPENCLAW_PROFILE?.trim() || "bustly";
 
 let gatewayProcess: ChildProcess | null = null;
 let mainWindow: BrowserWindow | null = null;
@@ -288,6 +289,43 @@ function writeMainLog(message: string) {
   }
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("main-log", { message });
+  }
+}
+
+function loadLoginShellEnvironment(shellPath: string, homeDir: string): Record<string, string> {
+  try {
+    const result = spawnSync(shellPath, ["-lc", "env -0"], {
+      encoding: "buffer",
+      env: {
+        ...process.env,
+        HOME: homeDir,
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    if (result.status !== 0 || !result.stdout) {
+      return {};
+    }
+
+    const out = result.stdout.toString("utf8");
+    const env: Record<string, string> = {};
+    for (const entry of out.split("\0")) {
+      if (!entry) {
+        continue;
+      }
+      const eq = entry.indexOf("=");
+      if (eq <= 0) {
+        continue;
+      }
+      const key = entry.slice(0, eq);
+      const value = entry.slice(eq + 1);
+      if (!key) {
+        continue;
+      }
+      env[key] = value;
+    }
+    return env;
+  } catch {
+    return {};
   }
 }
 
@@ -575,7 +613,9 @@ async function startGateway(): Promise<boolean> {
     const homeDir = app.getPath("home");
     const stateDir = resolveElectronStateDir();
     const shellPath = process.env.SHELL?.trim() || "/bin/zsh";
+    const loginShellEnv = loadLoginShellEnvironment(shellPath, homeDir);
     const fixedPath =
+      loginShellEnv.PATH?.trim() ||
       process.env.PATH?.trim() ||
       "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
     const bunInstall =
@@ -643,15 +683,16 @@ async function startGateway(): Promise<boolean> {
     const spawnEnv = {
       ...process.env,
       ...envVars,
+      ...loginShellEnv,
       NODE_ENV: "production",
+      OPENCLAW_PROFILE: ELECTRON_OPENCLAW_PROFILE,
       OPENCLAW_BUNDLED_PLUGINS_DIR: bundledPluginsDir,
       ...(existsSync(bundledSkillsDir) ? { OPENCLAW_BUNDLED_SKILLS_DIR: bundledSkillsDir } : {}),
       OPENCLAW_STATE_DIR: stateDir,
       OPENCLAW_CONFIG_PATH: resolveElectronConfigPath(),
       HOME: homeDir,
       USERPROFILE: homeDir,
-      OPENCLAW_LOAD_SHELL_ENV: "0",
-      OPENCLAW_DEFER_SHELL_ENV_FALLBACK: "1",
+      OPENCLAW_LOAD_SHELL_ENV: "1",
       SHELL: shellPath,
       PATH: fixedPath,
       BUN_INSTALL: bunInstall,

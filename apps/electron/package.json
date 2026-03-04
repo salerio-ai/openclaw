@@ -96,6 +96,21 @@
       ],
       "identity": "RETENTIA HOLDINGS LIMITED (ZZGX67T9NU)",
       "hardenedRuntime": true,
+      "extendInfo": {
+        "NSCameraUsageDescription": "Bustly needs camera access for media capture and camera-based workflows.",
+        "NSMicrophoneUsageDescription": "Bustly needs microphone access for voice input and audio capture.",
+        "NSPhotoLibraryUsageDescription": "Bustly needs photo library access to read images you choose to share.",
+        "NSPhotoLibraryAddUsageDescription": "Bustly needs photo library add access to save generated or edited media.",
+        "NSCalendarsUsageDescription": "Bustly needs calendar access to read and create calendar events on your behalf.",
+        "NSCalendarsFullAccessUsageDescription": "Bustly needs full calendar access to read, create, and edit events on your behalf.",
+        "NSCalendarsWriteOnlyAccessUsageDescription": "Bustly needs write access to create calendar events on your behalf.",
+        "NSContactsUsageDescription": "Bustly needs contacts access for contact-aware workflows you explicitly request.",
+        "NSLocationWhenInUseUsageDescription": "Bustly needs location access when in use for location-aware tasks you request.",
+        "NSRemindersUsageDescription": "Bustly needs access to Reminders to create and manage your reminder tasks.",
+        "NSRemindersFullAccessUsageDescription": "Bustly needs full access to Reminders to create, edit, and complete your reminder tasks.",
+        "NSRemindersWriteOnlyAccessUsageDescription": "Bustly needs write access to Reminders to add tasks on your behalf.",
+        "NSAppleEventsUsageDescription": "Bustly may use Apple Events to integrate with Apple apps, including Reminders."
+      },
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.inherit.plist"
     },

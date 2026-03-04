@@ -9,12 +9,46 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import type { PresetConfigOptions } from "../config/default-config.js";
 import { resolveConfigPath as resolveConfigPathFromSrc } from "../../../../src/config/paths";
 import { resolveCliInvocation, resolveOpenClawCliPath } from "./cli-utils.js";
 
 const __dirname = resolve(fileURLToPath(import.meta.url), "..");
+
+function loadLoginShellEnvironment(): Record<string, string> {
+  try {
+    const shellPath = process.env.SHELL?.trim() || "/bin/zsh";
+    const result = execFileSync(shellPath, ["-lc", "env -0"], {
+      encoding: "buffer",
+      env: {
+        ...process.env,
+        HOME: homedir(),
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const out = result.toString("utf8");
+    const env: Record<string, string> = {};
+    for (const entry of out.split("\0")) {
+      if (!entry) {
+        continue;
+      }
+      const eq = entry.indexOf("=");
+      if (eq <= 0) {
+        continue;
+      }
+      const key = entry.slice(0, eq);
+      const value = entry.slice(eq + 1);
+      if (!key) {
+        continue;
+      }
+      env[key] = value;
+    }
+    return env;
+  } catch {
+    return {};
+  }
+}
 
 function resolveConfigPathSafe(): string {
   try {
@@ -92,7 +126,13 @@ async function runCliOnboard(options: InitializationOptions): Promise<void> {
   }
   const command = invocation.command;
   const commandArgs = invocation.args;
-  const env = { ...process.env };
+  const loginShellEnv = loadLoginShellEnvironment();
+  const env = {
+    ...process.env,
+    ...loginShellEnv,
+    OPENCLAW_LOAD_SHELL_ENV: "1",
+    OPENCLAW_PROFILE: process.env.BUSTLY_OPENCLAW_PROFILE?.trim() || "bustly",
+  };
 
   await new Promise<void>((resolvePromise, rejectPromise) => {
     execFile(command, commandArgs, { env }, (error) => {
