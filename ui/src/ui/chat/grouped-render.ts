@@ -303,7 +303,9 @@ function renderGroupedMessage(
   const extractedText = extractTextCached(message);
   const extractedThinking =
     opts.showReasoning && role === "assistant" ? extractThinkingCached(message) : null;
-  const markdownBase = extractedText?.trim() ? extractedText : null;
+  const isUser = role === "user";
+  const markdownBase = !isUser && extractedText?.trim() ? extractedText : null;
+  const userText = isUser && extractedText !== null ? extractedText : null;
   const reasoningMarkdown = extractedThinking ? formatReasoningMarkdown(extractedThinking) : null;
   const markdown = markdownBase;
   const canCopyMarkdown = role === "assistant" && Boolean(markdown?.trim());
@@ -321,7 +323,7 @@ function renderGroupedMessage(
     return html`${toolCards.map((card) => renderToolCardSidebar(card, onOpenSidebar))}`;
   }
 
-  if (!markdown && !hasToolCards && !hasImages) {
+  if (!markdown && !userText && !hasToolCards && !hasImages) {
     return nothing;
   }
 
@@ -334,6 +336,11 @@ function renderGroupedMessage(
           ? html`<div class="chat-thinking">${unsafeHTML(
               toSanitizedMarkdownHtml(reasoningMarkdown),
             )}</div>`
+          : nothing
+      }
+      ${
+        userText
+          ? html`<div class="chat-user-text" dir="${detectTextDirection(userText)}">${userText}</div>`
           : nothing
       }
       ${

@@ -374,7 +374,7 @@ function renderTimelineNode(item: TimelineNode, activeRunningToolKey: string | n
       <div class="chat-flow-item chat-flow-item--user-bubble">
         <div class="chat-flow-user-bubble has-copy">
           ${renderCopyAsMarkdownButton(item.text)}
-          ${unsafeHTML(toSanitizedMarkdownHtml(item.text))}
+          <div class="chat-flow-user-text" dir="${detectTextDirection(item.text)}">${item.text}</div>
         </div>
         ${
           timeLabel

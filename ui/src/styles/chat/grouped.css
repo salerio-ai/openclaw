@@ -271,6 +271,12 @@ img.chat-avatar {
   background: rgba(255, 77, 77, 0.15);
 }
 
+.chat-user-text,
+.chat-flow-user-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* Streaming animation */
 .chat-bubble.streaming {
   animation: pulsing-border 1.5s ease-out infinite;
