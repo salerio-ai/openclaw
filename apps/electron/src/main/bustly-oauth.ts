@@ -219,7 +219,7 @@ export function getBustlyAuthCode(): string | null {
     return null;
   }
   // Check expiry
-  if (Date.now() > state.expiresAt) {
+  if (state.expiresAt && Date.now() > state.expiresAt) {
     clearBustlyOAuthState();
     return null;
   }

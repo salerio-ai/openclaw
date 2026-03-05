@@ -39,9 +39,11 @@
     "@whiskeysockets/baileys": "7.0.0-rc.9",
     "ajv": "^8.17.1",
     "chalk": "^5.6.2",
+    "dompurify": "^3.3.1",
     "electron-updater": "^6.7.3",
     "google-auth-library": "^10.5.0",
     "json5": "^2.2.3",
+    "marked": "^17.0.3",
     "proper-lockfile": "^4.1.2",
     "qrcode-terminal": "^0.12.0",
     "react": "^19.1.0",
@@ -52,6 +54,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@types/dompurify": "^3.2.0",
     "@types/node": "^22.19.7",
     "@types/react": "^19.2.10",
     "@types/react-dom": "^19.2.3",

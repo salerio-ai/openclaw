@@ -35,7 +35,9 @@ done < <(node "$FILTER_FILES" lint -- "${files[@]}")
 
 format_files=()
 while IFS= read -r -d '' file; do
-  format_files+=("$file")
+  if [[ -n "$file" && -f "$ROOT_DIR/$file" ]]; then
+    format_files+=("$file")
+  fi
 done < <(node "$FILTER_FILES" format -- "${files[@]}")
 
 if [ "${#lint_files[@]}" -gt 0 ]; then

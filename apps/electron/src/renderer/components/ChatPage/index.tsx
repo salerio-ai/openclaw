@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { GatewayBrowserClient, type GatewayEventFrame } from "../../../../../ui/src/ui/gateway.ts";
-import { extractText, extractThinking } from "../../../../../ui/src/ui/chat/message-extract.ts";
+import { GatewayBrowserClient, type GatewayEventFrame } from "../../lib/gateway-client";
+import { extractText, extractThinking } from "../../lib/chat-extract";
+import { ChatTimeline } from "./ChatTimeline";
+import { collapseProcessedTurn, resolveToolDisplay, formatToolDetail } from "./utils";
+import type { TimelineNode } from "./types";
 
 type ChatRole = "user" | "assistant" | "thinking" | "system";
 
@@ -92,7 +95,13 @@ function extractToolText(value: unknown): string {
   try {
     return JSON.stringify(value, null, 2);
   } catch {
-    return String(value);
+    if (typeof value === "symbol") {
+      return value.description ? `Symbol(${value.description})` : "Symbol()";
+    }
+    if (typeof value === "function") {
+      return "[function]";
+    }
+    return Object.prototype.toString.call(value);
   }
 }
 
@@ -112,19 +121,6 @@ function compareTimeline(a: TimelineItem, b: TimelineItem): number {
     return a.timestamp - b.timestamp;
   }
   return a.id.localeCompare(b.id);
-}
-
-function roleLabel(role: ChatRole): string {
-  if (role === "assistant") {
-    return "Assistant";
-  }
-  if (role === "thinking") {
-    return "Thinking";
-  }
-  if (role === "system") {
-    return "System";
-  }
-  return "You";
 }
 
 function readContentText(message: unknown): string | null {
@@ -205,7 +201,6 @@ export default function ChatPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [streamUpdatedAt, setStreamUpdatedAt] = useState<number | null>(null);
-  const [thinkingUpdatedAt, setThinkingUpdatedAt] = useState<number | null>(null);
 
   const clientRef = useRef<GatewayBrowserClient | null>(null);
   const seqCounterRef = useRef(1_000_000_000);
@@ -246,7 +241,7 @@ export default function ChatPage() {
           runId: params.runId,
           streaming: params.streaming,
         };
-        return [...prev, next].sort(compareTimeline);
+        return [...prev, next].toSorted(compareTimeline);
       }
       const current = prev[idx] as TextItem;
       const nextText = normalizeTextDelta(current.text, params.text, params.delta);
@@ -326,7 +321,7 @@ export default function ChatPage() {
           output: params.output,
           status: params.phase === "result" ? (params.isError ? "error" : "completed") : "running",
         };
-        return [...prev, created].sort(compareTimeline);
+        return [...prev, created].toSorted(compareTimeline);
       }
       const current = prev[idx] as ToolItem;
       const next = [...prev];
@@ -381,7 +376,7 @@ export default function ChatPage() {
           return prev;
         }
         if (timerMap.has(key)) {
-          window.clearTimeout(timerMap.get(key)!);
+          window.clearTimeout(timerMap.get(key));
           timerMap.delete(key);
         }
         const next = [...prev];
@@ -468,7 +463,7 @@ export default function ChatPage() {
       }
     }
 
-    setTimeline(items.sort(compareTimeline));
+    setTimeline(items.toSorted(compareTimeline));
   }, []);
 
   const connectGateway = useCallback(
@@ -493,6 +488,7 @@ export default function ChatPage() {
       }
       const client = new GatewayBrowserClient({
         url: connectConfig.wsUrl,
+        token: connectConfig.token ?? undefined,
         clientName: "openclaw-control-ui",
         mode: "webchat",
         instanceId: `bustly-electron-chat-${Date.now()}`,
@@ -557,7 +553,6 @@ export default function ChatPage() {
                 timestamp: ts,
                 streaming: true,
               });
-              setThinkingUpdatedAt(Date.now());
               return;
             }
 
@@ -602,7 +597,7 @@ export default function ChatPage() {
                       runId: runId ?? undefined,
                       streaming: false,
                     };
-                    return [...prev, next].sort(compareTimeline);
+                    return [...prev, next].toSorted(compareTimeline);
                   });
                 }
               }
@@ -802,8 +797,24 @@ export default function ChatPage() {
       }
       const dataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result ?? ""));
-        reader.onerror = () => reject(reader.error ?? new Error("Failed to read image"));
+        reader.addEventListener(
+          "load",
+          () => {
+            if (typeof reader.result === "string") {
+              resolve(reader.result);
+              return;
+            }
+            reject(new Error("Unexpected file reader result type"));
+          },
+          { once: true },
+        );
+        reader.addEventListener(
+          "error",
+          () => {
+            reject(reader.error ?? new Error("Failed to read image"));
+          },
+          { once: true },
+        );
         reader.readAsDataURL(file);
       });
       if (!dataUrl) {
@@ -833,133 +844,123 @@ export default function ChatPage() {
     return Date.now() - streamUpdatedAt < 700;
   }, [streamUpdatedAt, timeline.length]);
 
-  const hasRecentThinkingStream = useMemo(() => {
-    if (!thinkingUpdatedAt) {
-      return false;
+  const activeRunningToolId = useMemo(() => {
+    let latest: ToolItem | null = null;
+    for (const entry of timeline) {
+      if (entry.kind !== "tool" || entry.status !== "running") {
+        continue;
+      }
+      if (!latest || entry.sortSeq > latest.sortSeq) {
+        latest = entry;
+      }
     }
-    return Date.now() - thinkingUpdatedAt < 700;
-  }, [thinkingUpdatedAt, timeline.length]);
+    return latest?.id ?? null;
+  }, [timeline]);
 
-  const showThinkingLive = Boolean(activeRunId && !hasRecentTextStream && runningTools === 0);
+  const processedTimeline = useMemo(() => {
+    const rawNodes: TimelineNode[] = timeline.map((item) => {
+      if (item.kind === "text") {
+        return {
+          kind: "text",
+          key: item.id,
+          timestamp: item.timestamp,
+          text: item.text,
+          tone:
+            item.role === "thinking"
+              ? "thinking"
+              : item.role === "system"
+                ? "system"
+                : item.role === "user"
+                  ? "user"
+                  : "assistant",
+          streaming: item.streaming,
+          final: false,
+        };
+      }
+      const display = resolveToolDisplay({ name: item.name, args: item.args });
+      const detail = formatToolDetail(display);
+      const summary = detail ? `${display.label}: ${detail}` : display.label;
+
+      const detailText = [
+        `Tool: ${display.label}`,
+        detail ? `Detail: ${detail}` : null,
+        item.args != null ? `Args:\n${JSON.stringify(item.args, null, 2)}` : null,
+        item.output ? `Output:\n${item.output}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+
+      return {
+        kind: "tool",
+        key: item.id,
+        timestamp: item.timestamp,
+        mergeKey: item.toolCallId,
+        summary,
+        detail: detailText,
+        hasOutput: !!item.output,
+        completed: item.status !== "running",
+        running: item.status === "running",
+      };
+    });
+    return collapseProcessedTurn(rawNodes);
+  }, [timeline]);
+
+  const activeRunningToolKey = activeRunningToolId ? activeRunningToolId : null;
 
   return (
-    <div className="flex h-screen flex-col bg-slate-50 text-slate-900">
-      <div className="border-b border-slate-200 bg-white px-5 py-3">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h1 className="text-lg font-semibold">Chat</h1>
-            <p className="text-xs text-slate-500">
-              Session: {DEFAULT_SESSION_KEY}
-            </p>
-          </div>
-          <div className="flex items-center gap-2 text-xs">
-            <span
-              className={`rounded-full px-2 py-1 font-medium ${
-                connected ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-700"
-              }`}
+    <div className="chat-page-shell">
+      <div className="chat-page-header">
+        <div className="chat-page-header-left">
+          <h1 className="chat-page-title">Chat</h1>
+          <p className="chat-page-subtitle">Session: {DEFAULT_SESSION_KEY}</p>
+        </div>
+        <div className="chat-page-header-right">
+          <span className={`chat-page-badge ${connected ? "is-connected" : ""}`}>
+            {connected ? "Connected" : "Disconnected"}
+          </span>
+          <span className="chat-page-port">Port: {gateway?.port ?? "-"}</span>
+          {!gateway?.running ? (
+            <button
+              type="button"
+              className="chat-page-start-btn"
+              onClick={() => {
+                void handleStartGateway();
+              }}
             >
-              {connected ? "Connected" : "Disconnected"}
-            </span>
-            <span className="text-slate-500">
-              Port: {gateway?.port ?? "-"}
-            </span>
-            {!gateway?.running ? (
-              <button
-                type="button"
-                className="rounded-md bg-slate-900 px-3 py-1.5 font-medium text-white hover:bg-slate-800"
-                onClick={() => {
-                  void handleStartGateway();
-                }}
-              >
-                Start Gateway
-              </button>
-            ) : null}
-          </div>
+              Start Gateway
+            </button>
+          ) : null}
         </div>
       </div>
 
-      {error ? (
-        <div className="mx-5 mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {error}
-        </div>
-      ) : null}
+      {error ? <div className="chat-page-error">{error}</div> : null}
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
+      <div ref={scrollRef} className="chat-page-timeline">
         {loading ? (
-          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
-            Loading chat history...
-          </div>
+          <div className="chat-flow-item chat-flow-item--text">Loading chat history...</div>
         ) : null}
 
-        <div className="space-y-3">
-          {timeline.map((item) => {
-            if (item.kind === "tool") {
-              const summary = `${item.name}`;
-              return (
-                <details key={item.id} className="rounded-xl border border-slate-200 bg-white px-3 py-2">
-                  <summary className="cursor-pointer list-none text-sm font-medium text-slate-700">
-                    <span className={item.status === "running" ? "text-amber-700" : item.status === "error" ? "text-red-700" : "text-slate-700"}>
-                      {item.status === "running" ? "Running" : "Completed"} {summary}
-                    </span>
-                  </summary>
-                  <pre className="mt-2 overflow-auto rounded-md bg-slate-950/95 p-3 text-xs text-slate-100">
-{`Tool: ${item.name}\n\nArgs:\n${JSON.stringify(item.args ?? {}, null, 2)}\n\nOutput:\n${item.output ?? "(none)"}`}
-                  </pre>
-                </details>
-              );
-            }
-
-            const isUser = item.role === "user";
-            const isThinking = item.role === "thinking";
-            return (
-              <div key={item.id} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-                <div
-                  className={`max-w-[84%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
-                    isUser
-                      ? "bg-slate-900 text-white"
-                      : isThinking
-                        ? "border border-slate-200 bg-slate-100 text-slate-600"
-                        : item.role === "system"
-                          ? "border border-amber-200 bg-amber-50 text-amber-800"
-                          : "border border-slate-200 bg-white text-slate-800"
-                  }`}
-                >
-                  <div className="mb-1 text-[11px] font-medium opacity-70">{roleLabel(item.role)}</div>
-                  <div className="whitespace-pre-wrap break-words">{item.text}</div>
-                  {item.streaming ? (
-                    <div className="mt-1 text-[11px] opacity-60">streaming...</div>
-                  ) : null}
-                </div>
-              </div>
-            );
-          })}
-
-          {showThinkingLive ? (
-            <div className="flex justify-start">
-              <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
-                <span>Thinking...</span>
-                <span className="absolute inset-y-0 -left-20 w-20 animate-[shimmer_1.4s_infinite] bg-gradient-to-r from-transparent via-slate-200/70 to-transparent" />
-              </div>
+        <div className="chat-flow-list">
+          <ChatTimeline timeline={processedTimeline} activeRunningToolKey={activeRunningToolKey} />
+          {activeRunId && !hasRecentTextStream && runningTools === 0 ? (
+            <div className="chat-flow-item chat-flow-item--thinking-live">
+              <p className="chat-flow-thinking-live">Thinking...</p>
             </div>
           ) : null}
         </div>
       </div>
 
-      <div className="border-t border-slate-200 bg-white px-4 py-3">
+      <div className="chat-page-footer">
         {attachments.length > 0 ? (
-          <div className="mb-3 flex flex-wrap gap-2">
+          <div className="chat-attachments">
             {attachments.map((att) => (
-              <div key={att.id} className="relative">
-                <img
-                  src={att.dataUrl}
-                  alt={att.name}
-                  className="h-20 w-20 rounded-md border border-slate-200 object-cover"
-                />
+              <div key={att.id} className="chat-attachment">
+                <img src={att.dataUrl} alt="Attachment" className="chat-attachment__img" />
                 <button
                   type="button"
-                  className="absolute -right-2 -top-2 rounded-full bg-slate-900 px-1.5 py-0.5 text-xs text-white"
+                  className="chat-attachment__remove"
                   onClick={() => {
-                    setAttachments((prev) => prev.filter((entry) => entry.id !== att.id));
+                    setAttachments((prev) => prev.filter((p) => p.id !== att.id));
                   }}
                 >
                   ×
@@ -968,68 +969,49 @@ export default function ChatPage() {
             ))}
           </div>
         ) : null}
-        <div className="flex items-end gap-2">
-          <label className="inline-flex cursor-pointer items-center rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50">
-            Image
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(event) => {
-                void handleAttachmentFiles(event.target.files);
-                event.currentTarget.value = "";
-              }}
-            />
-          </label>
+        <div className="chat-compose-row">
           <textarea
+            className="chat-compose-input"
+            rows={1}
+            placeholder={
+              connected
+                ? "Message (Enter to send, Shift+Enter for new line)"
+                : "Connect to gateway to chat..."
+            }
+            disabled={!connected || sending}
             value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
                 void handleSend();
               }
             }}
-            placeholder={connected ? "Type your message..." : "Gateway not connected"}
-            disabled={!connected || sending}
-            className="max-h-44 min-h-[48px] flex-1 resize-y rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none ring-slate-900/10 placeholder:text-slate-400 focus:ring-2 disabled:bg-slate-100"
+            onPaste={(e) => {
+              const items = e.clipboardData.items;
+              void handleAttachmentFiles(items as unknown as FileList);
+            }}
           />
-          <div className="flex gap-2">
+          <div className="chat-compose-actions">
             {activeRunId ? (
-              <button
-                type="button"
-                onClick={() => {
-                  void handleAbort();
-                }}
-                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
+              <button type="button" className="chat-btn chat-btn--stop" onClick={handleAbort}>
                 Stop
               </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => {
-                void handleSend();
-              }}
-              disabled={!connected || sending || (!draft.trim() && attachments.length === 0)}
-              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-            >
-              Send
-            </button>
+            ) : (
+              <button
+                type="button"
+                className="chat-btn chat-btn--send"
+                disabled={!connected || sending || (!draft.trim() && attachments.length === 0)}
+                onClick={() => {
+                  void handleSend();
+                }}
+              >
+                Send
+              </button>
+            )}
           </div>
         </div>
-        {hasRecentThinkingStream ? (
-          <div className="mt-2 text-xs text-slate-500">Thinking stream active</div>
-        ) : null}
       </div>
-
-      <style>{`
-        @keyframes shimmer {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(420px); }
-        }
-      `}</style>
     </div>
   );
 }

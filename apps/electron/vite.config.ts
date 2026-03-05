@@ -7,6 +7,12 @@ export default defineConfig({
   plugins: [react()],
   root: resolve(import.meta.dirname, "src/renderer"),
   publicDir: resolve(import.meta.dirname, "public"),
+  resolve: {
+    alias: {
+      openclaw: resolve(import.meta.dirname, "../../src"),
+      "@": resolve(import.meta.dirname, "src"),
+    },
+  },
   build: {
     outDir: resolve(import.meta.dirname, "dist/renderer"),
     emptyOutDir: true,

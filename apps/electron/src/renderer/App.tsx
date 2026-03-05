@@ -6,7 +6,7 @@ import Onboard from "./components/Onboard";
 import BustlyLoginPage from "./components/Onboard/BustlyLoginPage";
 import ProviderSetupPage from "./components/Onboard/ProviderSetupPage";
 import DevPanel from "./components/DevPanel";
-import ChatPage from "./components/ChatPage";
+import ChatPage from "./components/ChatPage/index";
 
 interface LogEntry {
   id: number;
