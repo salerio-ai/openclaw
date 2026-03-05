@@ -23,6 +23,7 @@ type TextItem = {
   text: string;
   runId?: string;
   streaming?: boolean;
+  final?: boolean;
 };
 
 type ToolStatus = "running" | "completed" | "error";
@@ -141,11 +142,46 @@ function readThinkingText(message: unknown): string | null {
   return trimmed ? text : null;
 }
 
-function parseToolBlocks(message: unknown): Array<{ toolCallId: string; name: string; args: unknown; output?: string }> {
+function parseToolBlocks(message: unknown): Array<{ toolCallId: string; name: string; args?: unknown; output?: string }> {
   if (!message || typeof message !== "object") {
     return [];
   }
   const rec = message as Record<string, unknown>;
+  const role = typeof rec.role === "string" ? rec.role.toLowerCase() : "";
+
+  // Handle standalone tool/toolResult history messages.
+  if (role === "toolresult" || role === "tool_result") {
+    const toolCallId =
+      typeof rec.toolCallId === "string"
+        ? rec.toolCallId
+        : typeof rec.id === "string"
+          ? rec.id
+          : "";
+    if (!toolCallId) {
+      return [];
+    }
+    return [
+      {
+        toolCallId,
+        name: typeof rec.toolName === "string" ? rec.toolName : "tool",
+        output: extractToolText(rec.content ?? rec.text ?? rec.output ?? rec),
+      },
+    ];
+  }
+  if (role === "toolcall" || role === "tool_call" || role === "tool") {
+    const toolCallId = typeof rec.id === "string" ? rec.id : "";
+    if (!toolCallId) {
+      return [];
+    }
+    return [
+      {
+        toolCallId,
+        name: typeof rec.name === "string" ? rec.name : "tool",
+        args: rec.arguments ?? rec.args ?? {},
+      },
+    ];
+  }
+
   const content = Array.isArray(rec.content) ? rec.content : [];
   const calls = new Map<string, { toolCallId: string; name: string; args: unknown; output?: string }>();
   for (const raw of content) {
@@ -182,7 +218,7 @@ function parseToolBlocks(message: unknown): Array<{ toolCallId: string; name: st
       calls.set(toolCallId, {
         toolCallId,
         name: typeof item.name === "string" ? item.name : existing?.name ?? "tool",
-        args: existing?.args ?? {},
+        args: existing?.args,
         output,
       });
     }
@@ -205,6 +241,17 @@ export default function ChatPage() {
   const clientRef = useRef<GatewayBrowserClient | null>(null);
   const seqCounterRef = useRef(1_000_000_000);
   const toolTimersRef = useRef<Map<string, number>>(new Map());
+  const runSeqBaseRef = useRef<Map<string, number>>(new Map());
+  const streamSegmentsRef = useRef<
+    Map<
+      string,
+      {
+        last: string | null;
+        assistant: number;
+        thinking: number;
+      }
+    >
+  >(new Map());
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const loadGatewayStatus = useCallback(async () => {
@@ -222,6 +269,7 @@ export default function ChatPage() {
     delta?: string;
     timestamp?: number;
     streaming?: boolean;
+    final?: boolean;
   }) => {
     setTimeline((prev) => {
       const idx = prev.findIndex((item) => item.kind === "text" && item.id === params.key);
@@ -240,12 +288,13 @@ export default function ChatPage() {
           text: nextText,
           runId: params.runId,
           streaming: params.streaming,
+          final: params.final,
         };
         return [...prev, next].toSorted(compareTimeline);
       }
       const current = prev[idx] as TextItem;
       const nextText = normalizeTextDelta(current.text, params.text, params.delta);
-      if (nextText === current.text && current.streaming === params.streaming) {
+      if (nextText === current.text && current.streaming === params.streaming && current.final === params.final) {
         return prev;
       }
       const next = [...prev];
@@ -254,6 +303,7 @@ export default function ChatPage() {
         text: nextText,
         sortSeq: Math.min(current.sortSeq, params.seq),
         streaming: params.streaming,
+        final: params.final ?? current.final,
       };
       return next;
     });
@@ -396,15 +446,25 @@ export default function ChatPage() {
       limit: 200,
     });
     const history = Array.isArray(res.messages) ? res.messages : [];
+    console.log("[electron-chat] chat.history loaded", { count: history.length, sessionKey: DEFAULT_SESSION_KEY });
     const items: TimelineItem[] = [];
+    const toolsByCallId = new Map<string, ToolItem>();
     let fallbackSeq = 1;
 
     for (const message of history) {
+      console.log("[electron-chat] history message", message);
       if (!message || typeof message !== "object") {
         continue;
       }
       const rec = message as Record<string, unknown>;
+      const nested =
+        rec.message && typeof rec.message === "object" ? (rec.message as Record<string, unknown>) : null;
       const role = typeof rec.role === "string" ? rec.role.toLowerCase() : "";
+      const stopReasonRaw =
+        (typeof rec.stopReason === "string" ? rec.stopReason : undefined) ??
+        (typeof nested?.stopReason === "string" ? nested.stopReason : undefined) ??
+        "";
+      const stopReason = stopReasonRaw.toLowerCase();
       const timestamp =
         typeof rec.timestamp === "number"
           ? rec.timestamp
@@ -444,26 +504,53 @@ export default function ChatPage() {
           role: textRole,
           text,
           streaming: false,
+          final: textRole === "assistant" && stopReason === "stop",
         });
       }
 
       const tools = parseToolBlocks(message);
       for (const tool of tools) {
-        items.push({
-          kind: "tool",
-          id: `tool:${tool.toolCallId}:${nextId("h")}`,
-          toolCallId: tool.toolCallId,
-          sortSeq: baseSeq + 0.02,
-          timestamp,
-          name: tool.name,
-          args: tool.args,
-          output: tool.output,
-          status: tool.output ? "completed" : "running",
+        const existing = toolsByCallId.get(tool.toolCallId);
+        if (!existing) {
+          toolsByCallId.set(tool.toolCallId, {
+            kind: "tool",
+            id: `tool:${tool.toolCallId}`,
+            toolCallId: tool.toolCallId,
+            sortSeq: baseSeq + 0.02,
+            timestamp,
+            name: tool.name,
+            args: tool.args,
+            output: tool.output,
+            status: tool.output ? "completed" : "running",
+          });
+          continue;
+        }
+        toolsByCallId.set(tool.toolCallId, {
+          ...existing,
+          sortSeq: Math.min(existing.sortSeq, baseSeq + 0.02),
+          timestamp: Math.min(existing.timestamp, timestamp),
+          name: tool.name || existing.name,
+          args: tool.args ?? existing.args,
+          output: tool.output ?? existing.output,
+          status: tool.output ? "completed" : existing.status,
         });
       }
     }
 
-    setTimeline(items.toSorted(compareTimeline));
+    items.push(...toolsByCallId.values());
+    setTimeline((prev) => {
+      if (prev.length === 0) {
+        return items.toSorted(compareTimeline);
+      }
+      const merged = new Map<string, TimelineItem>();
+      for (const item of items) {
+        merged.set(item.id, item);
+      }
+      for (const item of prev) {
+        merged.set(item.id, item);
+      }
+      return [...merged.values()].toSorted(compareTimeline);
+    });
   }, []);
 
   const connectGateway = useCallback(
@@ -505,6 +592,7 @@ export default function ChatPage() {
           setError(message);
         },
         onEvent: (evt: GatewayEventFrame) => {
+          console.log("[electron-chat] received event", evt.event, evt.payload);
           if (evt.event === "agent") {
             const payload = evt.payload as {
               runId?: string;
@@ -518,18 +606,41 @@ export default function ChatPage() {
               return;
             }
             const runId = typeof payload.runId === "string" ? payload.runId : null;
-            const seq = typeof payload.seq === "number" ? payload.seq : seqCounterRef.current++;
+            let seq = seqCounterRef.current++;
+            if (runId) {
+              let base = runSeqBaseRef.current.get(runId);
+              if (base == null) {
+                base = seqCounterRef.current;
+                runSeqBaseRef.current.set(runId, base);
+                seqCounterRef.current += 100_000;
+              }
+              if (typeof payload.seq === "number" && Number.isFinite(payload.seq)) {
+                seq = base + payload.seq;
+              } else {
+                seq = base + (seqCounterRef.current++ % 100_000);
+              }
+            } else if (typeof payload.seq === "number" && Number.isFinite(payload.seq)) {
+              seq = payload.seq;
+            }
             const ts = typeof payload.ts === "number" ? payload.ts : Date.now();
             const stream = typeof payload.stream === "string" ? payload.stream : "";
             const data = payload.data ?? {};
+            const runKey = runId ?? "__unknown__";
+            const segmentState =
+              streamSegmentsRef.current.get(runKey) ?? { last: null, assistant: 0, thinking: 0 };
 
             if (runId) {
               setActiveRunId(runId);
             }
 
             if (stream === "assistant") {
+              if (segmentState.last !== "assistant") {
+                segmentState.assistant += 1;
+              }
+              segmentState.last = "assistant";
+              streamSegmentsRef.current.set(runKey, segmentState);
               appendOrUpdateText({
-                key: `run:${runId ?? "unknown"}:assistant`,
+                key: `run:${runId ?? "unknown"}:assistant:${segmentState.assistant}`,
                 role: "assistant",
                 runId: runId ?? undefined,
                 seq,
@@ -537,14 +648,20 @@ export default function ChatPage() {
                 delta: typeof data.delta === "string" ? data.delta : undefined,
                 timestamp: ts,
                 streaming: true,
+                final: false,
               });
               setStreamUpdatedAt(Date.now());
               return;
             }
 
             if (stream === "thinking") {
+              if (segmentState.last !== "thinking") {
+                segmentState.thinking += 1;
+              }
+              segmentState.last = "thinking";
+              streamSegmentsRef.current.set(runKey, segmentState);
               appendOrUpdateText({
-                key: `run:${runId ?? "unknown"}:thinking`,
+                key: `run:${runId ?? "unknown"}:thinking:${segmentState.thinking}`,
                 role: "thinking",
                 runId: runId ?? undefined,
                 seq,
@@ -557,6 +674,8 @@ export default function ChatPage() {
             }
 
             if (stream === "tool") {
+              segmentState.last = "tool";
+              streamSegmentsRef.current.set(runKey, segmentState);
               const phase =
                 data.phase === "start" || data.phase === "update" || data.phase === "result"
                   ? data.phase
@@ -583,6 +702,10 @@ export default function ChatPage() {
               if (phase === "end") {
                 markRunFinished(runId);
                 setActiveRunId((prev) => (prev === runId ? null : prev));
+                streamSegmentsRef.current.delete(runKey);
+                if (runId) {
+                  runSeqBaseRef.current.delete(runId);
+                }
                 const aborted = data.aborted === true;
                 if (aborted) {
                   const stopReason = typeof data.stopReason === "string" ? data.stopReason : "aborted";
@@ -627,6 +750,7 @@ export default function ChatPage() {
                   seq: seqCounterRef.current++,
                   text,
                   streaming: false,
+                  final: true,
                 });
               }
               const thinking = readThinkingText(payload.message);
@@ -874,7 +998,7 @@ export default function ChatPage() {
                   ? "user"
                   : "assistant",
           streaming: item.streaming,
-          final: false,
+          final: item.final === true,
         };
       }
       const display = resolveToolDisplay({ name: item.name, args: item.args });

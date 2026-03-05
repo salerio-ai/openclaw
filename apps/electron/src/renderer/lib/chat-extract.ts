@@ -42,6 +42,15 @@ export function extractText(message: unknown): string | null {
   if (role === "thinking") {
     return null;
   }
+  if (
+    role === "tool" ||
+    role === "toolcall" ||
+    role === "tool_call" ||
+    role === "toolresult" ||
+    role === "tool_result"
+  ) {
+    return null;
+  }
   const raw = readRawText(message);
   if (!raw) {
     return null;

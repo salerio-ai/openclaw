@@ -1082,7 +1082,6 @@
 .chat-flow-item--text,
 .chat-flow-item--thinking {
   max-width: 100%;
-  white-space: pre-wrap;
   word-break: break-word;
 }
 
@@ -1205,6 +1204,71 @@
   font-size: 12px;
   color: var(--muted);
 }
+
+
+.chat-flow-item--text :where(p, h1, h2, h3, h4, h5, h6, ul, ol, pre, blockquote, hr, table),
+.chat-flow-item--thinking :where(p, h1, h2, h3, h4, h5, h6, ul, ol, pre, blockquote, hr, table),
+.chat-flow-user-bubble :where(p, h1, h2, h3, h4, h5, h6, ul, ol, pre, blockquote, hr, table) {
+  margin-block: 0.5em;
+}
+
+.chat-flow-item--text :where(li),
+.chat-flow-item--thinking :where(li),
+.chat-flow-user-bubble :where(li) {
+  margin-block: 0.12em;
+}
+
+.chat-flow-item--text :where(ul, ol),
+.chat-flow-item--thinking :where(ul, ol),
+.chat-flow-user-bubble :where(ul, ol) {
+  padding-inline-start: 1.25em;
+}
+
+/* Markdown table styles for linear flow nodes */
+.chat-flow-item--text :where(table),
+.chat-flow-item--thinking :where(table),
+.chat-flow-user-bubble :where(table) {
+  margin: 1em 0;
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+
+.chat-flow-item--text :where(th, td),
+.chat-flow-item--thinking :where(th, td),
+.chat-flow-user-bubble :where(th, td) {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  vertical-align: top;
+}
+
+.chat-flow-item--text :where(th),
+.chat-flow-item--thinking :where(th),
+.chat-flow-user-bubble :where(th) {
+  font-family: var(--mono);
+  font-weight: 500;
+  color: var(--muted);
+  background: var(--secondary);
+}
+
+.chat-flow-item--text :where(img),
+.chat-flow-item--thinking :where(img),
+.chat-flow-user-bubble :where(img) {
+  display: block;
+  max-width: min(100%, 360px);
+  max-height: 280px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.chat-flow-item--text :where(a),
+.chat-flow-item--thinking :where(a),
+.chat-flow-user-bubble :where(a) {
+  color: inherit;
+}
+
 
 @keyframes chat-flow-tool-shimmer {
   0% {
