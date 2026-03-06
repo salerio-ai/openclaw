@@ -315,22 +315,25 @@ export function handleMessageEnd(
     }
   }
 
-  if (!ctx.state.emittedAssistantUpdate && (cleanedText || hasMedia)) {
+  if (cleanedText || hasMedia) {
+    const finalDelta = ctx.state.emittedAssistantUpdate ? "" : cleanedText;
     emitAgentEvent({
       runId: ctx.params.runId,
       stream: "assistant",
       data: {
         text: cleanedText,
-        delta: cleanedText,
+        delta: finalDelta,
         mediaUrls: hasMedia ? mediaUrls : undefined,
+        final: true,
       },
     });
     void ctx.params.onAgentEvent?.({
       stream: "assistant",
       data: {
         text: cleanedText,
-        delta: cleanedText,
+        delta: finalDelta,
         mediaUrls: hasMedia ? mediaUrls : undefined,
+        final: true,
       },
     });
     ctx.state.emittedAssistantUpdate = true;

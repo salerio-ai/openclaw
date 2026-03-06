@@ -246,9 +246,10 @@ export default function ChatPage() {
     Map<
       string,
       {
-        last: string | null;
         assistant: number;
+        assistantClosed: boolean;
         thinking: number;
+        thinkingOpen: boolean;
       }
     >
   >(new Map());
@@ -327,6 +328,53 @@ export default function ChatPage() {
         return { ...item, streaming: false };
       }),
     );
+  }, []);
+
+  const markLastAssistantAsFinal = useCallback((runId: string | null) => {
+    if (!runId) {
+      return;
+    }
+    setTimeline((prev) => {
+      let targetId: string | null = null;
+      for (const item of prev) {
+        if (item.kind !== "text") {
+          continue;
+        }
+        if (item.runId !== runId || item.role !== "assistant") {
+          continue;
+        }
+        if (!targetId) {
+          targetId = item.id;
+          continue;
+        }
+        const current = prev.find((entry) => entry.kind === "text" && entry.id === targetId) as
+          | TextItem
+          | undefined;
+        if (!current) {
+          targetId = item.id;
+          continue;
+        }
+        if (item.sortSeq > current.sortSeq || (item.sortSeq === current.sortSeq && item.timestamp >= current.timestamp)) {
+          targetId = item.id;
+        }
+      }
+      if (!targetId) {
+        return prev;
+      }
+      let changed = false;
+      const next = prev.map((item) => {
+        if (item.kind !== "text" || item.runId !== runId || item.role !== "assistant") {
+          return item;
+        }
+        const shouldBeFinal = item.id === targetId;
+        if (item.final === shouldBeFinal) {
+          return item;
+        }
+        changed = true;
+        return { ...item, final: shouldBeFinal };
+      });
+      return changed ? next : prev;
+    });
   }, []);
 
   const upsertTool = useCallback((params: {
@@ -592,6 +640,9 @@ export default function ChatPage() {
           setError(message);
         },
         onEvent: (evt: GatewayEventFrame) => {
+          if (evt.event === "health") {
+            return;
+          }
           console.log("[electron-chat] received event", evt.event, evt.payload);
           if (evt.event === "agent") {
             const payload = evt.payload as {
@@ -627,17 +678,19 @@ export default function ChatPage() {
             const data = payload.data ?? {};
             const runKey = runId ?? "__unknown__";
             const segmentState =
-              streamSegmentsRef.current.get(runKey) ?? { last: null, assistant: 0, thinking: 0 };
+              streamSegmentsRef.current.get(runKey) ??
+              { assistant: 0, assistantClosed: true, thinking: 0, thinkingOpen: false };
 
             if (runId) {
               setActiveRunId(runId);
             }
 
             if (stream === "assistant") {
-              if (segmentState.last !== "assistant") {
+              const isFinalChunk = data.final === true;
+              if (segmentState.assistant === 0 || segmentState.assistantClosed) {
                 segmentState.assistant += 1;
+                segmentState.assistantClosed = false;
               }
-              segmentState.last = "assistant";
               streamSegmentsRef.current.set(runKey, segmentState);
               appendOrUpdateText({
                 key: `run:${runId ?? "unknown"}:assistant:${segmentState.assistant}`,
@@ -647,18 +700,22 @@ export default function ChatPage() {
                 text: typeof data.text === "string" ? data.text : undefined,
                 delta: typeof data.delta === "string" ? data.delta : undefined,
                 timestamp: ts,
-                streaming: true,
+                streaming: !isFinalChunk,
                 final: false,
               });
+              if (isFinalChunk) {
+                segmentState.assistantClosed = true;
+                streamSegmentsRef.current.set(runKey, segmentState);
+              }
               setStreamUpdatedAt(Date.now());
               return;
             }
 
             if (stream === "thinking") {
-              if (segmentState.last !== "thinking") {
+              if (!segmentState.thinkingOpen) {
                 segmentState.thinking += 1;
+                segmentState.thinkingOpen = true;
               }
-              segmentState.last = "thinking";
               streamSegmentsRef.current.set(runKey, segmentState);
               appendOrUpdateText({
                 key: `run:${runId ?? "unknown"}:thinking:${segmentState.thinking}`,
@@ -674,7 +731,7 @@ export default function ChatPage() {
             }
 
             if (stream === "tool") {
-              segmentState.last = "tool";
+              segmentState.thinkingOpen = false;
               streamSegmentsRef.current.set(runKey, segmentState);
               const phase =
                 data.phase === "start" || data.phase === "update" || data.phase === "result"
@@ -700,13 +757,16 @@ export default function ChatPage() {
             if (stream === "lifecycle") {
               const phase = typeof data.phase === "string" ? data.phase : "";
               if (phase === "end") {
+                const aborted = data.aborted === true;
                 markRunFinished(runId);
+                if (!aborted) {
+                  markLastAssistantAsFinal(runId);
+                }
                 setActiveRunId((prev) => (prev === runId ? null : prev));
                 streamSegmentsRef.current.delete(runKey);
                 if (runId) {
                   runSeqBaseRef.current.delete(runId);
                 }
-                const aborted = data.aborted === true;
                 if (aborted) {
                   const stopReason = typeof data.stopReason === "string" ? data.stopReason : "aborted";
                   setTimeline((prev) => {
@@ -729,47 +789,9 @@ export default function ChatPage() {
           }
 
           if (evt.event === "chat") {
-            const payload = evt.payload as {
-              runId?: string;
-              sessionKey?: string;
-              state?: string;
-              message?: unknown;
-              errorMessage?: string;
-            };
-            if (!payload || payload.sessionKey !== DEFAULT_SESSION_KEY) {
-              return;
-            }
-            const runId = typeof payload.runId === "string" ? payload.runId : null;
-            if (payload.state === "final" && payload.message) {
-              const text = readContentText(payload.message);
-              if (text) {
-                appendOrUpdateText({
-                  key: `run:${runId ?? "unknown"}:assistant-final`,
-                  role: "assistant",
-                  runId: runId ?? undefined,
-                  seq: seqCounterRef.current++,
-                  text,
-                  streaming: false,
-                  final: true,
-                });
-              }
-              const thinking = readThinkingText(payload.message);
-              if (thinking) {
-                appendOrUpdateText({
-                  key: `run:${runId ?? "unknown"}:thinking-final`,
-                  role: "thinking",
-                  runId: runId ?? undefined,
-                  seq: seqCounterRef.current++,
-                  text: thinking,
-                  streaming: false,
-                });
-              }
-              markRunFinished(runId);
-              setActiveRunId((prev) => (prev === runId ? null : prev));
-            }
-            if (payload.state === "error") {
-              setError(payload.errorMessage ?? "Chat error");
-            }
+            // Realtime timeline is intentionally single-channel: only `agent` stream events.
+            // `chat` frames are ignored here to prevent duplicate rendering.
+            return;
           }
         },
       });
@@ -777,7 +799,7 @@ export default function ChatPage() {
       clientRef.current = client;
       client.start();
     },
-    [appendOrUpdateText, loadHistory, markRunFinished, upsertTool],
+    [appendOrUpdateText, loadHistory, markLastAssistantAsFinal, markRunFinished, upsertTool],
   );
 
   useEffect(() => {

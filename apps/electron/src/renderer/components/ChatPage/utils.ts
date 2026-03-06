@@ -588,14 +588,18 @@ function normalizeComparableText(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
+function isTextTimelineNode(node: TimelineNode): node is Extract<TimelineNode, { kind: "text" }> {
+  return node.kind === "text";
+}
+
 function dedupeAdjacentAssistantTextNodes(nodes: TimelineNode[]): TimelineNode[] {
   const out: TimelineNode[] = [];
   for (const node of nodes) {
     const prev = out[out.length - 1];
     if (
       prev &&
-      prev.kind === "text" &&
-      node.kind === "text" &&
+      isTextTimelineNode(prev) &&
+      isTextTimelineNode(node) &&
       prev.tone === "assistant" &&
       node.tone === "assistant" &&
       !prev.streaming &&
@@ -894,10 +898,13 @@ export function collapseProcessedTurn(nodes: TimelineNode[]): TimelineNode[] {
       continue;
     }
     const finalNode = nodes[finalIndex];
+    if (!finalNode || !isTextTimelineNode(finalNode) || finalNode.tone !== "assistant" || !finalNode.final) {
+      continue;
+    }
     let turnStart = cursor;
     for (let i = finalIndex - 1; i >= cursor; i--) {
       const node = nodes[i];
-      if (node.kind === "text" && node.tone === "user") {
+      if (isTextTimelineNode(node) && node.tone === "user") {
         turnStart = i + 1;
         break;
       }
@@ -910,6 +917,21 @@ export function collapseProcessedTurn(nodes: TimelineNode[]): TimelineNode[] {
     const collapsedItems = nodes
       .slice(turnStart, finalIndex)
       .filter((node) => node.kind !== "divider");
+    const finalComparableText = normalizeComparableText(finalNode.text);
+    while (collapsedItems.length > 0) {
+      const tail = collapsedItems[collapsedItems.length - 1];
+      if (
+        tail &&
+        isTextTimelineNode(tail) &&
+        tail.tone === "assistant" &&
+        !tail.final &&
+        normalizeComparableText(tail.text) === finalComparableText
+      ) {
+        collapsedItems.pop();
+        continue;
+      }
+      break;
+    }
     if (collapsedItems.length > 0) {
       const estimatedDurationMs =
         finalNode.timestamp >= collapsedItems[0].timestamp
