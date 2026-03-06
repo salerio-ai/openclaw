@@ -4,6 +4,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import bustlyWordmark from "../../assets/imgs/bustly_wordmark.png";
 import logoIcon from "../../assets/imgs/collapsed_logo_v2.svg";
 import openSidebarIcon from "../../assets/imgs/open_sidebar.svg";
+import { GatewayBrowserClient } from "../../lib/gateway-client";
+import Skeleton from "../ui/Skeleton";
 
 type ClientAppSidebarProps = {
   collapsed: boolean;
@@ -15,6 +17,20 @@ type SidebarTask = {
   name: string;
   pinned?: boolean;
 };
+
+type GatewaySessionRow = {
+  key: string;
+  label?: string;
+  displayName?: string;
+  derivedTitle?: string;
+  updatedAt: number | null;
+};
+
+type SessionsListResult = {
+  sessions: GatewaySessionRow[];
+};
+
+const DEFAULT_SESSION_KEY = "agent:main:main";
 
 type IconProps = {
   className?: string;
@@ -191,6 +207,7 @@ function TaskItem(props: {
   task: SidebarTask;
   active: boolean;
   collapsed: boolean;
+  onClick: () => void;
 }) {
   const [isHovered, setIsHovered] = useState(false);
   const itemRef = useRef<HTMLDivElement | null>(null);
@@ -199,6 +216,7 @@ function TaskItem(props: {
     <>
       <div
         ref={itemRef}
+        onClick={props.onClick}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         className={`group relative flex cursor-pointer items-center rounded-xl transition-all duration-200 ${
@@ -220,6 +238,14 @@ function TaskItem(props: {
         {props.task.name}
       </PortalTooltip>
     </>
+  );
+}
+
+function TaskItemSkeleton() {
+  return (
+    <div className="mx-4 flex items-center gap-3 px-4 py-2.5">
+      <Skeleton className="h-3.5 w-full rounded-md" />
+    </div>
   );
 }
 
@@ -404,21 +430,18 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isTasksExpanded, setIsTasksExpanded] = useState(true);
   const [isWindowFullscreen, setIsWindowFullscreen] = useState(false);
+  const [recentTasks, setRecentTasks] = useState<SidebarTask[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(true);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
   const isSettingsPage = false;
   const isNewTaskPage = location.pathname === "/chat";
   const isSkillPage = location.pathname === "/skill";
-  const activeTaskId = null;
-  const recentTasks = useMemo<SidebarTask[]>(
-    () => [
-      { id: "task-1", name: "Sales trend analysis", pinned: true },
-      { id: "task-2", name: "Inventory summary" },
-      { id: "task-3", name: "Campaign performance" },
-    ],
-    [],
-  );
+  const activeTaskId = useMemo(() => {
+    const searchParams = new URLSearchParams(location.search);
+    return searchParams.get("session") ?? DEFAULT_SESSION_KEY;
+  }, [location.search]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -448,6 +471,96 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
     return () => {
       disposed = true;
       unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    let disposed = false;
+    const clientRef: { current: GatewayBrowserClient | null } = { current: null };
+
+    const loadTasks = async () => {
+      try {
+        const status = await window.electronAPI.gatewayStatus();
+        if (!status.running) {
+          if (!disposed) {
+            setRecentTasks([]);
+            setTasksLoading(false);
+          }
+          return;
+        }
+        const connectConfig = await window.electronAPI.gatewayConnectConfig();
+        if (!connectConfig.token || !connectConfig.wsUrl) {
+          if (!disposed) {
+            setRecentTasks([]);
+            setTasksLoading(false);
+          }
+          return;
+        }
+
+        const client = new GatewayBrowserClient({
+          url: connectConfig.wsUrl,
+          token: connectConfig.token ?? undefined,
+          clientName: "openclaw-control-ui",
+          mode: "webchat",
+          instanceId: `bustly-electron-sidebar-${Date.now()}`,
+          onHello: () => {
+            if (disposed) {
+              return;
+            }
+            void client
+              .request<SessionsListResult>("sessions.list", {
+                limit: 20,
+                includeGlobal: false,
+                includeUnknown: false,
+                includeDerivedTitles: true,
+                includeLastMessage: false,
+              })
+              .then((result) => {
+                if (disposed) {
+                  return;
+                }
+                setRecentTasks(
+                  result.sessions.map((session) => ({
+                    id: session.key,
+                    name:
+                      session.displayName?.trim() ||
+                      session.derivedTitle?.trim() ||
+                      session.label?.trim() ||
+                      session.key,
+                  })),
+                );
+                setTasksLoading(false);
+              })
+              .catch(() => {
+                if (disposed) {
+                  return;
+                }
+                setRecentTasks([]);
+                setTasksLoading(false);
+              });
+          },
+          onClose: () => {
+            if (!disposed) {
+              setTasksLoading(false);
+            }
+          },
+        });
+        clientRef.current = client;
+        client.start();
+      } catch {
+        if (!disposed) {
+          setRecentTasks([]);
+          setTasksLoading(false);
+        }
+      }
+    };
+
+    void loadTasks();
+
+    return () => {
+      disposed = true;
+      clientRef.current?.stop();
+      clientRef.current = null;
     };
   }, []);
 
@@ -539,9 +652,25 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
 
               {isTasksExpanded ? (
                 <div className="space-y-0.5">
-                  {recentTasks.map((task) => (
-                    <TaskItem key={task.id} task={task} active={!isNewTaskPage && activeTaskId === task.id} collapsed={false} />
-                  ))}
+                  {tasksLoading ? (
+                    <>
+                      <TaskItemSkeleton />
+                      <TaskItemSkeleton />
+                      <TaskItemSkeleton />
+                    </>
+                  ) : (
+                    recentTasks.map((task) => (
+                      <TaskItem
+                        key={task.id}
+                        task={task}
+                        active={activeTaskId === task.id}
+                        collapsed={false}
+                        onClick={() => {
+                          void navigate(`/chat?session=${encodeURIComponent(task.id)}`);
+                        }}
+                      />
+                    ))
+                  )}
                 </div>
               ) : null}
             </div>
