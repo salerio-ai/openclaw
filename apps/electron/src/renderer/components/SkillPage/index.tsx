@@ -1,6 +1,8 @@
 import { createPortal } from "react-dom";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
+import { GatewayBrowserClient } from "../../lib/gateway-client";
+import Skeleton from "../ui/Skeleton";
 import collapsedLogo from "../../assets/imgs/collapsed_logo_clean.svg";
 import trashIcon from "../../assets/imgs/Trash.svg";
 import uploadIcon from "../../assets/imgs/download_simple_bold.svg";
@@ -13,6 +15,30 @@ type SkillItemData = {
   description: string;
   icon: SkillIconComponent;
   enabled: boolean;
+  skillKey?: string;
+  source?: string;
+  filePath?: string;
+  homepage?: string;
+  primaryEnv?: string;
+  loading?: boolean;
+  canDelete?: boolean;
+};
+
+type SkillStatusEntry = {
+  name: string;
+  description: string;
+  source: string;
+  skillKey: string;
+  filePath: string;
+  homepage?: string;
+  primaryEnv?: string;
+  disabled: boolean;
+};
+
+type SkillStatusReport = {
+  workspaceDir: string;
+  managedSkillsDir: string;
+  skills: SkillStatusEntry[];
 };
 
 function IconBase(props: {
@@ -57,6 +83,28 @@ function ToggleRightIcon({ className }: { className?: string }) {
     <IconBase className={className}>
       <path d="M176,56H80a72,72,0,0,0,0,144h96a72,72,0,0,0,0-144Zm0,128H80A56,56,0,0,1,80,72h96a56,56,0,0,1,0,112Zm0-96a40,40,0,1,0,40,40A40,40,0,0,0,176,88Zm0,64a24,24,0,1,1,24-24A24,24,0,0,1,176,152Z" />
     </IconBase>
+  );
+}
+
+function SkillToggle(props: { enabled: boolean; disabled?: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={props.onClick}
+      disabled={props.disabled}
+      title={props.enabled ? "Disable skill" : "Enable skill"}
+      className={`relative inline-flex h-[22px] w-[38px] items-center rounded-full transition-all duration-200 ${
+        props.enabled
+          ? "bg-[#16112B] shadow-[inset_0_0_0_1px_rgba(22,17,43,0.02)]"
+          : "bg-[#D3D8E1] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.28)]"
+      } ${props.disabled ? "cursor-not-allowed opacity-60" : ""}`}
+    >
+      <span
+        className={`block h-[14px] w-[14px] rounded-full bg-white shadow-[0_1px_2px_rgba(15,23,42,0.18)] transition-transform duration-200 ${
+          props.enabled ? "translate-x-[21px]" : "translate-x-[4px]"
+        }`}
+      />
+    </button>
   );
 }
 
@@ -203,22 +251,40 @@ function SkillCard(props: {
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-4">
-        <button
-          type="button"
+        <SkillToggle
+          enabled={props.skill.enabled}
+          disabled={props.skill.loading}
           onClick={() => props.onToggle(props.skill.id)}
-          className={props.skill.enabled ? "text-[#1A162F]" : "text-gray-300"}
-          title={props.skill.enabled ? "Disable skill" : "Enable skill"}
-        >
-          {props.skill.enabled ? <ToggleRightIcon className="h-7 w-7" /> : <ToggleLeftIcon className="h-7 w-7" />}
-        </button>
+        />
         <button
           type="button"
           onClick={() => props.onDelete(props.skill.id)}
-          className="rounded-md p-1 opacity-0 transition-opacity hover:bg-red-50 focus:opacity-100 group-hover:opacity-100"
-          title="Delete skill"
+          disabled={!props.skill.canDelete}
+          className={`rounded-md p-1 transition-opacity focus:opacity-100 group-hover:opacity-100 ${
+            props.skill.canDelete ? "opacity-0 hover:bg-red-50" : "cursor-not-allowed opacity-0"
+          }`}
+          title={props.skill.canDelete ? "Delete skill" : "Delete is not available yet"}
         >
           <img src={trashIcon} alt="Delete" className="h-[18px] w-[18px]" />
         </button>
+      </div>
+    </div>
+  );
+}
+
+function SkillCardSkeleton() {
+  return (
+    <div className="flex h-[88px] items-center justify-between rounded-xl border border-gray-100 bg-white p-4">
+      <div className="flex min-w-0 flex-1 items-center gap-4">
+        <Skeleton className="h-10 w-10 shrink-0 rounded-lg" />
+        <div className="min-w-0 flex-1 space-y-2 pr-4">
+          <Skeleton className="h-3.5 w-40 rounded-md" />
+          <Skeleton className="h-3 w-32 rounded-md" />
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-4">
+        <Skeleton className="h-[22px] w-[38px]" />
+        <Skeleton className="h-[18px] w-[18px] rounded-md" />
       </div>
     </div>
   );
@@ -384,7 +450,10 @@ function GithubImportModal(props: {
 export default function SkillPage() {
   const navigate = useNavigate();
   const dropdownRef = useRef<HTMLDivElement | null>(null);
-  const [skills, setSkills] = useState(INITIAL_SKILLS);
+  const clientRef = useRef<GatewayBrowserClient | null>(null);
+  const [skills, setSkills] = useState<SkillItemData[]>([]);
+  const [loadingSkills, setLoadingSkills] = useState(true);
+  const [skillsError, setSkillsError] = useState<string | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showGithubModal, setShowGithubModal] = useState(false);
@@ -403,6 +472,101 @@ export default function SkillPage() {
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, []);
 
+  useEffect(() => {
+    let disposed = false;
+
+    const connectGateway = async () => {
+      try {
+        const status = await window.electronAPI.gatewayStatus();
+        if (!status.running) {
+          if (!disposed) {
+            setLoadingSkills(false);
+            setSkillsError("Gateway is not running.");
+          }
+          return;
+        }
+        const connectConfig = await window.electronAPI.gatewayConnectConfig();
+        if (!connectConfig.token || !connectConfig.wsUrl) {
+          if (!disposed) {
+            setLoadingSkills(false);
+            setSkillsError("Gateway token missing in config; cannot load skills.");
+          }
+          return;
+        }
+
+        const client = new GatewayBrowserClient({
+          url: connectConfig.wsUrl,
+          token: connectConfig.token ?? undefined,
+          clientName: "openclaw-control-ui",
+          mode: "webchat",
+          instanceId: `bustly-electron-skill-${Date.now()}`,
+          onHello: () => {
+            if (disposed) {
+              return;
+            }
+            setSkillsError(null);
+            void client
+              .request<SkillStatusReport>("skills.status", {})
+              .then((report) => {
+                if (disposed) {
+                  return;
+                }
+                setSkills(
+                  report.skills.map((skill, index) => ({
+                    id: skill.skillKey || `${skill.name}-${index}`,
+                    name: skill.name,
+                    description: skill.description,
+                    icon: INITIAL_SKILLS.find((item) => item.name === skill.name)?.icon ?? LightningIcon,
+                    enabled: !skill.disabled,
+                    skillKey: skill.skillKey,
+                    source: skill.source,
+                    filePath: skill.filePath,
+                    homepage: skill.homepage,
+                    primaryEnv: skill.primaryEnv,
+                    canDelete: false,
+                  })),
+                );
+                setLoadingSkills(false);
+              })
+              .catch((error) => {
+                if (disposed) {
+                  return;
+                }
+                setSkillsError(error instanceof Error ? error.message : String(error));
+                setLoadingSkills(false);
+              });
+          },
+          onClose: ({ error }) => {
+            if (disposed) {
+              return;
+            }
+            setLoadingSkills(false);
+            if (skills.length === 0) {
+              setSkillsError(error?.message ?? "Gateway disconnected.");
+            }
+          },
+        });
+
+        clientRef.current = client;
+        client.start();
+      } catch (error) {
+        if (disposed) {
+          return;
+        }
+        setLoadingSkills(false);
+        setSkillsError(error instanceof Error ? error.message : String(error));
+      }
+    };
+
+    void connectGateway();
+
+    return () => {
+      disposed = true;
+      clientRef.current?.stop();
+      clientRef.current = null;
+    };
+  }, []);
+
   const handleAddSkill = (skill?: Partial<SkillItemData>) => {
     setSkills((previous) => [
       {
@@ -411,6 +575,7 @@ export default function SkillPage() {
         description: skill?.description ?? "A newly created skill for your workspace.",
         enabled: true,
         icon: skill?.icon ?? LightningIcon,
+        canDelete: false,
       },
       ...previous,
     ]);
@@ -495,15 +660,54 @@ export default function SkillPage() {
         </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {skillRows.length > 0 ? (
+          {loadingSkills ? (
+            <>
+              <SkillCardSkeleton />
+              <SkillCardSkeleton />
+              <SkillCardSkeleton />
+              <SkillCardSkeleton />
+            </>
+          ) : skillsError ? (
+            <div className="col-span-full rounded-xl border border-red-100 bg-red-50 py-12 text-center text-sm text-red-600">
+              {skillsError}
+            </div>
+          ) : skillRows.length > 0 ? (
             skillRows.map((skill) => (
               <SkillCard
                 key={skill.id}
                 skill={skill}
                 onToggle={(id) => {
-                  setSkills((previous) => previous.map((item) => (item.id === id ? { ...item, enabled: !item.enabled } : item)));
+                  const target = skills.find((item) => item.id === id);
+                  if (!target?.skillKey || !clientRef.current) {
+                    return;
+                  }
+                  setSkills((previous) =>
+                    previous.map((item) => (item.id === id ? { ...item, loading: true } : item)),
+                  );
+                  void clientRef.current
+                    .request("skills.update", {
+                      skillKey: target.skillKey,
+                      enabled: !target.enabled,
+                    })
+                    .then(() => {
+                      setSkills((previous) =>
+                        previous.map((item) =>
+                          item.id === id ? { ...item, enabled: !item.enabled, loading: false } : item,
+                        ),
+                      );
+                    })
+                    .catch((error) => {
+                      setSkills((previous) =>
+                        previous.map((item) => (item.id === id ? { ...item, loading: false } : item)),
+                      );
+                      setSkillsError(error instanceof Error ? error.message : String(error));
+                    });
                 }}
                 onDelete={(id) => {
+                  const target = skills.find((item) => item.id === id);
+                  if (!target?.canDelete) {
+                    return;
+                  }
                   setDeleteModal({ isOpen: true, id });
                 }}
               />
