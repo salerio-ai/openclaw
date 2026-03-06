@@ -225,6 +225,14 @@ const PRELOAD_PATH = process.env.NODE_ENV === "development"
   ? resolve(__dirname, "main/preload.js")
   : resolve(__dirname, "preload.js");
 const UPDATE_STATUS_CHANNEL = "update-status";
+const WINDOW_NATIVE_FULLSCREEN_CHANNEL = "window-native-fullscreen";
+
+function sendNativeFullscreenState(isNativeFullscreen: boolean) {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  mainWindow.webContents.send(WINDOW_NATIVE_FULLSCREEN_CHANNEL, { isNativeFullscreen });
+}
 
 function resolveUserPath(input: string, homeDir: string): string {
   const trimmed = input.trim();
@@ -1088,6 +1096,14 @@ function createWindow(): void {
     mainWindow = null;
   });
 
+  mainWindow.on("enter-full-screen", () => {
+    sendNativeFullscreenState(true);
+  });
+
+  mainWindow.on("leave-full-screen", () => {
+    sendNativeFullscreenState(false);
+  });
+
   mainWindow.on("focus", () => {
     if (!mainWindow || mainWindow.isDestroyed()) {
       return;
@@ -1105,6 +1121,7 @@ function createWindow(): void {
   });
 
   mainWindow.webContents.once("did-finish-load", () => {
+    sendNativeFullscreenState(Boolean(mainWindow?.isFullScreen()));
     flushPendingDeepLink();
   });
   flushPendingDeepLink();
@@ -1358,6 +1375,10 @@ function setupIpcHandlers(): void {
       electronVersion: process.versions.electron,
       nodeVersion: process.versions.node,
     };
+  });
+
+  ipcMain.handle("window-native-fullscreen-status", () => {
+    return { isNativeFullscreen: Boolean(mainWindow?.isFullScreen()) };
   });
 
   ipcMain.handle("updater-check", async () => {

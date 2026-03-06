@@ -150,6 +150,7 @@ interface ElectronAPI {
   gatewayStatus: () => Promise<GatewayStatus>;
   gatewayConnectConfig: () => Promise<GatewayConnectConfig>;
   getAppInfo: () => Promise<AppInfo>;
+  getNativeFullscreenStatus: () => Promise<{ isNativeFullscreen: boolean }>;
 
   // Onboarding
   bustlyLogin: () => Promise<{ success: boolean; error?: string }>;
@@ -186,6 +187,7 @@ interface ElectronAPI {
   onMainLog: (callback: (data: MainLogData) => void) => () => void;
   onBustlyLoginRefresh: (callback: () => void) => () => void;
   onUpdateStatus: (callback: (data: { event: string }) => void) => () => void;
+  onNativeFullscreenChange: (callback: (data: { isNativeFullscreen: boolean }) => void) => () => void;
   onDeepLink: (callback: (data: DeepLinkData) => void) => () => void;
 }
 

@@ -7,6 +7,8 @@ import BustlyLoginPage from "./components/Onboard/BustlyLoginPage";
 import ProviderSetupPage from "./components/Onboard/ProviderSetupPage";
 import DevPanel from "./components/DevPanel";
 import ChatPage from "./components/ChatPage/index";
+import ClientAppShell from "./components/ClientAppShell";
+import SkillPage from "./components/SkillPage";
 
 interface LogEntry {
   id: number;
@@ -354,7 +356,22 @@ function AppShell() {
           />
         }
       />
-      <Route path="/chat" element={<ChatPage />} />
+      <Route
+        path="/chat"
+        element={
+          <ClientAppShell>
+            <ChatPage />
+          </ClientAppShell>
+        }
+      />
+      <Route
+        path="/skill"
+        element={
+          <ClientAppShell>
+            <SkillPage />
+          </ClientAppShell>
+        }
+      />
       <Route
         path="/onboard"
         element={<Onboard onComplete={handleOnboardComplete} onCancel={handleOnboardCancel} />}

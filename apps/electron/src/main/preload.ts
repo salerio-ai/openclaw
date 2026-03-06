@@ -63,6 +63,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // App info
   getAppInfo: () => ipcRenderer.invoke("get-app-info"),
+  getNativeFullscreenStatus: () => ipcRenderer.invoke("window-native-fullscreen-status"),
   updaterCheck: () => ipcRenderer.invoke("updater-check"),
   updaterInstall: () => ipcRenderer.invoke("updater-install"),
   updaterStatus: () => ipcRenderer.invoke("updater-status"),
@@ -125,6 +126,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     const listener = (_event: IpcRendererEvent, data: UpdateStatusPayload) => callback(data);
     ipcRenderer.on("update-status", listener);
     return () => ipcRenderer.removeListener("update-status", listener);
+  },
+  onNativeFullscreenChange: (callback: (data: { isNativeFullscreen: boolean }) => void) => {
+    const listener = (_event: IpcRendererEvent, data: { isNativeFullscreen: boolean }) => callback(data);
+    ipcRenderer.on("window-native-fullscreen", listener);
+    return () => ipcRenderer.removeListener("window-native-fullscreen", listener);
   },
   onBustlyLoginRefresh: (callback: () => void) => {
     const listener = () => callback();
