@@ -27,6 +27,8 @@ export type TimelineNode =
       key: string;
       timestamp: number;
       mergeKey: string;
+      icon?: string;
+      label?: string;
       summary: string;
       detail: string;
       hasOutput: boolean;

@@ -528,6 +528,8 @@ function toToolNodes(
       key: `tool-node:${key}:${params.keySuffix}`,
       timestamp,
       mergeKey,
+      icon: display.icon,
+      label: display.label,
       summary,
       hasOutput,
       completed,

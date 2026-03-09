@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { GatewayBrowserClient, type GatewayEventFrame } from "../../lib/gateway-client";
 import { extractText, extractThinking } from "../../lib/chat-extract";
-import { ChatTimeline } from "./ChatTimeline";
+import { ChatTimeline, ChatTimelineThinkingIndicator } from "./ChatTimeline";
 import { collapseProcessedTurn, resolveToolDisplay, formatToolDetail } from "./utils";
 import type { TimelineNode } from "./types";
 
@@ -310,6 +310,40 @@ function parseToolBlocks(message: unknown): Array<{ toolCallId: string; name: st
   return [...calls.values()];
 }
 
+function PaperclipIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-[18px] w-[18px]">
+      <path
+        d="m21.44 11.05-8.49 8.49a5.5 5.5 0 0 1-7.78-7.78l8.84-8.83a3.5 3.5 0 0 1 4.95 4.95l-8.49 8.48a1.5 1.5 0 1 1-2.12-2.12l7.78-7.78"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ArrowUpIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-[14px] w-[14px]">
+      <path d="m12 19 0-14" strokeLinecap="round" />
+      <path d="m5 12 7-7 7 7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function StopIcon() {
+  return <div className="h-2.5 w-2.5 rounded-[1px] bg-white" />;
+}
+
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3">
+      <path d="M18 6 6 18" strokeLinecap="round" />
+      <path d="m6 6 12 12" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export default function ChatPage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -346,6 +380,8 @@ export default function ChatPage() {
     >
   >(new Map());
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const currentSessionKey = useMemo(() => {
     const searchParams = new URLSearchParams(location.search);
     return searchParams.get("session") ?? DEFAULT_SESSION_KEY;
@@ -1140,6 +1176,15 @@ export default function ChatPage() {
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [timeline]);
 
+  useEffect(() => {
+    const textarea = composerRef.current;
+    if (!textarea) {
+      return;
+    }
+    textarea.style.height = "0px";
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
+  }, [draft]);
+
   const handleStartGateway = useCallback(async () => {
     setError(null);
     const result = await window.electronAPI.gatewayStart();
@@ -1338,6 +1383,8 @@ export default function ChatPage() {
         key: item.id,
         timestamp: item.timestamp,
         mergeKey: item.toolCallId,
+        icon: display.icon,
+        label: display.label,
         summary,
         detail: detailText,
         hasOutput: !!item.output,
@@ -1357,126 +1404,183 @@ export default function ChatPage() {
   }, [sessionUsage.contextTokens, sessionUsage.remainingTokens]);
 
   return (
-    <div className="chat-page-shell">
-      <div className="chat-page-header">
-        <div className="chat-page-header-left">
-          <h1 className="chat-page-title">Chat</h1>
-          <p className="chat-page-subtitle">
-            Session: {currentSessionKey}
-            {" · "}
-            {contextUsageLabel}
-          </p>
-        </div>
-        <div className="chat-page-header-right">
-          <span className={`chat-page-badge ${connected ? "is-connected" : ""}`}>
-            {connected ? "Connected" : "Disconnected"}
-          </span>
-          <span className="chat-page-port">Port: {gateway?.port ?? "-"}</span>
-          {!gateway?.running ? (
-            <button
-              type="button"
-              className="chat-page-start-btn"
-              onClick={() => {
-                void handleStartGateway();
-              }}
-            >
-              Start Gateway
-            </button>
-          ) : null}
-        </div>
-      </div>
-
-      {error ? <div className="chat-page-error">{error}</div> : null}
-
-      <div ref={scrollRef} className="chat-page-timeline">
-        {loading ? (
-          <div className="chat-flow-item chat-flow-item--text">Loading chat history...</div>
-        ) : null}
-
-        <div className="chat-flow-list">
-          <ChatTimeline timeline={processedTimeline} activeRunningToolKey={activeRunningToolKey} />
-          {compactingRunId ? (
-            <div className="chat-flow-item chat-flow-item--thinking-live">
-              <p className="chat-flow-thinking-live">Compacting conversation...</p>
-            </div>
-          ) : null}
-          {activeRunId && !compactingRunId && !hasRecentTextStream && runningTools === 0 ? (
-            <div className="chat-flow-item chat-flow-item--thinking-live">
-              <p className="chat-flow-thinking-live">Thinking...</p>
-            </div>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="chat-page-footer">
-        {attachments.length > 0 ? (
-          <div className="chat-attachments">
-            {attachments.map((att) => (
-              <div key={att.id} className="chat-attachment">
-                <img src={att.dataUrl} alt="Attachment" className="chat-attachment__img" />
-                <button
-                  type="button"
-                  className="chat-attachment__remove"
-                  onClick={() => {
-                    setAttachments((prev) => prev.filter((p) => p.id !== att.id));
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-            ))}
+    <div className="flex h-full min-h-0 flex-col bg-white text-gray-900">
+      <div className="border-b border-gray-100 bg-white">
+        <div className="mx-auto flex w-full max-w-3xl items-center justify-between px-6 py-4">
+          <div className="min-w-0">
+            <h1 className="text-[20px] font-semibold tracking-tight text-gray-900">Chat</h1>
+            <p className="mt-1 truncate text-sm text-gray-500">
+              Session: {currentSessionKey}
+              {" · "}
+              {contextUsageLabel}
+            </p>
           </div>
-        ) : null}
-        <div className="chat-compose-row">
-          <button
-            type="button"
-            className="chat-btn chat-btn--secondary"
-            disabled={sending || Boolean(activeRunId)}
-            onClick={() => {
-              void handleNewChannel();
-            }}
-          >
-            New channel
-          </button>
-          <textarea
-            className="chat-compose-input"
-            rows={1}
-            placeholder={
-              connected
-                ? "Message (Enter to send, Shift+Enter for new line)"
-                : "Connect to gateway to chat..."
-            }
-            disabled={!connected || sending}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                void handleSend();
-              }
-            }}
-            onPaste={(e) => {
-              const items = e.clipboardData.items;
-              void handleAttachmentFiles(items as unknown as FileList);
-            }}
-          />
-          <div className="chat-compose-actions">
-            {activeRunId ? (
-              <button type="button" className="chat-btn chat-btn--stop" onClick={handleAbort}>
-                Stop
-              </button>
-            ) : (
+          <div className="flex items-center gap-2">
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                connected ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"
+              }`}
+            >
+              {connected ? "Connected" : "Disconnected"}
+            </span>
+            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-500">
+              Port {gateway?.port ?? "-"}
+            </span>
+            {!gateway?.running ? (
               <button
                 type="button"
-                className="chat-btn chat-btn--send"
-                disabled={!connected || sending || (!draft.trim() && attachments.length === 0)}
+                className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 shadow-sm transition-all hover:bg-gray-50 hover:shadow-md"
                 onClick={() => {
-                  void handleSend();
+                  void handleStartGateway();
                 }}
               >
-                Send
+                Start Gateway
               </button>
-            )}
+            ) : null}
+          </div>
+        </div>
+      </div>
+
+      {error ? (
+        <div className="mx-auto mt-4 w-full max-w-3xl rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+          {error}
+        </div>
+      ) : null}
+
+      <div className="relative flex-1 overflow-hidden">
+        <div ref={scrollRef} className="chat-page-timeline h-full">
+          <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 pt-8 pb-44">
+            {loading ? (
+              <div className="rounded-2xl border border-gray-100 bg-white px-4 py-3 text-sm text-gray-500">
+                Loading chat history...
+              </div>
+            ) : null}
+
+            <ChatTimeline timeline={processedTimeline} activeRunningToolKey={activeRunningToolKey} />
+            {compactingRunId ? (
+              <div className="py-2">
+                <ChatTimelineThinkingIndicator label="Compacting conversation" />
+              </div>
+            ) : null}
+            {activeRunId && !compactingRunId && !hasRecentTextStream && runningTools === 0 ? (
+              <div className="py-2">
+                <ChatTimelineThinkingIndicator label="Thinking" />
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20">
+          <div className="h-8 bg-gradient-to-t from-white via-white/80 to-transparent" />
+          <div className="bg-white px-6 pb-8 pointer-events-auto">
+            <div className="mx-auto w-full max-w-3xl">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  void handleAttachmentFiles(e.target.files);
+                  e.currentTarget.value = "";
+                }}
+              />
+              <div className="group relative rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition-all hover:border-gray-300 focus-within:border-gray-400 focus-within:shadow-md">
+                {attachments.length > 0 ? (
+                  <div className="relative z-10 mb-2 flex flex-wrap gap-2">
+                    {attachments.map((att) => (
+                      <div
+                        key={att.id}
+                        className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-100 py-1 pl-2 pr-1 text-xs font-medium text-gray-900"
+                      >
+                        <img src={att.dataUrl} alt="" className="h-5 w-5 rounded object-cover" />
+                        <span className="max-w-[120px] truncate">{att.name}</span>
+                        <button
+                          type="button"
+                          className="rounded p-0.5 text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-900"
+                          onClick={() => {
+                            setAttachments((prev) => prev.filter((p) => p.id !== att.id));
+                          }}
+                        >
+                          <CloseIcon />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                <textarea
+                  ref={composerRef}
+                  rows={1}
+                  value={draft}
+                  disabled={!connected || sending}
+                  placeholder={
+                    connected ? "Ask for follow-up changes..." : "Connect to gateway to chat..."
+                  }
+                  className="relative z-10 min-h-[44px] max-h-[200px] w-full resize-none border-none bg-transparent px-1 text-base font-normal text-gray-900 outline-none placeholder:text-gray-400 disabled:cursor-not-allowed disabled:text-gray-400"
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      void handleSend();
+                    }
+                  }}
+                  onPaste={(e) => {
+                    const items = e.clipboardData.items;
+                    void handleAttachmentFiles(items as unknown as FileList);
+                  }}
+                />
+
+                <div className="mt-1 flex items-center justify-between pt-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-all duration-200 hover:bg-gray-100 hover:text-gray-900 active:bg-gray-200"
+                      onClick={() => {
+                        fileInputRef.current?.click();
+                      }}
+                    >
+                      <PaperclipIcon />
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-lg px-3 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40"
+                      disabled={sending || Boolean(activeRunId)}
+                      onClick={() => {
+                        void handleNewChannel();
+                      }}
+                    >
+                      New channel
+                    </button>
+                  </div>
+
+                  {activeRunId ? (
+                    <button
+                      type="button"
+                      className="flex h-7 w-7 items-center justify-center rounded-full bg-text-main text-white shadow-sm transition-all active:scale-95 hover:bg-text-main/90"
+                      onClick={handleAbort}
+                    >
+                      <StopIcon />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className={`flex h-7 w-7 items-center justify-center rounded-lg shadow-sm transition-all active:scale-95 ${
+                        connected && !sending && (draft.trim() || attachments.length > 0)
+                          ? "bg-text-main text-white hover:bg-text-main/90 hover:shadow-md"
+                          : "cursor-not-allowed bg-gray-100 text-gray-300"
+                      }`}
+                      disabled={!connected || sending || (!draft.trim() && attachments.length === 0)}
+                      onClick={() => {
+                        void handleSend();
+                      }}
+                    >
+                      <ArrowUpIcon />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
