@@ -6,7 +6,7 @@
 import { existsSync, readFileSync, writeFileSync, unlinkSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import * as os from "node:os";
-import type { BustlyOAuthState, BustlySearchDataConfig } from "../../../../src/config/types.base.js";
+import type { BustlyOAuthState, BustlySearchDataConfig } from "./bustly-types.js";
 import { verifySupabaseAuth } from "./api/bustly.js";
 
 function resolveUserPath(input: string, homeDir: string): string {
@@ -124,24 +124,14 @@ export async function getBustlyUserInfo(): Promise<BustlyOAuthState["user"] | nu
  */
 export async function verifyBustlyLoginStatus(): Promise<boolean> {
   const state = readBustlyOAuthState();
-  const supabaseUrl = state?.bustlySearchData?.SEARCH_DATA_SUPABASE_URL?.trim() ?? "";
-  const supabaseAnonKey = state?.bustlySearchData?.SEARCH_DATA_SUPABASE_ANON_KEY?.trim() ?? "";
   const accessToken = state?.bustlySearchData?.SEARCH_DATA_SUPABASE_ACCESS_TOKEN?.trim() ?? "";
   if (!accessToken) {
     console.log("[BustlyOAuth] Verify skipped (no access token)");
     return false;
   }
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.warn("[BustlyOAuth] Missing Supabase URL or anon key; skipping verify check");
-    return true;
-  }
 
   try {
-    const verifyResult = await verifySupabaseAuth({
-      accessToken,
-      supabaseUrl,
-      supabaseAnonKey,
-    });
+    const verifyResult = await verifySupabaseAuth();
 
     if (verifyResult.status === 400 || verifyResult.status === 401 || verifyResult.status === 403) {
       console.warn(

@@ -1523,6 +1523,9 @@ function setupIpcHandlers(): void {
     try {
       console.log("[Bustly Logout] Logging out...");
       BustlyOAuth.logoutBustly();
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("bustly-login-refresh");
+      }
       console.log("[Bustly Logout] Logged out successfully");
 
       return { success: true };

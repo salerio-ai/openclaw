@@ -445,6 +445,8 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
   const [isWindowFullscreen, setIsWindowFullscreen] = useState(false);
   const [recentTasks, setRecentTasks] = useState<SidebarTask[]>([]);
   const [tasksLoading, setTasksLoading] = useState(true);
+  const [bustlyUserInfo, setBustlyUserInfo] = useState<BustlyUserInfo | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
@@ -589,6 +591,75 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
       clientRef.current = null;
     };
   }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    let disposed = false;
+
+    const loadBustlyUserInfo = async () => {
+      try {
+        const loggedIn = await window.electronAPI.bustlyIsLoggedIn();
+        if (!loggedIn) {
+          if (!disposed) {
+            setBustlyUserInfo(null);
+          }
+          return;
+        }
+        const userInfo = await window.electronAPI.bustlyGetUserInfo();
+        if (!disposed) {
+          setBustlyUserInfo(userInfo);
+        }
+      } catch {
+        if (!disposed) {
+          setBustlyUserInfo(null);
+        }
+      }
+    };
+
+    void loadBustlyUserInfo();
+    const unsubscribe = window.electronAPI.onBustlyLoginRefresh(() => {
+      void loadBustlyUserInfo();
+    });
+
+    return () => {
+      disposed = true;
+      unsubscribe();
+    };
+  }, []);
+
+  const userName = bustlyUserInfo?.userName?.trim() || "User";
+  const userEmail = bustlyUserInfo?.userEmail?.trim() || "user@example.com";
+  const avatarSeed = bustlyUserInfo?.userEmail?.trim() || bustlyUserInfo?.userName?.trim() || "User";
+
+  const handleOpenSettings = async () => {
+    setIsUserMenuOpen(false);
+    await window.electronAPI.bustlyOpenSettings();
+  };
+
+  const handleOpenHomepage = () => {
+    setIsUserMenuOpen(false);
+    void navigate("/chat");
+  };
+
+  const handleSignOut = async () => {
+    if (isLoggingOut) {
+      return;
+    }
+    setIsLoggingOut(true);
+    try {
+      const result = await window.electronAPI.bustlyLogout();
+      if (!result.success) {
+        return;
+      }
+      setBustlyUserInfo(null);
+      setIsUserMenuOpen(false);
+      const openResult = await window.electronAPI.bustlyOpenLogin();
+      if (!openResult.success) {
+        void navigate("/bustly-login", { replace: true });
+      }
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
 
   return (
     <div
@@ -736,26 +807,34 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
         {isUserMenuOpen ? (
           <div className={`absolute z-50 ${props.collapsed ? "bottom-full left-0 mb-2 ml-2 w-56" : "bottom-full left-0 mb-2 w-full px-4"}`}>
             <div className="space-y-0.5 rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg animate-in fade-in zoom-in-95 duration-200">
-              <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100">
+              <button
+                type="button"
+                onClick={() => {
+                  void handleOpenSettings();
+                }}
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100"
+              >
                 <GearIcon className="h-4 w-4 text-gray-500" />
                 Settings
               </button>
-              <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100">
+              <button
+                type="button"
+                onClick={handleOpenHomepage}
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100"
+              >
                 <HouseIcon className="h-4 w-4 text-gray-500" />
                 <span className="flex-1">Homepage</span>
                 <ArrowUpRightIcon className="h-4 w-4 text-gray-400" />
               </button>
               <div className="mx-2 my-1 h-px bg-gray-100" />
-              <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-500 transition-colors hover:bg-gray-100 hover:text-slate-900">
-                <PlayIcon className="h-4 w-4" />
-                Onboarding Test
-              </button>
-              <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-500 transition-colors hover:bg-gray-100 hover:text-slate-900">
-                <PlayIcon className="h-4 w-4" />
-                Bustly AI Test
-              </button>
-              <div className="mx-2 my-1 h-px bg-gray-100" />
-              <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium text-red-600 transition-colors hover:bg-red-50">
+              <button
+                type="button"
+                onClick={() => {
+                  void handleSignOut();
+                }}
+                disabled={isLoggingOut}
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
                 <SignOutIcon className="h-4 w-4 shrink-0" />
                 <span className="truncate">Sign out</span>
               </button>
@@ -780,14 +859,14 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
           }}
         >
           <img
-            src="https://ui-avatars.com/api/?name=User&background=1A162F&color=fff"
+            src={`https://ui-avatars.com/api/?name=${encodeURIComponent(avatarSeed)}&background=1A162F&color=fff`}
             alt="Profile"
             className="h-8 w-8 rounded-full border border-gray-200 bg-white"
           />
           {!props.collapsed ? (
             <div className="min-w-0 flex-1 text-left">
-              <p className="truncate text-sm font-semibold text-slate-900">User</p>
-              <p className="truncate text-xs text-slate-500">user@example.com</p>
+              <p className="truncate text-sm font-semibold text-slate-900">{userName}</p>
+              <p className="truncate text-xs text-slate-500">{userEmail}</p>
             </div>
           ) : null}
         </div>
