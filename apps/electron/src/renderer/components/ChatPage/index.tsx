@@ -48,6 +48,7 @@ type ToolItem = {
   kind: "tool";
   id: string;
   toolCallId: string;
+  runId?: string;
   sortSeq: number;
   timestamp: number;
   name: string;
@@ -490,7 +491,6 @@ export default function ChatPage() {
     contextTokens: null,
     remainingTokens: null,
   });
-  const [streamUpdatedAt, setStreamUpdatedAt] = useState<number | null>(null);
   const [modelLevelOpen, setModelLevelOpen] = useState(false);
   const [modelMenuPos, setModelMenuPos] = useState<{
     top: number;
@@ -686,17 +686,36 @@ export default function ChatPage() {
     });
   }, []);
 
-  const finalizeRunState = useCallback((runId: string | null) => {
+  const settleToolsForRun = useCallback((runId: string | null, status: ToolStatus) => {
+    if (!runId) {
+      return;
+    }
+    setTimeline((prev) => {
+      let changed = false;
+      const next = prev.map((item) => {
+        if (item.kind !== "tool" || item.runId !== runId || item.status !== "running") {
+          return item;
+        }
+        changed = true;
+        return { ...item, status };
+      });
+      return changed ? next : prev;
+    });
+  }, []);
+
+  const finalizeRunState = useCallback((runId: string | null, toolStatus: ToolStatus = "completed") => {
     markRunFinished(runId);
+    settleToolsForRun(runId, toolStatus);
     setActiveRunId((prev) => (prev === runId ? null : prev));
     setCompactingRunId((prev) => (prev === runId ? null : prev));
     if (runId) {
       runSeqBaseRef.current.delete(runId);
     }
     streamSegmentsRef.current.delete(runId ?? "__unknown__");
-  }, [markRunFinished]);
+  }, [markRunFinished, settleToolsForRun]);
 
   const upsertTool = useCallback((params: {
+    runId?: string;
     toolCallId: string;
     seq: number;
     timestamp: number;
@@ -731,6 +750,7 @@ export default function ChatPage() {
           kind: "tool",
           id: key,
           toolCallId: params.toolCallId,
+          runId: params.runId,
           sortSeq: params.seq,
           timestamp: params.timestamp,
           name: params.name,
@@ -750,6 +770,7 @@ export default function ChatPage() {
           : current.status;
       next[idx] = {
         ...current,
+        runId: params.runId ?? current.runId,
         name: params.name || current.name,
         args: params.phase === "start" ? params.args ?? current.args : current.args,
         output: params.phase === "result" ? (params.output ?? current.output) : current.output,
@@ -819,7 +840,6 @@ export default function ChatPage() {
       contextTokens: null,
       remainingTokens: null,
     });
-    setStreamUpdatedAt(null);
     setError(null);
     seqCounterRef.current = 1_000_000_000;
     streamSegmentsRef.current.clear();
@@ -903,18 +923,24 @@ export default function ChatPage() {
 
       const tools = parseToolBlocks(message);
       for (const tool of tools) {
+        const toolStatus: ToolStatus = tool.output
+          ? "completed"
+          : stopReason === "aborted" || stopReason === "error"
+            ? "error"
+            : "running";
         const existing = toolsByCallId.get(tool.toolCallId);
         if (!existing) {
           toolsByCallId.set(tool.toolCallId, {
             kind: "tool",
             id: `tool:${tool.toolCallId}`,
             toolCallId: tool.toolCallId,
+            runId: undefined,
             sortSeq: baseSeq + 0.02,
             timestamp,
             name: tool.name,
             args: tool.args,
             output: tool.output,
-            status: tool.output ? "completed" : "running",
+            status: toolStatus,
           });
           continue;
         }
@@ -925,7 +951,12 @@ export default function ChatPage() {
           name: tool.name || existing.name,
           args: tool.args ?? existing.args,
           output: tool.output ?? existing.output,
-          status: tool.output ? "completed" : existing.status,
+          status:
+            tool.output
+              ? "completed"
+              : existing.status === "running"
+                ? toolStatus
+                : existing.status,
         });
       }
     }
@@ -997,7 +1028,7 @@ export default function ChatPage() {
               return;
             }
             if (terminalState === "final") {
-              finalizeRunState(runId);
+              finalizeRunState(runId, "completed");
               if (!payload.message) {
                 return;
               }
@@ -1036,7 +1067,7 @@ export default function ChatPage() {
               return;
             }
             if (terminalState === "aborted" || terminalState === "error") {
-              finalizeRunState(runId);
+              finalizeRunState(runId, "error");
               const statusText =
                 terminalState === "aborted"
                   ? "Request aborted."
@@ -1148,7 +1179,6 @@ export default function ChatPage() {
                 segmentState.assistantClosed = true;
                 streamSegmentsRef.current.set(runKey, segmentState);
               }
-              setStreamUpdatedAt(Date.now());
               return;
             }
 
@@ -1183,6 +1213,7 @@ export default function ChatPage() {
                 return;
               }
               upsertTool({
+                runId: runId ?? undefined,
                 toolCallId,
                 seq,
                 timestamp: ts,
@@ -1209,7 +1240,7 @@ export default function ChatPage() {
 
             const terminalState = resolveAgentTerminalState({ stream, data });
             if (terminalState) {
-              finalizeRunState(runId);
+              finalizeRunState(runId, terminalState === "final" ? "completed" : "error");
               if (terminalState === "final") {
                 markLastAssistantAsFinal(runId);
               }
@@ -1418,14 +1449,50 @@ export default function ChatPage() {
       return;
     }
     try {
-      await clientRef.current.request("chat.abort", {
+      const res = await clientRef.current.request<{ aborted?: boolean; runIds?: string[] }>("chat.abort", {
         sessionKey: currentSessionKey,
         runId: activeRunId ?? undefined,
       });
+      const abortedRunIds = Array.isArray(res.runIds)
+        ? res.runIds.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
+        : activeRunId
+          ? [activeRunId]
+          : [];
+      if (res.aborted && abortedRunIds.length > 0) {
+        for (const runId of abortedRunIds) {
+          finalizeRunState(runId, "error");
+        }
+        setTimeline((prev) => {
+          const existing = new Set(
+            prev
+              .filter((item): item is TextItem => item.kind === "text")
+              .map((item) => `${item.runId ?? ""}:${item.text}`),
+          );
+          const next = [...prev];
+          for (const runId of abortedRunIds) {
+            const text = "Request aborted.";
+            const dedupeKey = `${runId}:${text}`;
+            if (existing.has(dedupeKey)) {
+              continue;
+            }
+            next.push({
+              kind: "text",
+              id: nextId("aborted-local"),
+              sortSeq: seqCounterRef.current++,
+              timestamp: Date.now(),
+              role: "system",
+              text,
+              runId,
+              streaming: false,
+            });
+          }
+          return next.toSorted(compareTimeline);
+        });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [activeRunId, connected, currentSessionKey]);
+  }, [activeRunId, connected, currentSessionKey, finalizeRunState]);
 
   const handleNewChannel = useCallback(async () => {
     const nextSessionKey = buildChannelSessionKey(currentSessionKey);
@@ -1512,13 +1579,6 @@ export default function ChatPage() {
     () => timeline.filter((item) => item.kind === "tool" && item.status === "running").length,
     [timeline],
   );
-
-  const hasRecentTextStream = useMemo(() => {
-    if (!streamUpdatedAt) {
-      return false;
-    }
-    return Date.now() - streamUpdatedAt < 700;
-  }, [streamUpdatedAt, timeline.length]);
 
   const activeRunningToolId = useMemo(() => {
     let latest: ToolItem | null = null;
@@ -1734,7 +1794,7 @@ export default function ChatPage() {
                 <ChatTimelineThinkingIndicator label="Compacting conversation" />
               </div>
             ) : null}
-            {activeRunId && !compactingRunId && !hasRecentTextStream && runningTools === 0 ? (
+            {(sending || activeRunId) && !compactingRunId && runningTools === 0 ? (
               <div className="py-2">
                 <ChatTimelineThinkingIndicator label="Thinking" />
               </div>
