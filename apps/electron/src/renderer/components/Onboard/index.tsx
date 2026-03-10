@@ -1,7 +1,6 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import BustlyLoginPage from "./BustlyLoginPage";
 import WhatsAppStep from "./WhatsAppStep";
-import { useProviderSetup } from "./useProviderSetup";
 
 interface OnboardProps {
   onComplete: () => void;
@@ -10,49 +9,37 @@ interface OnboardProps {
 
 type Step = "bustly-login" | "connect-whatsapp";
 
-const BETA_AUTO_BOOTSTRAP = {
-  providerId: "openrouter",
-  // model: "openrouter/anthropic/claude-opus-4.6",
-  model: "openrouter/minimax/minimax-m2.5",
-} as const;
-
 export default function Onboard({ onComplete, onCancel: _onCancel }: OnboardProps) {
   const [step, setStep] = useState<Step>("bustly-login");
-  const [betaOpenRouterApiKey, setBetaOpenRouterApiKey] = useState("");
 
-  useEffect(() => {
-    if (!window.electronAPI?.onboardBetaOpenRouterApiKey) {
-      return;
-    }
+  const handleLoginContinue = useCallback(() => {
     void (async () => {
+      let bootstrapOk = false;
       try {
-        const apiKey = await window.electronAPI.onboardBetaOpenRouterApiKey();
-        setBetaOpenRouterApiKey(apiKey.trim());
+        const electronAPI = window.electronAPI;
+        if (electronAPI?.onboardAuthOAuth && electronAPI?.onboardComplete) {
+          const authResult = await electronAPI.onboardAuthOAuth("bustly");
+          if (!authResult.success) {
+            throw new Error(authResult.error || "Bustly provider authentication failed");
+          }
+          const completeResult = await electronAPI.onboardComplete(authResult, {
+            model: "bustly/chat.lite",
+            openControlUi: false,
+          });
+          if (!completeResult.success) {
+            throw new Error(completeResult.error || "Failed to configure bustly provider");
+          }
+        }
+        bootstrapOk = true;
       } catch (error) {
-        console.error("Failed to load beta OpenRouter API key:", error);
+        console.error("Bustly provider bootstrap failed:", error);
+      } finally {
+        if (bootstrapOk) {
+          setStep("connect-whatsapp");
+        }
       }
     })();
   }, []);
-
-  // Start auto bootstrap as soon as the app has the beta key (no login-step gating).
-  const autoBootstrap = betaOpenRouterApiKey
-    ? {
-        ...BETA_AUTO_BOOTSTRAP,
-        apiKey: betaOpenRouterApiKey,
-      }
-    : undefined;
-
-  const providerSetup = useProviderSetup({
-    skipModelSelection: true,
-    autoBootstrap,
-  });
-
-  useEffect(() => {
-    if (!providerSetup.error) {
-      return;
-    }
-    console.error("Auto bootstrap failed:", providerSetup.error);
-  }, [providerSetup.error]);
 
   const handleWhatsAppDone = useCallback(async () => {
     if (window.electronAPI?.onboardOpenControlUi) {
@@ -72,7 +59,7 @@ export default function Onboard({ onComplete, onCancel: _onCancel }: OnboardProp
   if (step === "bustly-login") {
     return (
       <BustlyLoginPage
-        onContinue={() => setStep("connect-whatsapp")}
+        onContinue={handleLoginContinue}
         autoContinue
         showContinueWhenLoggedIn={false}
       />

@@ -417,6 +417,13 @@ export function handleOAuthPromptResponse(value: string) {
 
 // Provider configurations
 const PROVIDERS = {
+  bustly: {
+    id: "bustly",
+    label: "Bustly",
+    authMethods: [{ id: "oauth", label: "Bustly Login", kind: "oauth" as AuthMethodKind }],
+    defaultModel: "bustly/chat.lite",
+    envKey: "BUSTLY_USER_ACCESS_TOKEN",
+  },
   anthropic: {
     id: "anthropic",
     label: "Anthropic",
@@ -505,7 +512,7 @@ export interface AuthResult {
  * List available providers
  */
 export function listProviders(): ProviderConfig[] {
-  return Object.values(PROVIDERS);
+  return [PROVIDERS.bustly];
 }
 
 /**
@@ -602,6 +609,30 @@ export async function authenticateWithOAuth(params: {
   provider: ProviderId;
   onPromptRequired?: (message: string) => void;
 }): Promise<AuthResult> {
+  if (params.provider === "bustly") {
+    const oauthState = BustlyOAuth.readBustlyOAuthState();
+    const accessToken = oauthState?.user?.userAccessToken?.trim() ?? "";
+    if (!accessToken) {
+      return {
+        success: false,
+        provider: "bustly",
+        method: "oauth",
+        error: "Bustly login required. Please sign in first.",
+      };
+    }
+    return {
+      success: true,
+      provider: "bustly",
+      method: "oauth",
+      credential: {
+        type: "token",
+        provider: "bustly",
+        token: accessToken,
+      },
+      defaultModel: "bustly/chat.lite",
+    };
+  }
+
   if (params.provider === "openai") {
     try {
       const creds = await loginOpenAICodex({

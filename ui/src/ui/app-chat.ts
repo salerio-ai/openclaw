@@ -7,6 +7,7 @@ import { abortChatRun, loadChatHistory, sendChatMessage } from "./controllers/ch
 import { loadSessions } from "./controllers/sessions.ts";
 import type { GatewayHelloOk } from "./gateway.ts";
 import { normalizeBasePath } from "./navigation.ts";
+import type { SessionsListResult } from "./types.ts";
 import type { ChatAttachment, ChatQueueItem } from "./ui-types.ts";
 import { generateUUID } from "./uuid.ts";
 
@@ -20,7 +21,10 @@ export type ChatHost = {
   sessionKey: string;
   basePath: string;
   hello: GatewayHelloOk | null;
+  lastError: string | null;
   chatAvatarUrl: string | null;
+  sessionsResult: SessionsListResult | null;
+  sessionsError: string | null;
   refreshSessionsAfterChat: Set<string>;
 };
 

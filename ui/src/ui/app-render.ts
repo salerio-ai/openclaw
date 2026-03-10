@@ -151,11 +151,23 @@ function renderBustlyUserSection(state: AppViewState) {
     handleBustlyLogout: () => void;
   };
 
+  const providerSetupButton = html`
+    <button
+      class="bustly-provider-setup-btn"
+      @click=${bustlyState.handleConfigureAiOpen}
+      title="Open provider setup"
+    >
+      Provider Setup
+    </button>
+  `;
+
   // If logged in, show avatar with dropdown
   if (bustlyState.bustlyIsLoggedIn && bustlyState.bustlyUserInfo) {
     const email = bustlyState.bustlyUserInfo.userEmail || "";
     return html`
-      <div class="bustly-user-section ${bustlyState.bustlyUserMenuOpen ? "bustly-user-section--menu-open" : ""}">
+      <div class="bustly-user-controls">
+        ${providerSetupButton}
+        <div class="bustly-user-section ${bustlyState.bustlyUserMenuOpen ? "bustly-user-section--menu-open" : ""}">
         <button
           class="bustly-user-avatar-btn"
           @click=${bustlyState.handleBustlyUserMenuToggle}
@@ -180,6 +192,12 @@ function renderBustlyUserSection(state: AppViewState) {
             <div class="bustly-user-dropdown__divider"></div>
             <button
               class="bustly-user-dropdown__settings"
+              @click=${bustlyState.handleConfigureAiOpen}
+            >
+              Provider Setup
+            </button>
+            <button
+              class="bustly-user-dropdown__settings"
               @click=${bustlyState.handleBustlyOpenSettings}
             >
               Settings
@@ -200,6 +218,7 @@ function renderBustlyUserSection(state: AppViewState) {
         `
             : nothing
         }
+        </div>
       </div>
     `;
   }
@@ -207,20 +226,26 @@ function renderBustlyUserSection(state: AppViewState) {
   // Login in progress
   if (bustlyState.oauthLoginPending) {
     return html`
-      <button class="bustly-login-btn bustly-login-btn--pending" disabled>Logging in...</button>
+      <div class="bustly-user-controls">
+        ${providerSetupButton}
+        <button class="bustly-login-btn bustly-login-btn--pending" disabled>Logging in...</button>
+      </div>
     `;
   }
 
   // Not logged in - show login button
   const loginError = bustlyState.oauthLoginError?.trim() || "";
   return html`
-    <button
-      class="bustly-login-btn ${loginError ? "bustly-login-btn--error" : ""}"
-      @click=${bustlyState.handleBustlyLogin}
-      title=${loginError || "Log in to Bustly"}
-    >
-      ${loginError ? "Log in (failed)" : "Log in →"}
-    </button>
+    <div class="bustly-user-controls">
+      ${providerSetupButton}
+      <button
+        class="bustly-login-btn ${loginError ? "bustly-login-btn--error" : ""}"
+        @click=${bustlyState.handleBustlyLogin}
+        title=${loginError || "Log in to Bustly"}
+      >
+        ${loginError ? "Log in (failed)" : "Log in →"}
+      </button>
+    </div>
   `;
 }
 

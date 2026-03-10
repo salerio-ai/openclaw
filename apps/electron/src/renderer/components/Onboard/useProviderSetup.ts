@@ -274,6 +274,13 @@ export function useProviderSetup(options: ProviderSetupOptions) {
     onConfigured?.();
   }, [authResult, manualModel, onConfigured, selectedModel]);
 
+  useEffect(() => {
+    if (providers.length !== 1 || selectedProvider || loading) {
+      return;
+    }
+    handleProviderSelect(providers[0]);
+  }, [handleProviderSelect, loading, providers, selectedProvider]);
+
   return {
     providers,
     selectedProvider,

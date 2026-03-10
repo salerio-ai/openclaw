@@ -246,4 +246,16 @@ describe("chat view", () => {
 
     expect(container.textContent).toContain("Error: Unhandled stop reason: error");
   });
+
+  it("does not render route/model selector in chat composer", () => {
+    const container = document.createElement("div");
+    render(renderChat(createProps()), container);
+
+    const selects = Array.from(container.querySelectorAll("select"));
+    const hasRouteSelectorText = (container.textContent ?? "").includes(
+      "Fast & efficient for daily tasks.",
+    );
+    expect(selects.length).toBe(0);
+    expect(hasRouteSelectorText).toBe(false);
+  });
 });

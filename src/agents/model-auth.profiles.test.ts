@@ -1,8 +1,9 @@
-import type { Api, Model } from "@mariozechner/pi-ai";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import type { Api, Model } from "@mariozechner/pi-ai";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import * as BustlyOAuth from "../bustly-oauth.js";
 import { withEnvAsync } from "../test-utils/env.js";
 import { ensureAuthProfileStore } from "./auth-profiles.js";
 import { getApiKeyForModel, resolveApiKeyForProvider, resolveEnvApiKey } from "./model-auth.js";
@@ -46,6 +47,10 @@ async function expectBedrockAuthSource(params: {
     expect(resolved.source).toContain(params.expectedSource);
   });
 }
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("getApiKeyForModel", () => {
   it("migrates legacy oauth.json into auth-profiles.json", async () => {
@@ -282,6 +287,90 @@ describe("getApiKeyForModel", () => {
       expect(voyage.apiKey).toBe("voyage-test-key");
       expect(voyage.source).toContain("VOYAGE_API_KEY");
     });
+  });
+
+  it("prefers bustlyOauth.json token over auth-profiles for bustly", async () => {
+    vi.spyOn(BustlyOAuth, "readBustlyOAuthState").mockReturnValue({
+      deviceId: "device",
+      callbackPort: 17900,
+      user: {
+        userId: "u1",
+        userName: "User",
+        userEmail: "user@example.com",
+        userAccessToken: "oauth-token",
+        workspaceId: "w1",
+        skills: [],
+      },
+    });
+    const resolved = await resolveApiKeyForProvider({
+      provider: "bustly",
+      store: {
+        version: 1,
+        profiles: {
+          "bustly:default": {
+            type: "token",
+            provider: "bustly",
+            token: "profile-token",
+          },
+        },
+      },
+    });
+    expect(resolved.mode).toBe("token");
+    expect(resolved.apiKey).toBe("oauth-token");
+    expect(resolved.source).toBe("bustlyOauth.json:user.userAccessToken");
+  });
+
+  it("throws when bustlyOauth.json token is missing (no auth-profiles fallback)", async () => {
+    vi.spyOn(BustlyOAuth, "readBustlyOAuthState").mockReturnValue({
+      deviceId: "device",
+      callbackPort: 17900,
+      user: {
+        userId: "u1",
+        userName: "User",
+        userEmail: "user@example.com",
+        userAccessToken: "",
+        workspaceId: "w1",
+        skills: [],
+      },
+    });
+    await expect(
+      resolveApiKeyForProvider({
+        provider: "bustly",
+        store: {
+          version: 1,
+          profiles: {
+            "bustly:default": {
+              type: "token",
+              provider: "bustly",
+              token: "profile-token",
+            },
+          },
+        },
+      }),
+    ).rejects.toThrow(/No Bustly token found/);
+  });
+
+  it("uses bustlyOauth token even when explicit profileId has no credential", async () => {
+    vi.spyOn(BustlyOAuth, "readBustlyOAuthState").mockReturnValue({
+      deviceId: "device",
+      callbackPort: 17900,
+      user: {
+        userId: "u1",
+        userName: "User",
+        userEmail: "user@example.com",
+        userAccessToken: "oauth-token",
+        workspaceId: "w1",
+        skills: [],
+      },
+    });
+    const resolved = await resolveApiKeyForProvider({
+      provider: "bustly",
+      profileId: "bustly:default",
+      store: { version: 1, profiles: {} },
+    });
+    expect(resolved.mode).toBe("token");
+    expect(resolved.apiKey).toBe("oauth-token");
+    expect(resolved.source).toBe("bustlyOauth.json:user.userAccessToken");
   });
 
   it("strips embedded CR/LF from ANTHROPIC_API_KEY", async () => {

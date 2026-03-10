@@ -1067,6 +1067,7 @@
                   "providers/anthropic",
                   "providers/openai",
                   "providers/openrouter",
+                  "providers/bustly",
                   "providers/litellm",
                   "providers/bedrock",
                   "providers/vercel-ai-gateway",

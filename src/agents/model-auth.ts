@@ -1,8 +1,9 @@
-import { type Api, getEnvApiKey, type Model } from "@mariozechner/pi-ai";
 import path from "node:path";
+import { type Api, getEnvApiKey, type Model } from "@mariozechner/pi-ai";
+import { readBustlyOAuthState } from "../bustly-oauth.js";
+import { formatCliCommand } from "../cli/command-format.js";
 import type { OpenClawConfig } from "../config/config.js";
 import type { ModelProviderAuthMode, ModelProviderConfig } from "../config/types.js";
-import { formatCliCommand } from "../cli/command-format.js";
 import { getShellEnvAppliedKeys } from "../infra/shell-env.js";
 import {
   normalizeOptionalSecretInput,
@@ -142,6 +143,10 @@ export async function resolveApiKeyForProvider(params: {
 }): Promise<ResolvedProviderAuth> {
   const { provider, cfg, profileId, preferredProfile } = params;
   const store = params.store ?? ensureAuthProfileStore(params.agentDir);
+  const normalizedProvider = normalizeProviderId(provider);
+  const isBustlyProvider = normalizedProvider === "bustly";
+  const resolveBustlyUserAccessToken = () =>
+    normalizeOptionalSecretInput(readBustlyOAuthState()?.user?.userAccessToken);
 
   if (profileId) {
     const resolved = await resolveApiKeyForProfile({
@@ -150,21 +155,49 @@ export async function resolveApiKeyForProvider(params: {
       profileId,
       agentDir: params.agentDir,
     });
-    if (!resolved) {
-      throw new Error(`No credentials found for profile "${profileId}".`);
+    if (resolved) {
+      const mode = store.profiles[profileId]?.type;
+      return {
+        apiKey: resolved.apiKey,
+        profileId,
+        source: `profile:${profileId}`,
+        mode: mode === "oauth" ? "oauth" : mode === "token" ? "token" : "api-key",
+      };
     }
-    const mode = store.profiles[profileId]?.type;
-    return {
-      apiKey: resolved.apiKey,
-      profileId,
-      source: `profile:${profileId}`,
-      mode: mode === "oauth" ? "oauth" : mode === "token" ? "token" : "api-key",
-    };
+    if (isBustlyProvider) {
+      const accessToken = resolveBustlyUserAccessToken();
+      if (accessToken) {
+        return {
+          apiKey: accessToken,
+          source: "bustlyOauth.json:user.userAccessToken",
+          mode: "token",
+        };
+      }
+    }
+    throw new Error(`No credentials found for profile "${profileId}".`);
   }
 
   const authOverride = resolveProviderAuthOverride(cfg, provider);
   if (authOverride === "aws-sdk") {
     return resolveAwsSdkAuthInfo();
+  }
+
+  // Bustly login state in bustlyOauth.json is the source of truth.
+  if (isBustlyProvider) {
+    const accessToken = resolveBustlyUserAccessToken();
+    if (accessToken) {
+      return {
+        apiKey: accessToken,
+        source: "bustlyOauth.json:user.userAccessToken",
+        mode: "token",
+      };
+    }
+    throw new Error(
+      [
+        "No Bustly token found in ~/.bustly/bustlyOauth.json (user.userAccessToken).",
+        "Please sign in from the Bustly desktop app.",
+      ].join(" "),
+    );
   }
 
   const order = resolveAuthProfileOrder({
@@ -207,8 +240,7 @@ export async function resolveApiKeyForProvider(params: {
     return { apiKey: customKey, source: "models.json", mode: "api-key" };
   }
 
-  const normalized = normalizeProviderId(provider);
-  if (authOverride === undefined && normalized === "amazon-bedrock") {
+  if (authOverride === undefined && normalizedProvider === "amazon-bedrock") {
     return resolveAwsSdkAuthInfo();
   }
 

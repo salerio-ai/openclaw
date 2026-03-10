@@ -1,15 +1,8 @@
 import bustlyLogo from "../../assets/imgs/collapsed_logo_v2.svg";
-import claudeLogoRaw from "../../assets/imgs/claude.svg?raw";
-import geminiLogo from "../../assets/imgs/Gemini.png";
-import openaiLogo from "../../assets/imgs/openai.svg";
-import openrouterLogo from "../../assets/imgs/openrouter.svg";
 import OnboardContainer from "./OnboardContainer";
-import { formatTokenK } from "./utils";
 
 const providerLogos: Record<string, string | undefined> = {
-  openai: openaiLogo,
-  google: geminiLogo,
-  openrouter: openrouterLogo,
+  bustly: bustlyLogo,
 };
 
 interface ProviderStepProps {
@@ -93,9 +86,9 @@ export default function ProviderStep({
           </button>
         )}
         <img src={bustlyLogo} alt="Bustly Logo" className="h-12 mx-auto mb-3" />
-        <h2 className="text-3xl font-bold text-[#1A162F] mb-3">Configure AI Model</h2>
+        <h2 className="text-3xl font-bold text-[#1A162F] mb-3">Configure Bustly Provider</h2>
         <p className="text-[#6B6F86] text-lg max-w-2xl mx-auto leading-relaxed">
-          Select the AI provider to power your assistant.
+          Choose your default model tier for this workspace.
         </p>
       </div>
 
@@ -108,24 +101,16 @@ export default function ProviderStep({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
         {providers
           .slice()
-          .toSorted((a, b) => {
-            const order = ["openai", "anthropic", "google", "zai", "openrouter"];
+          .toSorted((a: ProviderConfig, b: ProviderConfig) => {
+            const order = ["bustly"];
             return order.indexOf(a.id) - order.indexOf(b.id);
           })
           .map((provider) => {
           const isSelected = selectedProvider?.id === provider.id;
           const logo = providerLogos[provider.id];
-          const isApiKeyFlowProvider =
-            provider.id === "openrouter" || provider.id === "anthropic" || provider.id === "zai";
-          const isAnthropic = provider.id === "anthropic";
-          const displayLabel =
-            provider.id === "google" ? "Google Gemini" : provider.label;
-          const badgeText =
-            provider.id === "openai"
-              ? "7D Free"
-              : provider.id === "anthropic"
-                ? "Max Performance"
-                : null;
+          const isApiKeyFlowProvider = selectedMethod !== "oauth";
+          const displayLabel = provider.label;
+          const badgeText = null;
           return (
             <div
               key={provider.id}
@@ -141,14 +126,7 @@ export default function ProviderStep({
                 </span>
               )}
               <div className="w-16 h-16 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center p-3">
-                {isAnthropic ? (
-                  <span
-                    className="w-full h-full"
-                    style={{ color: "rgb(217 119 87)" }}
-                    aria-label={displayLabel}
-                    dangerouslySetInnerHTML={{ __html: claudeLogoRaw }}
-                  />
-                ) : logo ? (
+                {logo ? (
                   <img src={logo} alt={displayLabel} className="w-full h-full object-contain" />
                 ) : (
                   <span className="text-lg font-bold text-[#1A162F]">
@@ -280,22 +258,13 @@ export default function ProviderStep({
                       >
                         {modelOptions.map((model) => {
                           const label = `${model.provider}/${model.id}`;
-                          const hintParts: string[] = [];
-                          if (model.name && model.name !== model.id) {
-                            hintParts.push(model.name);
-                          }
-                          if (model.contextWindow) {
-                            hintParts.push(`ctx ${formatTokenK(model.contextWindow)}`);
-                          }
-                          if (model.reasoning) {
-                            hintParts.push("reasoning");
-                          }
-                          if (model.aliases && model.aliases.length > 0) {
-                            hintParts.push(`alias: ${model.aliases.join(", ")}`);
-                          }
+                          const optionLabel =
+                            model.name && model.name !== model.id
+                              ? `${label} · ${model.name}`
+                              : label;
                           return (
                             <option key={label} value={label}>
-                              {label}
+                              {optionLabel}
                             </option>
                           );
                         })}
@@ -377,22 +346,13 @@ export default function ProviderStep({
                       >
                         {modelOptions.map((model) => {
                           const label = `${model.provider}/${model.id}`;
-                          const hintParts: string[] = [];
-                          if (model.name && model.name !== model.id) {
-                            hintParts.push(model.name);
-                          }
-                          if (model.contextWindow) {
-                            hintParts.push(`ctx ${formatTokenK(model.contextWindow)}`);
-                          }
-                          if (model.reasoning) {
-                            hintParts.push("reasoning");
-                          }
-                          if (model.aliases && model.aliases.length > 0) {
-                            hintParts.push(`alias: ${model.aliases.join(", ")}`);
-                          }
+                          const optionLabel =
+                            model.name && model.name !== model.id
+                              ? `${label} · ${model.name}`
+                              : label;
                           return (
                             <option key={label} value={label}>
-                              {label}
+                              {optionLabel}
                             </option>
                           );
                         })}

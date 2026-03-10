@@ -219,6 +219,35 @@
 }
 
 /* Bustly login button */
+.bustly-user-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bustly-provider-setup-btn {
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-soft);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+  white-space: nowrap;
+  font-family: inherit;
+}
+
+.bustly-provider-setup-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .bustly-login-btn {
   padding: 6px 12px;
   font-size: 13px;

@@ -1,6 +1,6 @@
+import { toNumber } from "../format.ts";
 import type { GatewayBrowserClient } from "../gateway.ts";
 import type { SessionsListResult } from "../types.ts";
-import { toNumber } from "../format.ts";
 
 export type SessionsState = {
   client: GatewayBrowserClient | null;
@@ -65,10 +65,11 @@ export async function patchSession(
     thinkingLevel?: string | null;
     verboseLevel?: string | null;
     reasoningLevel?: string | null;
+    model?: string | null;
   },
-) {
+): Promise<boolean> {
   if (!state.client || !state.connected) {
-    return;
+    return false;
   }
   const params: Record<string, unknown> = { key };
   if ("label" in patch) {
@@ -83,11 +84,16 @@ export async function patchSession(
   if ("reasoningLevel" in patch) {
     params.reasoningLevel = patch.reasoningLevel;
   }
+  if ("model" in patch) {
+    params.model = patch.model;
+  }
   try {
     await state.client.request("sessions.patch", params);
     await loadSessions(state);
+    return true;
   } catch (err) {
     state.sessionsError = String(err);
+    return false;
   }
 }
 
