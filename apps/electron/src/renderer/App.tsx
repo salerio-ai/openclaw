@@ -28,6 +28,7 @@ function AppShell() {
     gatewayPhase,
     gatewayReady,
     error: sessionError,
+    refreshAppState,
   } = useAppState();
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -88,7 +89,7 @@ function AppShell() {
           timestamp: new Date(),
         },
       ]);
-      setGatewayStatus((prev) => (prev ? { ...prev, running: false, pid: null } : null));
+      void refreshAppState();
     });
 
     const unsubscribeMain = window.electronAPI.onMainLog((data) => {
@@ -109,7 +110,7 @@ function AppShell() {
       unsubscribeExit();
       unsubscribeMain();
     };
-  }, []);
+  }, [refreshAppState]);
 
   useEffect(() => {
     if (!window.electronAPI?.onUpdateStatus) {

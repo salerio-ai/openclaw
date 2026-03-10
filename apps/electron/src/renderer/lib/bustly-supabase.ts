@@ -12,6 +12,12 @@ type WorkspaceMembershipRow = {
         logo_url: string | null;
         status: string;
       }
+    | {
+        id: string;
+        name: string;
+        logo_url: string | null;
+        status: string;
+      }[]
     | null;
 };
 
@@ -31,6 +37,11 @@ type WorkspaceSubscriptionRow = {
         name: string | null;
         tier: string | null;
       }
+    | {
+        code: string | null;
+        name: string | null;
+        tier: string | null;
+      }[]
     | null;
 };
 
@@ -105,7 +116,7 @@ export async function listWorkspaceSummaries(): Promise<{
     throw membershipRes.error;
   }
 
-  const memberships = (membershipRes.data ?? []) as WorkspaceMembershipRow[];
+  const memberships = (membershipRes.data ?? []) as unknown as WorkspaceMembershipRow[];
   const workspaceIds = memberships.map((item) => item.workspace_id).filter(Boolean);
   if (workspaceIds.length === 0) {
     return { workspaces: [], activeWorkspaceId: config.workspaceId };
@@ -137,7 +148,7 @@ export async function listWorkspaceSummaries(): Promise<{
   }
 
   const latestSubscriptionByWorkspace = new Map<string, WorkspaceSubscriptionRow>();
-  for (const row of (subscriptionRes.data ?? []) as WorkspaceSubscriptionRow[]) {
+  for (const row of (subscriptionRes.data ?? []) as unknown as WorkspaceSubscriptionRow[]) {
     if (!latestSubscriptionByWorkspace.has(row.workspace_id)) {
       latestSubscriptionByWorkspace.set(row.workspace_id, row);
     }
@@ -145,10 +156,14 @@ export async function listWorkspaceSummaries(): Promise<{
 
   const workspaces = memberships
     .map((item) => {
-      if (!item.workspaces?.id || !item.workspaces.name) {
+      const workspace = Array.isArray(item.workspaces) ? item.workspaces[0] : item.workspaces;
+      if (!workspace?.id || !workspace.name) {
         return null;
       }
       const subscription = latestSubscriptionByWorkspace.get(item.workspace_id);
+      const benefitPlan = Array.isArray(subscription?.benefit_plan)
+        ? subscription.benefit_plan[0]
+        : subscription?.benefit_plan;
       const effectiveEndAt = subscription?.end_at || subscription?.current_period_end;
       const expired =
         subscription?.status === "expired" ||
@@ -156,18 +171,18 @@ export async function listWorkspaceSummaries(): Promise<{
           typeof effectiveEndAt === "string" &&
           Number.isFinite(Date.parse(effectiveEndAt)) &&
           Date.parse(effectiveEndAt) <= Date.now());
-      const planLabel = (subscription?.benefit_plan?.code ||
-        subscription?.benefit_plan?.name ||
-        subscription?.benefit_plan?.tier ||
+      const planLabel = (benefitPlan?.code ||
+        benefitPlan?.name ||
+        benefitPlan?.tier ||
         "")
         .trim()
         .toUpperCase();
       return {
-        id: item.workspaces.id,
-        name: item.workspaces.name,
-        logoUrl: item.workspaces.logo_url,
+        id: workspace.id,
+        name: workspace.name,
+        logoUrl: workspace.logo_url,
         role: item.role,
-        status: item.workspaces.status,
+        status: workspace.status,
         members: memberCounts.get(item.workspace_id) ?? 0,
         plan: planLabel || null,
         expired,

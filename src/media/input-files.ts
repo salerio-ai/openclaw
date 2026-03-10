@@ -250,7 +250,7 @@ async function extractPdfContent(params: {
   const pdf = await getDocument({
     data: new Uint8Array(buffer),
     disableWorker: true,
-  }).promise;
+  } as Parameters<typeof getDocument>[0]).promise;
   const maxPages = Math.min(pdf.numPages, limits.pdf.maxPages);
   const textParts: string[] = [];
 

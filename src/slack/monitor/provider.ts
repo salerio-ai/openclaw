@@ -35,7 +35,7 @@ import { registerSlackMonitorEvents } from "./events.js";
 import { createSlackMessageHandler } from "./message-handler.js";
 import { registerSlackMonitorSlashCommands } from "./slash.js";
 
-const slackBoltModule = SlackBolt as typeof import("@slack/bolt") & {
+const slackBoltModule = SlackBolt as unknown as typeof import("@slack/bolt") & {
   default?: typeof import("@slack/bolt");
 };
 // Bun allows named imports from CJS; Node ESM doesn't. Use default+fallback for compatibility.
