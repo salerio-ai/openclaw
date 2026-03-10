@@ -8,6 +8,7 @@ import {
   dialog,
   type OpenDialogOptions,
 } from "electron";
+import { randomUUID } from "node:crypto";
 import { resolve, dirname, basename } from "node:path";
 import { spawn, spawnSync, ChildProcess } from "node:child_process";
 import {
@@ -60,8 +61,11 @@ import {
   normalizeProviderId,
 } from "../../../../src/agents/model-selection";
 import { loadConfig } from "../../../../src/config/config";
+import { GatewayClient } from "../../../../src/gateway/client";
+import type { SessionsPatchResult } from "../../../../src/gateway/protocol";
 import { mergeWhatsAppConfig } from "../../../../src/config/merge-config";
 import type { DmPolicy, OpenClawConfig } from "../../../../src/config/types";
+import { GATEWAY_CLIENT_MODES, GATEWAY_CLIENT_NAMES } from "../../../../src/utils/message-channel";
 import {
   applyAuthProfileConfig,
   applyOpenrouterProviderConfig,
@@ -1010,6 +1014,64 @@ function readGatewayTokenFromConfig(): string | null {
   }
 }
 
+async function withPrivilegedGatewayClient<T>(
+  request: (client: GatewayClient) => Promise<T>,
+): Promise<T> {
+  const token = readGatewayTokenFromConfig() ?? gatewayToken;
+  const url = token
+    ? `ws://${GATEWAY_HOST}:${gatewayPort}?token=${token}`
+    : `ws://${GATEWAY_HOST}:${gatewayPort}`;
+
+  return await new Promise<T>((resolve, reject) => {
+    let settled = false;
+    let client: GatewayClient | null = null;
+
+    const finish = (error?: unknown, value?: T) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      client?.stop();
+      if (error) {
+        reject(error instanceof Error ? error : new Error(String(error)));
+        return;
+      }
+      resolve(value as T);
+    };
+
+    const timer = setTimeout(() => {
+      finish(new Error("gateway connect timeout"));
+    }, 10_000);
+
+    client = new GatewayClient({
+      url,
+      token: token ?? undefined,
+      connectDelayMs: 0,
+      clientName: GATEWAY_CLIENT_NAMES.GATEWAY_CLIENT,
+      clientDisplayName: "Bustly Electron",
+      clientVersion: app.getVersion(),
+      platform: process.platform,
+      mode: GATEWAY_CLIENT_MODES.BACKEND,
+      role: "operator",
+      scopes: ["operator.admin"],
+      instanceId: `bustly-electron-main-${randomUUID()}`,
+      onHelloOk: () => {
+        void request(client as GatewayClient).then(
+          (result) => finish(undefined, result),
+          (error) => finish(error),
+        );
+      },
+      onConnectError: (error) => finish(error),
+      onClose: (code, reason) => {
+        finish(new Error(`gateway closed during request (${code}): ${reason}`));
+      },
+    });
+
+    client.start();
+  });
+}
+
 function readOpenClawConfigFile(): OpenClawConfig {
   const configPath = resolveOpenClawConfigPath();
   return JSON.parse(readFileSync(configPath, "utf-8")) as OpenClawConfig;
@@ -1491,6 +1553,35 @@ function setupIpcHandlers(): void {
       host: GATEWAY_HOST,
       port: gatewayPort,
     };
+  });
+
+  ipcMain.handle("gateway-patch-session-label", async (_event, key: string, label: string) => {
+    try {
+      const normalizedKey = typeof key === "string" ? key.trim() : "";
+      const normalizedLabel = typeof label === "string" ? label.trim() : "";
+      if (!normalizedKey) {
+        return { success: false, error: "Session key is required." };
+      }
+      if (!normalizedLabel) {
+        return { success: false, error: "Scenario name is required." };
+      }
+
+      const result = await withPrivilegedGatewayClient((client) =>
+        client.request<SessionsPatchResult>("sessions.patch", {
+          key: normalizedKey,
+          label: normalizedLabel,
+        })
+      );
+      if (!result?.ok) {
+        return { success: false, error: "Failed to rename scenario." };
+      }
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
   });
 
   ipcMain.handle("dialog-select-chat-context-paths", async () => {

@@ -1,17 +1,52 @@
 import React, { memo, useEffect, useState } from "react";
 import Lottie from "lottie-react";
+import {
+  Brain,
+  Browser,
+  CaretRight,
+  ChatCircle,
+  Check,
+  CircleNotch,
+  Clock,
+  Copy,
+  Cpu,
+  DownloadSimple,
+  File,
+  FileText,
+  Folder,
+  Globe,
+  Image,
+  ListBullets,
+  ListDashes,
+  MagnifyingGlass,
+  NotePencil,
+  Paperclip,
+  PaperPlaneRight,
+  PenNib,
+  PlusCircle,
+  Plug,
+  Pulse,
+  PuzzlePiece,
+  Robot,
+  ShareNetwork,
+  SpeakerHigh,
+  Square,
+  TerminalWindow,
+  Wrench,
+} from "@phosphor-icons/react";
 import loadingAnimation from "../../assets/lottie/thinking.json";
 import {
   parseInputArtifactsFromMessage,
   type ChatInputArtifact,
 } from "./input-artifacts";
-import type { TimelineNode } from "./types";
+import type { TimelineArtifact, TimelineNode } from "./types";
 import { toSanitizedMarkdownHtml } from "./utils";
 
 type ChatTimelineProps = {
   timeline: TimelineNode[];
   activeRunningToolKey: string | null;
   onCopyText?: (text: string) => void;
+  onPreviewImage?: (url: string) => void;
 };
 
 function cx(...parts: Array<string | false | null | undefined>) {
@@ -43,97 +78,55 @@ function formatProcessedDuration(durationMs: number | null | undefined): string 
   return `${minutes}m ${seconds}s`;
 }
 
-function CopyIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">
-      <rect x="9" y="9" width="10" height="10" rx="2" />
-      <path d="M15 9V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
-    </svg>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
-      <path d="m5 13 4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
 function ChevronIcon({ expanded = false }: { expanded?: boolean }) {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={cx("h-3.5 w-3.5 transition-transform duration-200", expanded && "rotate-90")}
-    >
-      <path d="m9 6 6 6-6 6" />
-    </svg>
+    <CaretRight size={14} weight="bold" className={cx("transition-transform duration-200", expanded && "rotate-90")} />
   );
 }
 
 function SpinnerIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      className={cx("h-3.5 w-3.5 animate-spin", className)}
-    >
-      <path d="M21 12a9 9 0 1 1-6.2-8.56" />
-    </svg>
-  );
+  return <CircleNotch size={14} weight="bold" className={cx("animate-spin", className)} />;
 }
 
 function UserImageIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
-      <rect x="3" y="5" width="18" height="14" rx="2" />
-      <circle cx="9" cy="10" r="1.5" />
-      <path d="m21 15-4.5-4.5L8 19" />
-    </svg>
-  );
+  return <Image size={16} weight="bold" className="h-4 w-4" />;
 }
 
 function UserFileIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
-      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z" />
-      <path d="M14 3v5h5" />
-      <path d="M9 13h6" />
-      <path d="M9 17h4" />
-    </svg>
-  );
+  return <File size={16} weight="bold" className="h-4 w-4" />;
 }
 
 function UserFolderIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
-      <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5z" />
-    </svg>
-  );
+  return <Folder size={16} weight="bold" className="h-4 w-4" />;
 }
 
-function UserArtifactCard({ artifact }: { artifact: ChatInputArtifact }) {
+function UserArtifactCard({
+  artifact,
+  onPreviewImage,
+}: {
+  artifact: ChatInputArtifact | TimelineArtifact;
+  onPreviewImage?: (url: string) => void;
+}) {
   const Icon =
     artifact.kind === "directory"
       ? UserFolderIcon
       : artifact.kind === "image"
         ? UserImageIcon
         : UserFileIcon;
+  const previewUrl = "imageUrl" in artifact ? artifact.imageUrl : undefined;
 
   return (
     <div className="flex max-w-full items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-100 py-1 pr-1 pl-2 text-xs font-medium text-text-main">
-      {artifact.kind === "image" ? (
-        <div className="flex h-5 w-5 shrink-0 items-center justify-center text-text-sub">
-          <Icon />
-        </div>
+      {artifact.kind === "image" && previewUrl ? (
+        <button
+          type="button"
+          className="h-5 w-5 shrink-0 overflow-hidden rounded-md border border-gray-200 bg-white"
+          onClick={() => {
+            onPreviewImage?.(previewUrl);
+          }}
+        >
+          <img src={previewUrl} alt={artifact.name} className="h-full w-full object-cover" />
+        </button>
       ) : (
         <div className="flex h-5 w-5 shrink-0 items-center justify-center text-text-sub">
           <Icon />
@@ -147,101 +140,71 @@ function UserArtifactCard({ artifact }: { artifact: ChatInputArtifact }) {
 }
 
 function ToolIcon({ name }: { name: string }) {
-  const common = {
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: "1.8",
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-    className: "h-4 w-4",
-  };
-
   switch (name) {
+    case "terminalWindow":
+      return <TerminalWindow size={16} weight="bold" className="h-4 w-4" />;
+    case "cpu":
+      return <Cpu size={16} weight="bold" className="h-4 w-4" />;
     case "fileText":
-      return (
-        <svg {...common}>
-          <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z" />
-          <path d="M14 3v5h5" />
-          <path d="M9 13h6" />
-          <path d="M9 17h6" />
-          <path d="M9 9h1" />
-        </svg>
-      );
+      return <FileText size={16} weight="bold" className="h-4 w-4" />;
+    case "penNib":
+      return <PenNib size={16} weight="bold" className="h-4 w-4" />;
+    case "pencilSimple":
+      return <NotePencil size={16} weight="bold" className="h-4 w-4" />;
     case "edit":
     case "penLine":
-      return (
-        <svg {...common}>
-          <path d="M12 20h9" />
-          <path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z" />
-        </svg>
-      );
+      return <NotePencil size={16} weight="bold" className="h-4 w-4" />;
     case "paperclip":
-      return (
-        <svg {...common}>
-          <path d="m21.44 11.05-8.49 8.49a5.5 5.5 0 0 1-7.78-7.78l8.84-8.83a3.5 3.5 0 0 1 4.95 4.95l-8.49 8.48a1.5 1.5 0 1 1-2.12-2.12l7.78-7.78" />
-        </svg>
-      );
+      return <Paperclip size={16} weight="bold" className="h-4 w-4" />;
     case "globe":
-      return (
-        <svg {...common}>
-          <circle cx="12" cy="12" r="9" />
-          <path d="M3 12h18" />
-          <path d="M12 3a15 15 0 0 1 0 18" />
-          <path d="M12 3a15 15 0 0 0 0 18" />
-        </svg>
-      );
+      return <Globe size={16} weight="bold" className="h-4 w-4" />;
+    case "downloadSimple":
+      return <DownloadSimple size={16} weight="bold" className="h-4 w-4" />;
+    case "browser":
+      return <Browser size={16} weight="bold" className="h-4 w-4" />;
+    case "square":
+      return <Square size={16} weight="bold" className="h-4 w-4" />;
+    case "shareNetwork":
+      return <ShareNetwork size={16} weight="bold" className="h-4 w-4" />;
+    case "chatCircle":
+      return <ChatCircle size={16} weight="bold" className="h-4 w-4" />;
+    case "speakerHigh":
+      return <SpeakerHigh size={16} weight="bold" className="h-4 w-4" />;
+    case "listBullets":
+      return <ListBullets size={16} weight="bold" className="h-4 w-4" />;
+    case "listDashes":
+      return <ListDashes size={16} weight="bold" className="h-4 w-4" />;
+    case "clock":
+      return <Clock size={16} weight="bold" className="h-4 w-4" />;
+    case "paperPlaneRight":
+      return <PaperPlaneRight size={16} weight="bold" className="h-4 w-4" />;
+    case "plusCircle":
+      return <PlusCircle size={16} weight="bold" className="h-4 w-4" />;
+    case "robot":
+      return <Robot size={16} weight="bold" className="h-4 w-4" />;
+    case "pulse":
+      return <Pulse size={16} weight="bold" className="h-4 w-4" />;
+    case "magnifyingGlass":
+      return <MagnifyingGlass size={16} weight="bold" className="h-4 w-4" />;
+    case "brain":
+      return <Brain size={16} weight="bold" className="h-4 w-4" />;
     case "image":
-      return (
-        <svg {...common}>
-          <rect x="3" y="5" width="18" height="14" rx="2" />
-          <circle cx="9" cy="10" r="1.5" />
-          <path d="m21 15-4.5-4.5L8 19" />
-        </svg>
-      );
+      return <Image size={16} weight="bold" className="h-4 w-4" />;
     case "smartphone":
-      return (
-        <svg {...common}>
-          <rect x="7" y="2.5" width="10" height="19" rx="2" />
-          <path d="M11 18.5h2" />
-        </svg>
-      );
+      return <PuzzlePiece size={16} weight="bold" className="h-4 w-4" />;
     case "loader":
       return <SpinnerIcon className="h-4 w-4" />;
     case "plug":
-      return (
-        <svg {...common}>
-          <path d="M12 22v-5" />
-          <path d="M9 8V2" />
-          <path d="M15 8V2" />
-          <path d="M8 8h8v4a4 4 0 0 1-8 0Z" />
-        </svg>
-      );
+      return <Plug size={16} weight="bold" className="h-4 w-4" />;
     case "circle":
-      return (
-        <svg {...common}>
-          <circle cx="12" cy="12" r="7.5" />
-        </svg>
-      );
+      return <Check size={16} weight="bold" className="h-4 w-4" />;
     case "messageSquare":
-      return (
-        <svg {...common}>
-          <path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-        </svg>
-      );
+      return <NotePencil size={16} weight="bold" className="h-4 w-4" />;
     case "wrench":
-      return (
-        <svg {...common}>
-          <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 0 5.4-5.4l-2.2 2.2-2.8-2.8Z" />
-        </svg>
-      );
+      return <Wrench size={16} weight="bold" className="h-4 w-4" />;
     case "puzzle":
     default:
-      return (
-        <svg {...common}>
-          <path d="M10 5.5a2.5 2.5 0 1 1 5 0V7h1.5A1.5 1.5 0 0 1 18 8.5V11h-1.5a2.5 2.5 0 1 0 0 5H18v2.5a1.5 1.5 0 0 1-1.5 1.5H14v-1.5a2.5 2.5 0 1 0-5 0V20H6.5A1.5 1.5 0 0 1 5 18.5V16h1.5a2.5 2.5 0 1 0 0-5H5V8.5A1.5 1.5 0 0 1 6.5 7H9V5.5Z" />
-        </svg>
-      );
+      return <PuzzlePiece size={16} weight="bold" className="h-4 w-4" />;
   }
 }
 
@@ -313,9 +276,11 @@ async function copyText(text: string, onCopyText?: (text: string) => void) {
 const TextNode = memo(function TextNode({
   node,
   onCopyText,
+  onPreviewImage,
 }: {
   node: Extract<TimelineNode, { kind: "text" }>;
   onCopyText?: (text: string) => void;
+  onPreviewImage?: (url: string) => void;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -334,22 +299,24 @@ const TextNode = memo(function TextNode({
   if (node.tone === "user") {
     const timeLabel = formatUserTime(node.timestamp);
     const parsed = parseInputArtifactsFromMessage(node.text);
+    const artifacts = node.artifacts ?? parsed.artifacts;
     return (
       <div className="group/user flex flex-col items-end">
+        {artifacts.length > 0 ? (
+          <div className="mb-2 flex max-w-[85%] flex-wrap justify-end gap-2">
+            {artifacts.map((artifact, index) => (
+              <UserArtifactCard
+                key={`${artifact.kind}:${artifact.name}:${artifact.path ?? index}`}
+                artifact={artifact}
+                onPreviewImage={onPreviewImage}
+              />
+            ))}
+          </div>
+        ) : null}
         <div className="flex max-w-[85%] flex-col gap-2 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
           {parsed.text ? (
             <div className="whitespace-pre-wrap text-sm leading-relaxed text-gray-900" dir="auto">
               {parsed.text}
-            </div>
-          ) : null}
-          {parsed.artifacts.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {parsed.artifacts.map((artifact, index) => (
-                <UserArtifactCard
-                  key={`${artifact.kind}:${artifact.name}:${artifact.path ?? index}`}
-                  artifact={artifact}
-                />
-              ))}
             </div>
           ) : null}
         </div>
@@ -363,7 +330,7 @@ const TextNode = memo(function TextNode({
               setCopied(true);
             }}
           >
-            {copied ? <CheckIcon /> : <CopyIcon />}
+            {copied ? <Check size={14} weight="bold" /> : <Copy size={14} weight="bold" />}
           </button>
           {timeLabel ? <span className="text-[11px] font-medium text-gray-400">{timeLabel}</span> : null}
         </div>
@@ -488,30 +455,38 @@ const ProcessedNode = memo(function ProcessedNode({
 }) {
   const [expanded, setExpanded] = useState(false);
   const duration = formatProcessedDuration(node.durationMs);
-  const summary = duration ? `Processed ${duration}` : "Processed";
+  const summary = duration
+    ? `${node.items.length} steps processed in ${duration}`
+    : `${node.items.length} steps processed`;
 
   return (
-    <div>
+    <div className="mb-2">
       <button
         type="button"
-        className="flex w-full items-center gap-3 text-left text-gray-400 transition-colors hover:text-gray-900"
+        className="flex w-full items-center gap-3 rounded-xl border border-gray-200 bg-gray-50/80 p-3 text-left transition-colors hover:bg-gray-100"
         onClick={() => {
           setExpanded((value) => !value);
         }}
       >
-        <span className="h-px flex-1 bg-gray-200" aria-hidden="true" />
-        <span className="text-[11px] font-semibold tracking-[0.12em] text-current">{summary}</span>
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#1A162F]/5 text-[#1A162F]">
+          <Check size={16} weight="bold" className="h-4 w-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-medium text-gray-900">Execution Completed</div>
+          <div className="text-xs text-gray-500">{summary}</div>
+        </div>
         <ChevronIcon expanded={expanded} />
-        <span className="h-px flex-1 bg-gray-200" aria-hidden="true" />
       </button>
 
       <div
         className={cx(
           "overflow-hidden transition-all duration-300 ease-in-out",
-          expanded ? "mt-4 mb-4 max-h-[2400px] opacity-100" : "max-h-0 opacity-0",
+          expanded ? "mt-4 max-h-[2400px] opacity-100" : "max-h-0 opacity-0",
         )}
       >
-        <TimelineStack items={node.items} activeRunningToolKey={activeRunningToolKey} />
+        <div className="ml-4 border-l-2 border-gray-100 pl-4">
+          <TimelineStack items={node.items} activeRunningToolKey={activeRunningToolKey} />
+        </div>
       </div>
     </div>
   );
@@ -531,11 +506,13 @@ function TimelineStack({
   items,
   activeRunningToolKey,
   onCopyText,
+  onPreviewImage,
   spaced = false,
 }: {
   items: TimelineNode[];
   activeRunningToolKey: string | null;
   onCopyText?: (text: string) => void;
+  onPreviewImage?: (url: string) => void;
   spaced?: boolean;
 }) {
   return (
@@ -549,6 +526,7 @@ function TimelineStack({
               node={node}
               activeRunningToolKey={activeRunningToolKey}
               onCopyText={onCopyText}
+              onPreviewImage={onPreviewImage}
             />
           </div>
         );
@@ -561,14 +539,16 @@ const TimelineItem = memo(function TimelineItem({
   node,
   activeRunningToolKey,
   onCopyText,
+  onPreviewImage,
 }: {
   node: TimelineNode;
   activeRunningToolKey: string | null;
   onCopyText?: (text: string) => void;
+  onPreviewImage?: (url: string) => void;
 }) {
   switch (node.kind) {
     case "text":
-      return <TextNode node={node} onCopyText={onCopyText} />;
+      return <TextNode node={node} onCopyText={onCopyText} onPreviewImage={onPreviewImage} />;
     case "tool":
       return <ToolNode node={node} activeRunningToolKey={activeRunningToolKey} />;
     case "processed":
@@ -595,9 +575,16 @@ export const ChatTimeline = memo(function ChatTimeline({
   timeline,
   activeRunningToolKey,
   onCopyText,
+  onPreviewImage,
 }: ChatTimelineProps) {
   return (
-    <TimelineStack items={timeline} activeRunningToolKey={activeRunningToolKey} onCopyText={onCopyText} spaced />
+    <TimelineStack
+      items={timeline}
+      activeRunningToolKey={activeRunningToolKey}
+      onCopyText={onCopyText}
+      onPreviewImage={onPreviewImage}
+      spaced
+    />
   );
 });
 

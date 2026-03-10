@@ -36,6 +36,7 @@
     "@aws-sdk/client-bedrock": "3.848.0",
     "@mariozechner/pi-ai": "0.55.0",
     "@mariozechner/pi-coding-agent": "0.55.0",
+    "@phosphor-icons/react": "^2.1.10",
     "@supabase/supabase-js": "^2.99.0",
     "@whiskeysockets/baileys": "7.0.0-rc.9",
     "ajv": "^8.17.1",

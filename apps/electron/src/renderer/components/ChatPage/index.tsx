@@ -1,6 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
+import {
+  ArrowDown,
+  ArrowUp,
+  CaretDown,
+  Check,
+  File,
+  Folder,
+  Image,
+  Paperclip,
+  Stop,
+  WarningCircle,
+  X,
+} from "@phosphor-icons/react";
+import { listWorkspaceSummaries } from "../../lib/bustly-supabase";
 import { GatewayBrowserClient, type GatewayEventFrame } from "../../lib/gateway-client";
 import { extractText, extractThinking } from "../../lib/chat-extract";
 import Skeleton from "../ui/Skeleton";
@@ -12,7 +26,7 @@ import {
   type InputArtifactKind,
 } from "./input-artifacts";
 import { collapseProcessedTurn, resolveToolDisplay, formatToolDetail } from "./utils";
-import type { TimelineNode } from "./types";
+import type { TimelineArtifact, TimelineNode } from "./types";
 import { useAppState } from "../../providers/AppStateProvider";
 
 type ChatRole = "user" | "assistant" | "thinking" | "system";
@@ -38,6 +52,7 @@ type TextItem = {
   timestamp: number;
   role: ChatRole;
   text: string;
+  artifacts?: TimelineArtifact[];
   runId?: string;
   streaming?: boolean;
   final?: boolean;
@@ -74,9 +89,9 @@ const SIDEBAR_TASKS_REFRESH_EVENT = "openclaw:sidebar-refresh-tasks";
 const CHAT_MODEL_LEVEL_STORAGE_KEY = "bustly.chat.model-level.v1";
 
 const CHAT_MODEL_LEVELS = [
-  { id: "lite", label: "Lite", description: "Fast & efficient for daily tasks." },
-  { id: "pro", label: "Pro", description: "Balanced performance for complex reasoning." },
-  { id: "max", label: "Max", description: "Frontier intelligence for critical challenges." },
+  { id: "lite", label: "Bustly Lite", description: "Fast & efficient for daily tasks." },
+  { id: "pro", label: "Bustly Pro", description: "Balanced performance for complex reasoning." },
+  { id: "max", label: "Bustly Max", description: "Frontier intelligence for critical challenges." },
 ] as const;
 
 type ChatModelLevelId = (typeof CHAT_MODEL_LEVELS)[number]["id"];
@@ -95,6 +110,36 @@ function resolveChannelBaseSessionKey(sessionKey: string) {
 
 function buildChannelSessionKey(sessionKey: string) {
   return `${resolveChannelBaseSessionKey(sessionKey)}:channel:${globalThis.crypto.randomUUID()}`;
+}
+
+function hashString(value: string): number {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) | 0;
+  }
+  return Math.abs(hash);
+}
+
+function sessionAccentClasses(sessionKey: string) {
+  const palette = [
+    "bg-[#E8F1FF] text-[#2E5AAC]",
+    "bg-[#EFF7EA] text-[#3E7D3C]",
+    "bg-[#FFF1E6] text-[#A55B1F]",
+    "bg-[#F4ECFF] text-[#6B46A6]",
+    "bg-[#FDECEF] text-[#B43C59]",
+  ] as const;
+  return palette[hashString(sessionKey) % palette.length] ?? palette[0];
+}
+
+function deriveScenarioLabel(sessionKey: string, rawLabel?: string | null) {
+  const trimmed = rawLabel?.trim();
+  if (trimmed) {
+    return trimmed;
+  }
+  if (sessionKey === DEFAULT_SESSION_KEY) {
+    return "Bustly AI";
+  }
+  return "Scenario";
 }
 
 function normalizeTextDelta(current: string, text?: string, delta?: string): string {
@@ -354,92 +399,22 @@ function parseToolBlocks(message: unknown): Array<{ toolCallId: string; name: st
   return [...calls.values()];
 }
 
-function PaperclipIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-[18px] w-[18px]">
-      <path
-        d="m21.44 11.05-8.49 8.49a5.5 5.5 0 0 1-7.78-7.78l8.84-8.83a3.5 3.5 0 0 1 4.95 4.95l-8.49 8.48a1.5 1.5 0 1 1-2.12-2.12l7.78-7.78"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function ArrowUpIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-[14px] w-[14px]">
-      <path d="m12 19 0-14" strokeLinecap="round" />
-      <path d="m5 12 7-7 7 7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function ArrowDownIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-[14px] w-[14px]">
-      <path d="m12 5 0 14" strokeLinecap="round" />
-      <path d="m19 12-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function StopIcon() {
-  return <div className="h-[9px] w-[9px] rounded-[1px] bg-white" />;
-}
-
-function CloseIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3">
-      <path d="M18 6 6 18" strokeLinecap="round" />
-      <path d="m6 6 12 12" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function ImageIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
-      <rect x="3" y="5" width="18" height="14" rx="2" />
-      <circle cx="9" cy="10" r="1.5" />
-      <path d="m21 15-4.5-4.5L8 19" />
-    </svg>
-  );
-}
-
-function FileIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
-      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z" />
-      <path d="M14 3v5h5" />
-      <path d="M9 13h6" />
-      <path d="M9 17h4" />
-    </svg>
-  );
-}
-
-function DirectoryIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
-      <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5z" />
-    </svg>
-  );
-}
-
 function InputArtifactCard({
   kind,
   title,
   subtitle,
   imageUrl,
+  onPreview,
   onRemove,
 }: {
   kind: InputArtifactKind;
   title: string;
   subtitle?: string;
   imageUrl?: string;
+  onPreview?: () => void;
   onRemove: () => void;
 }) {
-  const Icon = kind === "directory" ? DirectoryIcon : kind === "image" ? ImageIcon : FileIcon;
+  const Icon = kind === "directory" ? Folder : kind === "image" ? Image : File;
 
   return (
     <div
@@ -447,10 +422,12 @@ function InputArtifactCard({
       title={subtitle ?? title}
     >
       {imageUrl ? (
-        <img src={imageUrl} alt="" className="h-5 w-5 shrink-0 rounded-md border border-gray-200 object-cover" />
+        <button type="button" className="h-5 w-5 shrink-0 overflow-hidden rounded-md border border-gray-200" onClick={onPreview}>
+          <img src={imageUrl} alt="" className="h-full w-full object-cover" />
+        </button>
       ) : (
         <div className="flex h-5 w-5 shrink-0 items-center justify-center text-text-sub">
-          <Icon />
+          <Icon size={16} weight="bold" />
         </div>
       )}
       <div className="min-w-0 max-w-[220px] truncate">{title}</div>
@@ -460,25 +437,9 @@ function InputArtifactCard({
         onClick={onRemove}
         aria-label={`Remove ${title}`}
       >
-        <CloseIcon />
+        <X size={12} weight="bold" />
       </button>
     </div>
-  );
-}
-
-function CaretDownIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <path d="M6.7 9.3a1 1 0 0 1 1.4 0L12 13.17l3.9-3.88a1 1 0 0 1 1.4 1.42l-4.6 4.58a1 1 0 0 1-1.4 0L6.7 10.7a1 1 0 0 1 0-1.4Z" />
-    </svg>
-  );
-}
-
-function CheckIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
-      <path d="m5 12 4.2 4.2L19 6.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
   );
 }
 
@@ -504,6 +465,9 @@ export default function ChatPage() {
   const [modelLevelOpen, setModelLevelOpen] = useState(false);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
   const [composerAreaHeight, setComposerAreaHeight] = useState(176);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState("");
+  const [subscriptionExpired, setSubscriptionExpired] = useState(false);
   const [modelMenuPos, setModelMenuPos] = useState<{
     top: number;
     left: number;
@@ -543,6 +507,14 @@ export default function ChatPage() {
     const searchParams = new URLSearchParams(location.search);
     return searchParams.get("session") ?? DEFAULT_SESSION_KEY;
   }, [location.search]);
+  const currentScenarioLabel = useMemo(() => {
+    const searchParams = new URLSearchParams(location.search);
+    return deriveScenarioLabel(currentSessionKey, searchParams.get("label"));
+  }, [currentSessionKey, location.search]);
+  const currentScenarioAccent = useMemo(
+    () => sessionAccentClasses(`${currentSessionKey}:${currentScenarioLabel}`),
+    [currentScenarioLabel, currentSessionKey],
+  );
 
   const loadGatewayStatus = useCallback(async () => {
     const status = await window.electronAPI.gatewayStatus();
@@ -590,6 +562,7 @@ export default function ChatPage() {
     runId?: string;
     seq: number;
     text?: string;
+    artifacts?: TimelineArtifact[];
     delta?: string;
     timestamp?: number;
     streaming?: boolean;
@@ -610,6 +583,7 @@ export default function ChatPage() {
           timestamp: ts,
           role: params.role,
           text: nextText,
+          artifacts: params.artifacts,
           runId: params.runId,
           streaming: params.streaming,
           final: params.final,
@@ -625,6 +599,7 @@ export default function ChatPage() {
       next[idx] = {
         ...current,
         text: nextText,
+        artifacts: params.artifacts ?? current.artifacts,
         sortSeq: Math.min(current.sortSeq, params.seq),
         streaming: params.streaming,
         final: params.final ?? current.final,
@@ -1298,6 +1273,38 @@ export default function ChatPage() {
   );
 
   useEffect(() => {
+    let disposed = false;
+
+    const loadWorkspaceState = async () => {
+      try {
+        const summary = await listWorkspaceSummaries();
+        if (disposed) {
+          return;
+        }
+        const workspaceId = summary.activeWorkspaceId || summary.workspaces[0]?.id || "";
+        const activeWorkspace = summary.workspaces.find((entry) => entry.id === workspaceId);
+        setActiveWorkspaceId(workspaceId);
+        setSubscriptionExpired(activeWorkspace?.expired === true);
+      } catch {
+        if (!disposed) {
+          setActiveWorkspaceId("");
+          setSubscriptionExpired(false);
+        }
+      }
+    };
+
+    void loadWorkspaceState();
+    const unsubscribe = window.electronAPI.onBustlyLoginRefresh(() => {
+      void loadWorkspaceState();
+    });
+
+    return () => {
+      disposed = true;
+      unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
     if (!gatewayReady) {
       setConnected(false);
       setLoading(true);
@@ -1439,6 +1446,7 @@ export default function ChatPage() {
   const handleSend = useCallback(async () => {
     const msg = draft.trim();
     if (
+      subscriptionExpired ||
       !connected ||
       (!msg && attachments.length === 0 && contextPaths.length === 0) ||
       sending ||
@@ -1457,6 +1465,18 @@ export default function ChatPage() {
         path: entry.path,
       })),
     ];
+    const timelineArtifacts: TimelineArtifact[] = [
+      ...attachments.map((attachment) => ({
+        kind: "image" as const,
+        name: attachment.name,
+        imageUrl: attachment.dataUrl,
+      })),
+      ...contextPaths.map((entry) => ({
+        kind: entry.kind,
+        name: entry.name,
+        path: entry.path,
+      })),
+    ];
     const outgoingMessage = buildInputArtifactsMessage(draft, outgoingArtifacts);
 
     const localSeq = seqCounterRef.current++;
@@ -1467,6 +1487,7 @@ export default function ChatPage() {
       timestamp: Date.now(),
       role: "user",
       text: outgoingMessage,
+      artifacts: timelineArtifacts,
       streaming: false,
     };
     setTimeline((prev) => [...prev, userItem].sort(compareTimeline));
@@ -1511,7 +1532,7 @@ export default function ChatPage() {
     } finally {
       setSending(false);
     }
-  }, [attachments, connected, contextPaths, currentSessionKey, draft, sending]);
+  }, [attachments, connected, contextPaths, currentSessionKey, draft, sending, subscriptionExpired]);
 
   const handleAbort = useCallback(async () => {
     if (!connected || !clientRef.current) {
@@ -1568,8 +1589,15 @@ export default function ChatPage() {
     void navigate(`/chat?session=${encodeURIComponent(nextSessionKey)}`);
   }, [currentSessionKey, navigate]);
 
+  const handleOpenPricing = useCallback(async () => {
+    if (!activeWorkspaceId) {
+      return;
+    }
+    await window.electronAPI.bustlyOpenWorkspaceManage(activeWorkspaceId);
+  }, [activeWorkspaceId]);
+
   const handleAttachmentFiles = useCallback(async (files: FileList | null) => {
-    if (!files || files.length === 0) {
+    if (subscriptionExpired || !files || files.length === 0) {
       return;
     }
     const next: Attachment[] = [];
@@ -1612,9 +1640,12 @@ export default function ChatPage() {
     if (next.length > 0) {
       setAttachments((prev) => [...prev, ...next]);
     }
-  }, []);
+  }, [subscriptionExpired]);
 
   const handleSelectContextPaths = useCallback(async () => {
+    if (subscriptionExpired) {
+      return;
+    }
     try {
       const selected = await window.electronAPI.selectChatContextPaths();
       if (!Array.isArray(selected) || selected.length === 0) {
@@ -1642,7 +1673,7 @@ export default function ChatPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, []);
+  }, [subscriptionExpired]);
 
   const runningTools = useMemo(
     () =>
@@ -1683,6 +1714,7 @@ export default function ChatPage() {
           key: item.id,
           timestamp: item.timestamp,
           text: item.text,
+          artifacts: item.artifacts,
           tone:
             item.role === "thinking"
               ? "thinking"
@@ -1796,21 +1828,21 @@ export default function ChatPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-white text-gray-900">
-      <div className="sticky top-0 z-20 flex h-14 flex-none items-center border-b border-gray-100 bg-white/80 backdrop-blur-sm [-webkit-app-region:drag]">
+      <div className="sticky top-0 z-20 flex h-14 flex-none items-center bg-white/80 backdrop-blur-sm [-webkit-app-region:drag]">
         <div className="flex w-full items-center px-6">
           <div className="relative [-webkit-app-region:no-drag]">
             <button
               ref={modelTriggerRef}
               type="button"
               onClick={() => setModelLevelOpen((prev) => !prev)}
-              className={`flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm font-medium transition-all ${
+              className={`group flex items-center gap-2 rounded-lg px-3 py-1.5 transition-colors ${
                 modelLevelOpen
-                  ? "bg-gray-100 text-gray-900"
-                  : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                  ? "bg-[#F5F5F5] text-gray-900"
+                  : "text-gray-500 hover:bg-[#F5F5F5] hover:text-gray-900"
               }`}
             >
-              <span className="text-gray-900">{selectedModelLevel.label}</span>
-              <CaretDownIcon className={`h-3.5 w-3.5 text-gray-500 transition-transform ${modelLevelOpen ? "rotate-180" : ""}`} />
+              <span className="text-lg font-semibold tracking-tight text-gray-900">{selectedModelLevel.label}</span>
+              <CaretDown size={16} weight="bold" className={`text-gray-500 transition-transform ${modelLevelOpen ? "rotate-180" : ""}`} />
             </button>
           </div>
         </div>
@@ -1848,8 +1880,8 @@ export default function ChatPage() {
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-semibold">{option.label}</span>
-                        {selected ? <CheckIcon className="h-4 w-4 text-[#1A162F]" /> : null}
+                        <span className="text-sm font-medium">{option.label}</span>
+                        {selected ? <Check size={16} weight="bold" className="text-[#1A162F]" /> : null}
                       </div>
                       <div className="mt-0.5 text-xs opacity-70">{option.description}</div>
                     </button>
@@ -1863,7 +1895,22 @@ export default function ChatPage() {
 
       <div className="relative flex-1 overflow-hidden">
         <div ref={scrollRef} className="chat-page-timeline h-full">
-          <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 pt-8" style={{ paddingBottom: composerAreaHeight + 16 }}>
+          <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-6 pt-8" style={{ paddingBottom: composerAreaHeight + 16 }}>
+            {!loading && timeline.length === 0 ? (
+              <div className="flex min-h-[40vh] flex-col items-center justify-center pb-8 pt-4 text-center">
+                <div className={`mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-white shadow-lg shadow-[#1A162F]/5 ${currentScenarioAccent}`}>
+                  <span className="text-2xl font-semibold">{currentScenarioLabel.slice(0, 1).toUpperCase()}</span>
+                </div>
+                <h1 className="mb-2 text-2xl font-semibold tracking-tight text-[#1A162F]">
+                  {currentScenarioLabel}
+                </h1>
+                <p className="max-w-[720px] text-base text-[#666F8D]">
+                  {subscriptionExpired
+                    ? "Renew your workspace plan to continue this workflow."
+                    : "How can I help you today?"}
+                </p>
+              </div>
+            ) : null}
             {loading ? (
               <div className="rounded-2xl border border-gray-100 bg-white px-5 py-5">
                 <div className="space-y-4">
@@ -1892,7 +1939,11 @@ export default function ChatPage() {
               </div>
             ) : null}
 
-            <ChatTimeline timeline={processedTimeline} activeRunningToolKey={activeRunningToolKey} />
+            <ChatTimeline
+              timeline={processedTimeline}
+              activeRunningToolKey={activeRunningToolKey}
+              onPreviewImage={setPreviewImage}
+            />
             {compactingRunId ? (
               <div className="py-2">
                 <ChatTimelineThinkingIndicator label="Compacting conversation" />
@@ -1914,7 +1965,7 @@ export default function ChatPage() {
             style={{ bottom: composerAreaHeight + 16 }}
             aria-label="Scroll to bottom"
           >
-            <ArrowDownIcon />
+            <ArrowDown size={14} weight="bold" />
           </button>
         ) : null}
 
@@ -1922,7 +1973,40 @@ export default function ChatPage() {
           <div className="h-8 bg-gradient-to-t from-white via-white/80 to-transparent" />
           <div className="border-t border-white/40 bg-white px-6 pb-8 pointer-events-auto">
             <div className="mx-auto w-full max-w-3xl">
-              <div className="group relative rounded-[28px] border border-gray-200 bg-white p-4 shadow-sm transition-all duration-300 hover:border-gray-300 focus-within:border-gray-400 focus-within:shadow-md">
+              {subscriptionExpired ? (
+                <div className="mb-3 rounded-2xl border border-[#ECECEC] bg-white p-4 shadow-[0_10px_24px_rgba(26,22,47,0.05)]">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[#ECECEC] bg-white text-[#666F8D] shadow-sm">
+                        <WarningCircle size={18} weight="bold" />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-sm font-medium text-[#1A162F]">Your plan has expired</div>
+                        <p className="text-sm text-[#666F8D]">
+                          Renew to keep chatting with Bustly and continue follow-up tasks.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleOpenPricing();
+                      }}
+                      className="shrink-0 rounded-xl bg-[#1A162F] px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-[#27223F]"
+                    >
+                      Renew plan
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              <div
+                className={`group relative rounded-[28px] border bg-white p-4 shadow-sm transition-all duration-300 ${
+                  subscriptionExpired
+                    ? "cursor-not-allowed border-[#ECECEC] bg-[#FAFAFA]"
+                    : "border-gray-200 hover:border-gray-300 focus-within:border-gray-400 focus-within:shadow-md"
+                }`}
+              >
                 {attachments.length > 0 || contextPaths.length > 0 ? (
                   <div className="relative z-10 mb-3 flex flex-wrap gap-2">
                     {attachments.map((att) => (
@@ -1932,7 +2016,11 @@ export default function ChatPage() {
                         title={att.name}
                         subtitle={att.mimeType}
                         imageUrl={att.dataUrl}
+                        onPreview={() => {
+                          setPreviewImage(att.dataUrl);
+                        }}
                         onRemove={() => {
+                          setPreviewImage(null);
                           setAttachments((prev) => prev.filter((p) => p.id !== att.id));
                         }}
                       />
@@ -1955,11 +2043,15 @@ export default function ChatPage() {
                   ref={composerRef}
                   rows={1}
                   value={draft}
-                  disabled={!connected || sending}
+                  disabled={!connected || sending || subscriptionExpired}
                   placeholder={
-                    connected ? "Ask for follow-up changes..." : "Connect to gateway to chat..."
+                    subscriptionExpired
+                      ? "Renew your plan to continue..."
+                      : connected
+                        ? "Ask for follow-up changes..."
+                        : "Connect to gateway to chat..."
                   }
-                  className="relative z-10 min-h-[44px] max-h-[200px] w-full resize-none border-none bg-transparent px-1 pr-14 text-base font-light text-text-main outline-none placeholder:text-text-sub/70 disabled:cursor-not-allowed disabled:text-gray-400"
+                  className="relative z-10 min-h-[44px] max-h-[200px] w-full resize-none border-none bg-transparent px-1 pr-14 text-base font-light text-text-main outline-none placeholder:text-text-sub/70 disabled:cursor-not-allowed disabled:text-[#8B93AA]"
                   onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
@@ -1980,12 +2072,12 @@ export default function ChatPage() {
                     onClick={handleAbort}
                     aria-label="Stop"
                   >
-                    <StopIcon />
+                    <Stop size={14} weight="fill" />
                   </button>
                 ) : null}
 
                 <div className="mt-1 flex items-center justify-between pt-2">
-                  <div className="flex items-center gap-2">
+                  <div className={`flex items-center gap-2 ${subscriptionExpired ? "pointer-events-none opacity-50" : ""}`}>
                     <button
                       type="button"
                       className="flex h-8 w-8 items-center justify-center rounded-lg text-text-sub transition-all duration-200 hover:bg-gray-100 hover:text-text-main active:bg-gray-200"
@@ -1994,12 +2086,12 @@ export default function ChatPage() {
                       }}
                       title="Add photos & files"
                     >
-                      <PaperclipIcon />
+                      <Paperclip size={18} weight="bold" />
                     </button>
                     <button
                       type="button"
                       className="rounded-lg px-3 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40"
-                      disabled={sending || Boolean(activeRunId)}
+                      disabled={sending || Boolean(activeRunId) || subscriptionExpired}
                       onClick={() => {
                         void handleNewChannel();
                       }}
@@ -2015,6 +2107,7 @@ export default function ChatPage() {
                       type="button"
                       className={`flex h-7 w-7 items-center justify-center rounded-lg shadow-sm transition-all active:scale-95 ${
                         connected &&
+                        !subscriptionExpired &&
                         !sending &&
                         (draft.trim() || attachments.length > 0 || contextPaths.length > 0)
                           ? "bg-black text-white hover:bg-black/90 hover:shadow-md"
@@ -2022,6 +2115,7 @@ export default function ChatPage() {
                       }`}
                       disabled={
                         !connected ||
+                        subscriptionExpired ||
                         sending ||
                         (!draft.trim() && attachments.length === 0 && contextPaths.length === 0)
                       }
@@ -2029,7 +2123,7 @@ export default function ChatPage() {
                         void handleSend();
                       }}
                     >
-                      <ArrowUpIcon />
+                      <ArrowUp size={14} weight="bold" />
                     </button>
                   )}
                 </div>
@@ -2038,6 +2132,27 @@ export default function ChatPage() {
           </div>
         </div>
       </div>
+
+      {previewImage
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[30000] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+              onClick={() => setPreviewImage(null)}
+            >
+              <div className="relative max-h-full max-w-full overflow-hidden rounded-lg shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                <button
+                  type="button"
+                  className="absolute top-4 right-4 z-10 rounded-full bg-black/50 p-2 text-white transition-all hover:bg-black/70"
+                  onClick={() => setPreviewImage(null)}
+                >
+                  <X size={20} weight="bold" />
+                </button>
+                <img src={previewImage} alt="Preview" className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg" />
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

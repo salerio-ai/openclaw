@@ -1,6 +1,32 @@
 import { createPortal } from "react-dom";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createElement, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import {
+  ArrowSquareOut,
+  CaretDown,
+  CaretRight,
+  ChartBar,
+  Check,
+  ChatCircleText,
+  Database,
+  DotsThree,
+  Gear,
+  Globe,
+  Heart,
+  House,
+  Lightning,
+  Plus,
+  MagnifyingGlass,
+  PencilSimpleLine,
+  Robot,
+  ShoppingBag,
+  SignOut,
+  StackOverflowLogo,
+  TrendUp,
+  User,
+  Users,
+  X,
+} from "@phosphor-icons/react";
 import bustlyWordmark from "../../assets/imgs/bustly_wordmark.png";
 import logoIcon from "../../assets/imgs/collapsed_logo_v2.svg";
 import openSidebarIcon from "../../assets/imgs/open_sidebar.svg";
@@ -16,7 +42,7 @@ type ClientAppSidebarProps = {
 type SidebarTask = {
   id: string;
   name: string;
-  pinned?: boolean;
+  isMain?: boolean;
 };
 
 type GatewaySessionRow = {
@@ -33,6 +59,69 @@ type SessionsListResult = {
 
 const DEFAULT_SESSION_KEY = "agent:main:main";
 const SIDEBAR_TASKS_REFRESH_EVENT = "openclaw:sidebar-refresh-tasks";
+const SIDEBAR_CUSTOM_LABELS_STORAGE_KEY = "bustly.sidebar.custom-labels.v1";
+
+function notifySidebarTasksRefresh() {
+  window.dispatchEvent(new Event(SIDEBAR_TASKS_REFRESH_EVENT));
+}
+
+function readCustomSessionLabels(): Record<string, string> {
+  try {
+    const raw = window.localStorage.getItem(SIDEBAR_CUSTOM_LABELS_STORAGE_KEY);
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed as Record<string, string> : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeCustomSessionLabels(value: Record<string, string>) {
+  window.localStorage.setItem(SIDEBAR_CUSTOM_LABELS_STORAGE_KEY, JSON.stringify(value));
+}
+
+function resolveSessionIcon(label: string, sessionKey: string) {
+  const value = `${label} ${sessionKey}`.toLowerCase();
+  if (value.includes("heart")) {
+    return Heart;
+  }
+  if (value.includes("shop") || value.includes("order") || value.includes("source") || value.includes("product")) {
+    return ShoppingBag;
+  }
+  if (value.includes("sale") || value.includes("revenue") || value.includes("growth") || value.includes("trend")) {
+    return TrendUp;
+  }
+  if (value.includes("data") || value.includes("report") || value.includes("chart") || value.includes("analytics")) {
+    return ChartBar;
+  }
+  if (value.includes("inventory") || value.includes("db") || value.includes("database")) {
+    return Database;
+  }
+  if (value.includes("user") || value.includes("profile")) {
+    return User;
+  }
+  if (value.includes("team") || value.includes("member") || value.includes("customer")) {
+    return Users;
+  }
+  if (value.includes("search") || value.includes("find") || value.includes("research")) {
+    return MagnifyingGlass;
+  }
+  if (value.includes("write") || value.includes("draft") || value.includes("content")) {
+    return PencilSimpleLine;
+  }
+  if (value.includes("web") || value.includes("browser")) {
+    return Globe;
+  }
+  if (value.includes("chat") || value.includes("support")) {
+    return ChatCircleText;
+  }
+  if (value.includes("openclaw") || value.includes("codex") || value.includes("stack")) {
+    return StackOverflowLogo;
+  }
+  return Robot;
+}
 
 function isMainChannelSessionKey(sessionKey: string): boolean {
   if (sessionKey === DEFAULT_SESSION_KEY) {
@@ -57,110 +146,73 @@ function sanitizeSessionTitle(text: string | undefined): string | null {
   return cleaned;
 }
 
+function resolveSessionDisplayName(
+  session: Pick<GatewaySessionRow, "key" | "label" | "displayName" | "derivedTitle">,
+  customSessionLabels: Record<string, string>,
+): string {
+  return (
+    sanitizeSessionTitle(session.label) ||
+    sanitizeSessionTitle(session.displayName) ||
+    sanitizeSessionTitle(session.derivedTitle) ||
+    customSessionLabels[session.key] ||
+    (session.key === DEFAULT_SESSION_KEY ? "Bustly AI" : session.key)
+  );
+}
+
+function resolveChannelBaseSessionKey(sessionKey: string): string {
+  return sessionKey.replace(/:(thread|topic|channel|group):[^:]+$/i, "");
+}
+
+function buildChannelSessionKey(sessionKey: string): string {
+  return `${resolveChannelBaseSessionKey(sessionKey)}:channel:${globalThis.crypto.randomUUID()}`;
+}
+
 type IconProps = {
   className?: string;
 };
 
 function CaretDownIcon({ className }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <path d="M6.7 9.3a1 1 0 0 1 1.4 0L12 13.17l3.9-3.88a1 1 0 0 1 1.4 1.42l-4.6 4.58a1 1 0 0 1-1.4 0L6.7 10.7a1 1 0 0 1 0-1.4Z" />
-    </svg>
-  );
+  return <CaretDown size={14} weight="bold" className={className} />;
 }
 
 function CaretRightIcon({ className }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <path d="M9.3 6.7a1 1 0 0 1 1.4 0l4.58 4.6a1 1 0 0 1 0 1.4l-4.58 4.6a1 1 0 1 1-1.42-1.4L13.17 12 9.3 8.1a1 1 0 0 1 0-1.4Z" />
-    </svg>
-  );
+  return <CaretRight size={14} weight="bold" className={className} />;
 }
 
 function DotsThreeIcon({ className }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <circle cx="6" cy="12" r="1.8" />
-      <circle cx="12" cy="12" r="1.8" />
-      <circle cx="18" cy="12" r="1.8" />
-    </svg>
-  );
+  return <DotsThree size={18} weight="bold" className={className} />;
 }
 
 function CheckIcon({ className }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className={className}>
-      <path d="m5 12.5 4.2 4.2L19 7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
+  return <Check size={16} weight="bold" className={className} />;
+}
+
+function CloseIcon({ className }: IconProps) {
+  return <X size={16} weight="bold" className={className} />;
 }
 
 function GearIcon({ className }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
-      <path d="M12 8.5A3.5 3.5 0 1 1 8.5 12 3.5 3.5 0 0 1 12 8.5Z" />
-      <path d="M19.4 15a1 1 0 0 0 .2 1.1l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9V20a2 2 0 0 1-4 0v-.2a1 1 0 0 0-.6-.9 1 1 0 0 0-1.1.2l-.1.1a2 2 0 0 1-2.8-2.8l.1-.1a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6H4a2 2 0 0 1 0-4h.2a1 1 0 0 0 .9-.6 1 1 0 0 0-.2-1.1l-.1-.1a2 2 0 0 1 2.8-2.8l.1.1a1 1 0 0 0 1.1.2 1 1 0 0 0 .6-.9V4a2 2 0 0 1 4 0v.2a1 1 0 0 0 .6.9 1 1 0 0 0 1.1-.2l.1-.1a2 2 0 0 1 2.8 2.8l-.1.1a1 1 0 0 0-.2 1.1 1 1 0 0 0 .9.6H20a2 2 0 0 1 0 4h-.2a1 1 0 0 0-.9.6Z" />
-    </svg>
-  );
+  return <Gear size={16} weight="bold" className={className} />;
 }
 
 function HouseIcon({ className }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
-      <path d="M4 11.5 12 5l8 6.5" />
-      <path d="M6.5 10.5V19h11v-8.5" />
-    </svg>
-  );
+  return <House size={16} weight="bold" className={className} />;
 }
 
 function ArrowUpRightIcon({ className }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
-      <path d="M7 17 17 7M9 7h8v8" />
-    </svg>
-  );
-}
-
-function PlayIcon({ className }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <path d="M8 6.5v11l9-5.5-9-5.5Z" />
-    </svg>
-  );
+  return <ArrowSquareOut size={16} weight="bold" className={className} />;
 }
 
 function SignOutIcon({ className }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
-      <path d="M14 16.5 18.5 12 14 7.5" />
-      <path d="M9 12h9.5" />
-      <path d="M10 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h4" />
-    </svg>
-  );
+  return <SignOut size={16} weight="bold" className={className} />;
 }
 
 function LightningIcon({ className }: IconProps) {
-  return (
-    <svg viewBox="0 0 256 256" fill="currentColor" className={className}>
-      <path d="M215.79,118.17a8,8,0,0,0-5-5.66L153.18,90.9l14.66-73.33a8,8,0,0,0-13.69-7l-112,120a8,8,0,0,0,3,13l57.63,21.61L88.16,238.43a8,8,0,0,0,13.69,7l112-120A8,8,0,0,0,215.79,118.17ZM109.37,214l10.47-52.38a8,8,0,0,0-5-9.06L62,132.71l84.62-90.66L136.16,94.43a8,8,0,0,0,5,9.06l52.8,19.8Z" />
-      </svg>
-  );
+  return <Lightning size={18} weight="bold" className={className} />;
 }
 
 function PencilSimpleLineIcon({ className }: IconProps) {
-  return (
-    <svg viewBox="0 0 256 256" fill="currentColor" className={className}>
-      <path d="M227.32,73.37,182.63,28.69a16,16,0,0,0-22.63,0L36.69,152A15.86,15.86,0,0,0,32,163.31V208a16,16,0,0,0,16,16H216a8,8,0,0,0,0-16H115.32l112-112A16,16,0,0,0,227.32,73.37ZM92.69,208H48V163.31l88-88L180.69,120ZM192,108.69,147.32,64l24-24L216,84.69Z" />
-    </svg>
-  );
-}
-
-function PushPinIcon({ className }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <path d="m14.5 3 6.5 6.5-2 2-2.2-.7-3.3 3.3 3.7 3.7-1.4 1.4-3.7-3.7-5.6 5.6-.9-.9 5.6-5.6-3.7-3.7 1.4-1.4 3.7 3.7 3.3-3.3-.7-2.2 2-2Z" />
-    </svg>
-  );
+  return <PencilSimpleLine size={18} weight="bold" className={className} />;
 }
 
 function PortalTooltip(props: {
@@ -194,8 +246,58 @@ function PortalTooltip(props: {
   );
 }
 
+function SidebarModal(props: {
+  open: boolean;
+  title: string;
+  children: ReactNode;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    if (!props.open) {
+      return;
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        props.onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [props.open, props.onClose]);
+
+  if (!props.open) {
+    return null;
+  }
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[12000] flex items-center justify-center bg-black/20 p-4"
+      onClick={props.onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-3xl border border-gray-200 bg-white p-5 shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold text-[#1A162F]">{props.title}</h2>
+          <button
+            type="button"
+            className="rounded-lg p-1 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
+            onClick={props.onClose}
+          >
+            <CloseIcon className="h-4 w-4" />
+          </button>
+        </div>
+        {props.children}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 function SidebarItem(props: {
-  icon: ((iconProps: IconProps) => ReactNode) | string;
+  icon: ComponentType<Record<string, unknown>> | string;
   label: string;
   active: boolean;
   onClick: () => void;
@@ -224,7 +326,7 @@ function SidebarItem(props: {
         {typeof props.icon === "string" ? (
           <img src={props.icon} alt={props.label} className="h-[18px] w-[18px] shrink-0" />
         ) : (
-          props.icon({ className: "h-[18px] w-[18px] shrink-0" })
+          createElement(props.icon, { className: "h-[18px] w-[18px] shrink-0", size: 18, weight: "bold" })
         )}
         {!props.collapsed ? <span className="flex-1 truncate whitespace-nowrap text-[14px] font-medium">{props.label}</span> : null}
         {!props.collapsed ? props.rightSlot : null}
@@ -241,9 +343,32 @@ function TaskItem(props: {
   active: boolean;
   collapsed: boolean;
   onClick: () => void;
+  onRename: () => void;
+  onDelete: () => void;
 }) {
   const [isHovered, setIsHovered] = useState(false);
   const itemRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const SessionIcon = resolveSessionIcon(props.task.name, props.task.id);
+
+  useEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (itemRef.current?.contains(target) || menuRef.current?.contains(target)) {
+        return;
+      }
+      setMenuOpen(false);
+    };
+    window.addEventListener("mousedown", handlePointerDown);
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+    };
+  }, [menuOpen]);
 
   return (
     <>
@@ -253,23 +378,77 @@ function TaskItem(props: {
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         className={`group relative flex cursor-pointer items-center rounded-xl transition-all duration-200 ${
-          props.collapsed ? "mx-2 justify-center px-2 py-3" : "mx-4 gap-3 px-4 py-2.5 pr-10"
+          props.collapsed ? "mx-2 justify-center px-2 py-3" : "mx-4 gap-3 px-4 py-2.5"
         } ${
           props.active
-            ? "bg-[#1A162F]/10 font-semibold text-[#1A162F] hover:bg-[#1A162F]/15"
+            ? "bg-[#1A162F]/10 text-[#1A162F] hover:bg-[#1A162F]/15"
             : "text-slate-500 hover:bg-[#1A162F]/5 hover:text-slate-900"
         }`}
       >
-        {!props.collapsed ? <span className="flex-1 truncate text-[14px] font-medium">{props.task.name}</span> : null}
+        <div className={`${props.active ? "text-[#1A162F]" : "text-[#666F8D]"} flex h-8 w-8 shrink-0 items-center justify-center`}>
+          <SessionIcon size={18} weight="bold" />
+        </div>
+        {!props.collapsed ? <span className={`min-w-0 flex-1 truncate text-[14px] ${props.active ? "font-medium" : "font-normal"}`}>{props.task.name}</span> : null}
         {!props.collapsed ? (
-          <span className={`absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-0.5 transition-all ${isHovered ? "opacity-100" : "opacity-0"}`}>
-            <DotsThreeIcon className="h-[18px] w-[18px]" />
-          </span>
+          <button
+            ref={triggerRef}
+            type="button"
+            className={`ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-md p-1 transition-all ${
+              isHovered || menuOpen ? "opacity-100" : "opacity-0"
+            } ${
+              menuOpen ? "bg-white/88 shadow-sm backdrop-blur-sm" : ""
+            } ${
+              props.active ? "text-[#1A162F] hover:bg-[#1A162F]/6" : "text-text-sub hover:bg-black/[0.04]"
+            }`}
+            onClick={(event) => {
+              event.stopPropagation();
+              setMenuOpen((prev) => !prev);
+            }}
+          >
+            <DotsThreeIcon className="h-4 w-4" />
+          </button>
         ) : null}
       </div>
       <PortalTooltip visible={props.collapsed && isHovered} anchor={itemRef.current}>
         {props.task.name}
       </PortalTooltip>
+      {menuOpen && !props.collapsed && itemRef.current
+        ? createPortal(
+            <div
+              ref={menuRef}
+              className="fixed z-[11000] min-w-[160px] rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl"
+              style={{
+                top: (triggerRef.current ?? itemRef.current).getBoundingClientRect().bottom + 6,
+                left: (triggerRef.current ?? itemRef.current).getBoundingClientRect().left,
+              }}
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100"
+                onClick={() => {
+                  setMenuOpen(false);
+                  props.onRename();
+                }}
+              >
+                Rename
+              </button>
+              {!props.task.isMain ? (
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    props.onDelete();
+                  }}
+                >
+                  Delete scenario
+                </button>
+              ) : null}
+            </div>,
+            document.body,
+          )
+        : null}
     </>
   );
 }
@@ -621,16 +800,24 @@ function WorkspaceSwitcher(props: {
 
 export function ClientAppSidebar(props: ClientAppSidebarProps) {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const [isTasksExpanded, setIsTasksExpanded] = useState(true);
   const [isWindowFullscreen, setIsWindowFullscreen] = useState(false);
   const [recentTasks, setRecentTasks] = useState<SidebarTask[]>([]);
   const [tasksLoading, setTasksLoading] = useState(true);
+  const [hasLoadedTasks, setHasLoadedTasks] = useState(false);
+  const [customSessionLabels, setCustomSessionLabels] = useState<Record<string, string>>(() => readCustomSessionLabels());
   const [bustlyUserInfo, setBustlyUserInfo] = useState<BustlyUserInfo | null>(null);
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState("");
   const [hasLoadedWorkspaces, setHasLoadedWorkspaces] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [renameModalOpen, setRenameModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [renameSaving, setRenameSaving] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [draftScenarioName, setDraftScenarioName] = useState("");
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
@@ -719,14 +906,15 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
     const loadTasks = async () => {
       requestSettled = false;
       if (!disposed) {
-        setTasksLoading(true);
-        setRecentTasks([]);
+        setTasksLoading(!hasLoadedTasks);
       }
       try {
         const status = await window.electronAPI.gatewayStatus();
         if (!status.running) {
           if (!disposed) {
-            setRecentTasks([]);
+            if (!hasLoadedTasks) {
+              setRecentTasks([]);
+            }
             setTasksLoading(false);
           }
           return;
@@ -734,7 +922,9 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
         const connectConfig = await window.electronAPI.gatewayConnectConfig();
         if (!connectConfig.token || !connectConfig.wsUrl) {
           if (!disposed) {
-            setRecentTasks([]);
+            if (!hasLoadedTasks) {
+              setRecentTasks([]);
+            }
             setTasksLoading(false);
           }
           return;
@@ -768,13 +958,11 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
                     .filter((session) => isMainChannelSessionKey(session.key))
                     .map((session) => ({
                       id: session.key,
-                      name:
-                        sanitizeSessionTitle(session.displayName) ||
-                        sanitizeSessionTitle(session.derivedTitle) ||
-                        sanitizeSessionTitle(session.label) ||
-                        session.key,
+                      name: resolveSessionDisplayName(session, customSessionLabels),
+                      isMain: session.key === DEFAULT_SESSION_KEY,
                     })),
                 );
+                setHasLoadedTasks(true);
                 setTasksLoading(false);
               })
               .catch(() => {
@@ -782,7 +970,9 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
                   return;
                 }
                 requestSettled = true;
-                setRecentTasks([]);
+                if (!hasLoadedTasks) {
+                  setRecentTasks([]);
+                }
                 setTasksLoading(false);
               });
           },
@@ -796,7 +986,9 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
         client.start();
       } catch {
         if (!disposed) {
-          setRecentTasks([]);
+          if (!hasLoadedTasks) {
+            setRecentTasks([]);
+          }
           setTasksLoading(false);
         }
       }
@@ -815,7 +1007,7 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
       clientRef.current?.stop();
       clientRef.current = null;
     };
-  }, [location.pathname, location.search]);
+  }, [customSessionLabels, hasLoadedTasks, location.pathname, location.search]);
 
   useEffect(() => {
     let disposed = false;
@@ -910,6 +1102,93 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
     }
   };
 
+  const selectedTask = recentTasks.find((entry) => entry.id === selectedTaskId) ?? null;
+
+  const handleCreateScenario = () => {
+    const name = draftScenarioName.trim() || "New scenario";
+    const nextSessionKey = buildChannelSessionKey(DEFAULT_SESSION_KEY);
+    const nextLabels = { ...customSessionLabels, [nextSessionKey]: name };
+    setCustomSessionLabels(nextLabels);
+    writeCustomSessionLabels(nextLabels);
+    setRecentTasks((prev) => [
+      ...prev.filter((entry) => entry.id !== nextSessionKey),
+      { id: nextSessionKey, name, isMain: false },
+    ]);
+    setHasLoadedTasks(true);
+    setDraftScenarioName("");
+    setCreateModalOpen(false);
+    void navigate(`/chat?session=${encodeURIComponent(nextSessionKey)}&label=${encodeURIComponent(name)}`);
+  };
+
+  const handleRenameScenario = async () => {
+    if (!selectedTaskId) {
+      return;
+    }
+    const name = draftScenarioName.trim();
+    if (!name || renameSaving) {
+      return;
+    }
+    setRenameSaving(true);
+    setRenameError(null);
+    try {
+      const result = await window.electronAPI.gatewayPatchSessionLabel(selectedTaskId, name);
+      if (!result.success) {
+        setRenameError(result.error ?? "Failed to save scenario name.");
+        return;
+      }
+      const nextLabels = { ...customSessionLabels, [selectedTaskId]: name };
+      setCustomSessionLabels(nextLabels);
+      writeCustomSessionLabels(nextLabels);
+      setRecentTasks((prev) => prev.map((entry) => (entry.id === selectedTaskId ? { ...entry, name } : entry)));
+      setRenameModalOpen(false);
+      setDraftScenarioName("");
+      if (activeTaskId === selectedTaskId) {
+        void navigate(`/chat?session=${encodeURIComponent(selectedTaskId)}&label=${encodeURIComponent(name)}`, { replace: true });
+      }
+      notifySidebarTasksRefresh();
+    } catch (error) {
+      setRenameError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setRenameSaving(false);
+    }
+  };
+
+  const handleDeleteScenario = async () => {
+    if (!selectedTask || selectedTask.isMain) {
+      setDeleteModalOpen(false);
+      return;
+    }
+    try {
+      const connectConfig = await window.electronAPI.gatewayConnectConfig();
+      if (!connectConfig.token || !connectConfig.wsUrl) {
+        setDeleteModalOpen(false);
+        return;
+      }
+      const client = new GatewayBrowserClient({
+        url: connectConfig.wsUrl,
+        token: connectConfig.token ?? undefined,
+        clientName: "openclaw-control-ui",
+        mode: "webchat",
+        instanceId: `bustly-electron-sidebar-delete-${Date.now()}`,
+      });
+      client.start();
+      await client.request("sessions.delete", { key: selectedTask.id });
+      client.stop();
+      const nextLabels = { ...customSessionLabels };
+      delete nextLabels[selectedTask.id];
+      setCustomSessionLabels(nextLabels);
+      writeCustomSessionLabels(nextLabels);
+      setRecentTasks((prev) => prev.filter((entry) => entry.id !== selectedTask.id));
+      setDeleteModalOpen(false);
+      if (activeTaskId === selectedTask.id) {
+        void navigate("/chat", { replace: true });
+      }
+      notifySidebarTasksRefresh();
+    } catch {
+      setDeleteModalOpen(false);
+    }
+  };
+
   return (
     <div
       className={`[-webkit-app-region:drag] z-[100] flex h-full flex-col border-r border-white/40 bg-white/30 backdrop-blur-lg transition-all duration-300 ${
@@ -970,92 +1249,120 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
       </div>
 
       <div
-        className={`[-webkit-app-region:no-drag] custom-scrollbar flex flex-1 flex-col py-2 ${
+        className={`[-webkit-app-region:no-drag] custom-scrollbar flex flex-1 flex-col ${
           props.collapsed ? "items-center overflow-visible" : "overflow-y-auto overflow-x-hidden"
         }`}
       >
         {!props.collapsed ? (
-          <div className="mb-2 w-64 space-y-1">
-            <SidebarItem
-              icon={PencilSimpleLineIcon}
-              label="New Task"
-              active={isNewTaskPage && !activeTaskId}
-              onClick={() => {
-                void navigate("/chat");
-              }}
-              collapsed={false}
-            />
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="flex-1 space-y-0.5 overflow-y-auto px-0 py-4">
+              {tasksLoading ? (
+                <>
+                  <TaskItemSkeleton />
+                  <TaskItemSkeleton />
+                  <TaskItemSkeleton />
+                </>
+              ) : (
+                recentTasks.map((task) => (
+                  <TaskItem
+                    key={task.id}
+                    task={task}
+                    active={activeTaskId === task.id}
+                    collapsed={false}
+                    onClick={() => {
+                      void navigate(`/chat?session=${encodeURIComponent(task.id)}&label=${encodeURIComponent(task.name)}`);
+                    }}
+                    onRename={() => {
+                      setSelectedTaskId(task.id);
+                      setDraftScenarioName(task.name);
+                      setRenameError(null);
+                      setRenameModalOpen(true);
+                    }}
+                    onDelete={() => {
+                      setSelectedTaskId(task.id);
+                      setDeleteModalOpen(true);
+                    }}
+                  />
+                ))
+              )}
 
-            <SidebarItem
-              icon={LightningIcon}
-              label="Skills"
-              active={isSkillPage}
-              onClick={() => {
-                void navigate("/skill");
-              }}
-              collapsed={false}
-            />
-
-            <div className="mt-8 pt-8">
-              <div
-                className="group/header mx-2 mb-2 flex cursor-pointer items-center justify-between rounded-xl px-4 py-1.5 transition-colors hover:bg-gray-100"
-                onClick={() => setIsTasksExpanded((prev) => !prev)}
+              <button
+                type="button"
+                onClick={() => {
+                  setDraftScenarioName("");
+                  setCreateModalOpen(true);
+                }}
+                className="mx-4 flex w-[calc(100%-2rem)] items-center gap-3 rounded-xl px-4 py-2.5 text-left text-text-sub transition-all duration-200 hover:bg-[#1A162F]/5 hover:text-text-main"
               >
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold tracking-wider text-slate-500">All tasks</span>
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center text-[#666F8D]">
+                  <Plus size={18} weight="bold" />
                 </div>
-                <button type="button" className="text-slate-500 transition-colors hover:text-slate-900">
-                  {isTasksExpanded ? <CaretDownIcon className="h-3.5 w-3.5" /> : <CaretRightIcon className="h-3.5 w-3.5" />}
-                </button>
-              </div>
+                <span className="min-w-0 flex-1 truncate whitespace-nowrap text-[14px] font-normal">New scenario</span>
+              </button>
+            </div>
 
-              {isTasksExpanded ? (
-                <div className="space-y-0.5">
-                  {tasksLoading ? (
-                    <>
-                      <TaskItemSkeleton />
-                      <TaskItemSkeleton />
-                      <TaskItemSkeleton />
-                    </>
-                  ) : (
-                    recentTasks.map((task) => (
-                      <TaskItem
-                        key={task.id}
-                        task={task}
-                        active={activeTaskId === task.id}
-                        collapsed={false}
-                        onClick={() => {
-                          void navigate(`/chat?session=${encodeURIComponent(task.id)}`);
-                        }}
-                      />
-                    ))
-                  )}
-                </div>
-              ) : null}
+            <div className="space-y-1 border-t border-[#E5E7EB] bg-gray-50/30 p-3">
+              <SidebarItem
+                icon={LightningIcon}
+                label="Skills"
+                active={isSkillPage}
+                onClick={() => {
+                  void navigate("/skill");
+                }}
+                collapsed={false}
+              />
             </div>
           </div>
         ) : (
-          <div className="flex w-full flex-col space-y-3 px-2 pt-2">
-            <SidebarItem
-              icon={PencilSimpleLineIcon}
-              label="New Task"
-              active={isNewTaskPage && !activeTaskId}
-              onClick={() => {
-                void navigate("/chat");
-              }}
-              collapsed
-              showTooltip
-            />
-            <SidebarItem
-              icon={LightningIcon}
-              label="Skills"
-              active={isSkillPage}
-              onClick={() => {
-                void navigate("/skill");
-              }}
-              collapsed
-              showTooltip
-            />
+          <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-4 pt-4">
+            <div className="flex w-full flex-1 flex-col items-center gap-3">
+              {recentTasks.slice(0, 5).map((task) => (
+                <TaskItem
+                  key={task.id}
+                  task={task}
+                  active={activeTaskId === task.id}
+                  collapsed
+                  onClick={() => {
+                    void navigate(`/chat?session=${encodeURIComponent(task.id)}&label=${encodeURIComponent(task.name)}`);
+                  }}
+                    onRename={() => {
+                      setSelectedTaskId(task.id);
+                      setDraftScenarioName(task.name);
+                      setRenameError(null);
+                      setRenameModalOpen(true);
+                    }}
+                  onDelete={() => {
+                    setSelectedTaskId(task.id);
+                    setDeleteModalOpen(true);
+                  }}
+                />
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  setDraftScenarioName("");
+                  setCreateModalOpen(true);
+                }}
+                className="flex h-10 w-10 items-center justify-center rounded-xl text-text-sub transition-all hover:bg-[#1A162F]/5 hover:text-text-main"
+                aria-label="New scenario"
+                title="New scenario"
+              >
+                <Plus size={18} weight="bold" />
+              </button>
+            </div>
+
+            <div className="w-full space-y-2 border-t border-[#E5E7EB] px-2 pt-4">
+              <SidebarItem
+                icon={LightningIcon}
+                label="Skills"
+                active={isSkillPage}
+                onClick={() => {
+                  void navigate("/skill");
+                }}
+                collapsed
+                showTooltip
+              />
+            </div>
           </div>
         )}
       </div>
@@ -1133,6 +1440,128 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
           ) : null}
         </div>
       </div>
+
+      <SidebarModal
+        open={createModalOpen}
+        title="Create scenario"
+        onClose={() => {
+          setCreateModalOpen(false);
+          setDraftScenarioName("");
+        }}
+      >
+        <div className="space-y-5">
+          <div>
+            <label className="mb-2 block text-sm font-medium text-[#1A162F]">Scenario name</label>
+            <input
+              autoFocus
+              type="text"
+              value={draftScenarioName}
+              onChange={(event) => setDraftScenarioName(event.target.value)}
+              placeholder="e.g. Supplier finder"
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-normal transition-all focus:border-[#1A162F] focus:outline-none focus:ring-2 focus:ring-[#1A162F]/5"
+            />
+          </div>
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100"
+              onClick={() => {
+                setCreateModalOpen(false);
+                setDraftScenarioName("");
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="rounded-lg bg-[#1A162F] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#27223F]"
+              onClick={handleCreateScenario}
+            >
+              Create scenario
+            </button>
+          </div>
+        </div>
+      </SidebarModal>
+
+      <SidebarModal
+        open={renameModalOpen}
+        title="Rename scenario"
+        onClose={() => {
+          setRenameModalOpen(false);
+          setDraftScenarioName("");
+          setRenameError(null);
+        }}
+      >
+        <div className="space-y-5">
+          <div>
+            <label className="mb-2 block text-sm font-medium text-[#1A162F]">Scenario name</label>
+            <input
+              autoFocus
+              type="text"
+              value={draftScenarioName}
+              onChange={(event) => setDraftScenarioName(event.target.value)}
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-normal transition-all focus:border-[#1A162F] focus:outline-none focus:ring-2 focus:ring-[#1A162F]/5"
+            />
+          </div>
+          {renameError ? <p className="text-sm text-red-600">{renameError}</p> : null}
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100"
+              disabled={renameSaving}
+              onClick={() => {
+                setRenameModalOpen(false);
+                setDraftScenarioName("");
+                setRenameError(null);
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={renameSaving}
+              className="rounded-lg bg-[#1A162F] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#27223F] disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={handleRenameScenario}
+            >
+              {renameSaving ? "Saving..." : "Save"}
+            </button>
+          </div>
+        </div>
+      </SidebarModal>
+
+      <SidebarModal
+        open={deleteModalOpen}
+        title="Delete scenario"
+        onClose={() => {
+          setDeleteModalOpen(false);
+        }}
+      >
+        <div className="space-y-5">
+          <p className="text-sm leading-6 text-gray-600">
+            {`Are you sure you want to delete ${selectedTask?.name ? `"${selectedTask.name}"` : "this scenario"}? This action cannot be undone.`}
+          </p>
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100"
+              onClick={() => {
+                setDeleteModalOpen(false);
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
+              onClick={() => {
+                void handleDeleteScenario();
+              }}
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </SidebarModal>
     </div>
   );
 }

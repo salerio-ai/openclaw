@@ -165,6 +165,7 @@ interface ElectronAPI {
   gatewayStop: () => Promise<{ success: boolean; error?: string }>;
   gatewayStatus: () => Promise<GatewayStatus>;
   gatewayConnectConfig: () => Promise<GatewayConnectConfig>;
+  gatewayPatchSessionLabel: (key: string, label: string) => Promise<{ success: boolean; error?: string }>;
   selectChatContextPaths: () => Promise<ChatContextPathSelection[]>;
   getAppInfo: () => Promise<AppInfo>;
   getNativeFullscreenStatus: () => Promise<{ isNativeFullscreen: boolean }>;

@@ -25,29 +25,29 @@ export const TOOL_DISPLAY_CONFIG = {
     ]
   },
   "tools": {
-    "bash": {
-      "icon": "wrench",
-      "title": "Bash",
+    "exec": {
+      "icon": "terminalWindow",
+      "title": "Command Execution",
       "detailKeys": ["command"]
     },
     "process": {
-      "icon": "wrench",
-      "title": "Process",
+      "icon": "cpu",
+      "title": "Process Manager",
       "detailKeys": ["sessionId"]
     },
     "read": {
       "icon": "fileText",
-      "title": "Read",
+      "title": "Read File",
       "detailKeys": ["path"]
     },
     "write": {
-      "icon": "edit",
-      "title": "Write",
+      "icon": "penNib",
+      "title": "Write File",
       "detailKeys": ["path"]
     },
     "edit": {
-      "icon": "penLine",
-      "title": "Edit",
+      "icon": "pencilSimple",
+      "title": "Edit File",
       "detailKeys": ["path"]
     },
     "attach": {
@@ -56,8 +56,8 @@ export const TOOL_DISPLAY_CONFIG = {
       "detailKeys": ["path", "url", "fileName"]
     },
     "browser": {
-      "icon": "globe",
-      "title": "Browser",
+      "icon": "browser",
+      "title": "Browser Automation",
       "actions": {
         "status": { "label": "status" },
         "start": { "label": "start" },
@@ -101,8 +101,8 @@ export const TOOL_DISPLAY_CONFIG = {
       }
     },
     "canvas": {
-      "icon": "image",
-      "title": "Canvas",
+      "icon": "square",
+      "title": "Canvas Control",
       "actions": {
         "present": { "label": "present", "detailKeys": ["target", "node", "nodeId"] },
         "hide": { "label": "hide", "detailKeys": ["node", "nodeId"] },
@@ -114,8 +114,8 @@ export const TOOL_DISPLAY_CONFIG = {
       }
     },
     "nodes": {
-      "icon": "smartphone",
-      "title": "Nodes",
+      "icon": "shareNetwork",
+      "title": "Node Control",
       "actions": {
         "status": { "label": "status" },
         "describe": { "label": "describe", "detailKeys": ["node", "nodeId"] },
@@ -137,6 +137,71 @@ export const TOOL_DISPLAY_CONFIG = {
           "detailKeys": ["node", "nodeId", "duration", "durationMs", "fps", "screenIndex"]
         }
       }
+    },
+    "message": {
+      "icon": "chatCircle",
+      "title": "Message Channel",
+      "detailKeys": ["to", "channelId", "guildId", "userId", "content"]
+    },
+    "tts": {
+      "icon": "speakerHigh",
+      "title": "Text to Speech",
+      "detailKeys": ["voice", "text"]
+    },
+    "agents_list": {
+      "icon": "listBullets",
+      "title": "List Agents",
+      "detailKeys": ["scope"]
+    },
+    "sessions_list": {
+      "icon": "listDashes",
+      "title": "List Sessions",
+      "detailKeys": ["limit", "spawnedBy"]
+    },
+    "sessions_history": {
+      "icon": "clock",
+      "title": "Session History",
+      "detailKeys": ["sessionId", "limit"]
+    },
+    "sessions_send": {
+      "icon": "paperPlaneRight",
+      "title": "Send Message",
+      "detailKeys": ["sessionId", "text", "message"]
+    },
+    "sessions_spawn": {
+      "icon": "plusCircle",
+      "title": "Spawn Session",
+      "detailKeys": ["agent", "model", "sessionId"]
+    },
+    "subagents": {
+      "icon": "robot",
+      "title": "Manage Sub-agents",
+      "detailKeys": ["id", "action"]
+    },
+    "session_status": {
+      "icon": "pulse",
+      "title": "Session Status",
+      "detailKeys": ["sessionId", "model"]
+    },
+    "web_search": {
+      "icon": "globe",
+      "title": "Web Search",
+      "detailKeys": ["query", "q"]
+    },
+    "web_fetch": {
+      "icon": "downloadSimple",
+      "title": "Web Fetch",
+      "detailKeys": ["url", "targetUrl"]
+    },
+    "memory_search": {
+      "icon": "magnifyingGlass",
+      "title": "Memory Search",
+      "detailKeys": ["query", "q"]
+    },
+    "memory_get": {
+      "icon": "brain",
+      "title": "Get Memory",
+      "detailKeys": ["id", "memoryId"]
     },
     "cron": {
       "icon": "loader",
@@ -181,7 +246,7 @@ export const TOOL_DISPLAY_CONFIG = {
       }
     },
     "discord": {
-      "icon": "messageSquare",
+      "icon": "chatCircle",
       "title": "Discord",
       "actions": {
         "react": { "label": "react", "detailKeys": ["channelId", "messageId", "emoji"] },
@@ -216,7 +281,7 @@ export const TOOL_DISPLAY_CONFIG = {
       }
     },
     "slack": {
-      "icon": "messageSquare",
+      "icon": "chatCircle",
       "title": "Slack",
       "actions": {
         "react": { "label": "react", "detailKeys": ["channelId", "messageId", "emoji"] },

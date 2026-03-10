@@ -4,6 +4,13 @@ export type ChatAttachment = {
   mimeType: string;
 };
 
+export type TimelineArtifact = {
+  kind: "file" | "directory" | "image";
+  name: string;
+  path?: string;
+  imageUrl?: string;
+};
+
 export type ChatQueueItem = {
   id: string;
   text: string;
@@ -19,6 +26,7 @@ export type TimelineNode =
       timestamp: number;
       text: string;
       tone: "user" | "assistant" | "thinking" | "system";
+      artifacts?: TimelineArtifact[];
       streaming?: boolean;
       final?: boolean;
     }
