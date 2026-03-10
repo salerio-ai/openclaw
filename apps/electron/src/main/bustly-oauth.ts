@@ -45,6 +45,26 @@ function ensureConfigDir(): void {
   }
 }
 
+function migrateLegacyUserTokenFields(state: BustlyOAuthState): BustlyOAuthState {
+  const nextState: BustlyOAuthState = {
+    ...state,
+    user: state.user ? { ...state.user } : undefined,
+  };
+
+  const legacyAccessToken = state.bustlySearchData?.SEARCH_DATA_SUPABASE_ACCESS_TOKEN?.trim() ?? "";
+  const legacyWorkspaceId = state.bustlySearchData?.SEARCH_DATA_WORKSPACE_ID?.trim() ?? "";
+  const currentAccessToken = nextState.user?.userAccessToken?.trim() ?? "";
+  const currentWorkspaceId = nextState.user?.workspaceId?.trim() ?? "";
+
+  if (nextState.user && !currentAccessToken && legacyAccessToken) {
+    nextState.user.userAccessToken = legacyAccessToken;
+  }
+  if (nextState.user && !currentWorkspaceId && legacyWorkspaceId) {
+    nextState.user.workspaceId = legacyWorkspaceId;
+  }
+  return nextState;
+}
+
 /**
  * Generate device ID for OAuth
  */
@@ -67,7 +87,13 @@ export function readBustlyOAuthState(): BustlyOAuthState | null {
       return null;
     }
     const content = readFileSync(oauthFile, "utf-8");
-    return JSON.parse(content) as BustlyOAuthState;
+    const parsed = JSON.parse(content) as BustlyOAuthState;
+    const migrated = migrateLegacyUserTokenFields(parsed);
+    if (JSON.stringify(migrated) !== JSON.stringify(parsed)) {
+      writeBustlyOAuthState(migrated);
+      console.log("[BustlyOAuth] Migrated legacy token/workspace fields into user profile");
+    }
+    return migrated;
   } catch (error) {
     console.error("[BustlyOAuth] Failed to read state:", error);
     return null;
@@ -91,14 +117,11 @@ export function writeBustlyOAuthState(state: BustlyOAuthState): void {
 
 /**
  * Check if user is logged in
- * Login state is determined by either:
- * 1. Presence of Supabase access token in search data config (new format)
- * 2. Presence of user info (old format, for backward compatibility)
+ * Login state is determined by user.userAccessToken only.
  */
 export async function isBustlyLoggedIn(): Promise<boolean> {
   const state = readBustlyOAuthState();
-  // Check for new format (supabase access token in search data) or old format (user exists)
-  const accessToken = state?.bustlySearchData?.SEARCH_DATA_SUPABASE_ACCESS_TOKEN?.trim() ?? "";
+  const accessToken = state?.user?.userAccessToken?.trim() ?? "";
   if (!accessToken) {
     console.log("[BustlyOAuth] Logged in=false (no access token)");
     return false;
@@ -124,16 +147,13 @@ export async function getBustlyUserInfo(): Promise<BustlyOAuthState["user"] | nu
  */
 export async function verifyBustlyLoginStatus(): Promise<boolean> {
   const state = readBustlyOAuthState();
-  const accessToken = state?.bustlySearchData?.SEARCH_DATA_SUPABASE_ACCESS_TOKEN?.trim() ?? "";
+  const accessToken = state?.user?.userAccessToken?.trim() ?? "";
   if (!accessToken) {
     console.log("[BustlyOAuth] Verify skipped (no access token)");
     return false;
   }
 
-  const workspaceId =
-    state?.bustlySearchData?.SEARCH_DATA_WORKSPACE_ID?.trim() ??
-    state?.user?.workspaceId?.trim() ??
-    "";
+  const workspaceId = state?.user?.workspaceId?.trim() ?? "";
 
   if (!workspaceId) {
     console.warn("[BustlyOAuth] Missing workspaceId; skipping verify check");
@@ -221,8 +241,13 @@ export function getBustlyAuthCode(): string | null {
   if (!state || !state.authCode) {
     return null;
   }
+  const expiresAt = typeof state.expiresAt === "number" ? state.expiresAt : 0;
+  if (!expiresAt) {
+    clearBustlyOAuthState();
+    return null;
+  }
   // Check expiry
-  if (Date.now() > state.expiresAt) {
+  if (Date.now() > expiresAt) {
     clearBustlyOAuthState();
     return null;
   }
@@ -232,13 +257,14 @@ export function getBustlyAuthCode(): string | null {
 /**
  * Complete login - store user info and search data config
  * All configuration is stored in bustlyOauth.json
- * Supabase access token is stored within bustlySearchData.SEARCH_DATA_SUPABASE_ACCESS_TOKEN
+ * Supabase access token is mirrored to user.userAccessToken
  */
 export function completeBustlyLogin(params: {
   user: {
     userId: string;
     userName: string;
     userEmail: string;
+    userAccessToken?: string;
     workspaceId: string;
     skills: string[];
   };

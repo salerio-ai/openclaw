@@ -4,7 +4,7 @@
  */
 
 import { randomBytes } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync, unlinkSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import * as os from "node:os";
 import { resolve } from "node:path";
 import type { BustlyOAuthState, BustlySearchDataConfig } from "./config/types.base.js";
@@ -21,6 +21,24 @@ function ensureConfigDir(): void {
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true, mode: 0o700 });
   }
+}
+
+function migrateLegacyUserTokenFields(state: BustlyOAuthState): BustlyOAuthState {
+  const nextState: BustlyOAuthState = {
+    ...state,
+    user: state.user ? { ...state.user } : undefined,
+  };
+  const legacyAccessToken = state.bustlySearchData?.SEARCH_DATA_SUPABASE_ACCESS_TOKEN?.trim() ?? "";
+  const legacyWorkspaceId = state.bustlySearchData?.SEARCH_DATA_WORKSPACE_ID?.trim() ?? "";
+  const currentAccessToken = nextState.user?.userAccessToken?.trim() ?? "";
+  const currentWorkspaceId = nextState.user?.workspaceId?.trim() ?? "";
+  if (nextState.user && !currentAccessToken && legacyAccessToken) {
+    nextState.user.userAccessToken = legacyAccessToken;
+  }
+  if (nextState.user && !currentWorkspaceId && legacyWorkspaceId) {
+    nextState.user.workspaceId = legacyWorkspaceId;
+  }
+  return nextState;
 }
 
 /**
@@ -107,7 +125,13 @@ export function readBustlyOAuthState(): BustlyOAuthState | null {
       return null;
     }
     const content = readFileSync(BUSTLY_OAUTH_FILE, "utf-8");
-    return JSON.parse(content) as BustlyOAuthState;
+    const parsed = JSON.parse(content) as BustlyOAuthState;
+    const migrated = migrateLegacyUserTokenFields(parsed);
+    if (JSON.stringify(migrated) !== JSON.stringify(parsed)) {
+      writeFileSync(BUSTLY_OAUTH_FILE, JSON.stringify(migrated, null, 2), "utf-8");
+      console.log("[BustlyOAuth] Migrated legacy token/workspace fields into user profile");
+    }
+    return migrated;
   } catch (error) {
     console.error("[BustlyOAuth] Failed to read state:", error);
     return null;
@@ -119,8 +143,8 @@ export function readBustlyOAuthState(): BustlyOAuthState | null {
  */
 export function isBustlyLoggedIn(): boolean {
   const state = readBustlyOAuthState();
-  // Check for Supabase access token in search data config, or old format (user exists)
-  return !!state?.bustlySearchData?.SEARCH_DATA_SUPABASE_ACCESS_TOKEN || !!state?.user;
+  // Single source of truth for gateway JWT.
+  return Boolean(state?.user?.userAccessToken?.trim());
 }
 
 /**
@@ -145,7 +169,7 @@ export function logoutBustly(): void {
 /**
  * Complete login - store user info and search data config
  * This is the final step after successful token exchange
- * Supabase access token is stored within bustlySearchData
+ * Supabase access token is mirrored to user.userAccessToken
  */
 export function completeBustlyLogin(params: {
   user: BustlyOAuthState["user"];
@@ -179,20 +203,6 @@ export function completeBustlyLogin(params: {
   };
   writeBustlyOAuthState(newState);
   console.log("[BustlyOAuth] Login completed for user:", params.user?.userEmail);
-}
-
-/**
- * Clear OAuth state file
- */
-function clearBustlyOAuthState(): void {
-  try {
-    if (existsSync(BUSTLY_OAUTH_FILE)) {
-      unlinkSync(BUSTLY_OAUTH_FILE);
-      console.log("[BustlyOAuth] State cleared");
-    }
-  } catch (error) {
-    console.error("[BustlyOAuth] Failed to clear state:", error);
-  }
 }
 
 /**

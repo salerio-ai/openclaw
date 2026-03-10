@@ -232,6 +232,7 @@ async function handleBustlyOAuthCallbackHttpRequest(
         userId: apiResponse.data.userId,
         userName: apiResponse.data.userName,
         userEmail: apiResponse.data.userEmail,
+        userAccessToken: supabaseAccessToken,
         workspaceId: apiResponse.data.workspaceId,
         skills: searchDataConfig ? ["search-data"] : (apiResponse.data.skills ?? []),
       },

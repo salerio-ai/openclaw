@@ -36,23 +36,10 @@ import {
   type ProviderId,
 } from "./oauth-handler.js";
 import * as BustlyOAuth from "./bustly-oauth.js";
-import { loadModelCatalog } from "../../../../src/agents/model-catalog";
-import { upsertAuthProfile } from "../../../../src/agents/auth-profiles";
-import { DEFAULT_PROVIDER } from "../../../../src/agents/defaults";
-import {
-  buildModelAliasIndex,
-  modelKey,
-  normalizeProviderId,
-} from "../../../../src/agents/model-selection";
+import { normalizeProviderId } from "../../../../src/agents/model-selection";
 import { loadConfig } from "../../../../src/config/config";
 import { mergeWhatsAppConfig } from "../../../../src/config/merge-config";
 import type { DmPolicy, OpenClawConfig } from "../../../../src/config/types";
-import {
-  applyAuthProfileConfig,
-  setOpenrouterApiKey,
-  writeOAuthCredentials,
-} from "../../../../src/commands/onboard-auth";
-import { applyPrimaryModel } from "../../../../src/commands/model-picker";
 import { enablePluginInConfig } from "../../../../src/plugins/enable";
 import { normalizeE164 } from "../../../../src/utils";
 import {
@@ -63,6 +50,60 @@ import { startWebLoginWithQr, waitForWebLogin } from "../../../../src/web/login-
 import { webAuthExists } from "../../../../src/web/session";
 
 const __dirname = resolve(fileURLToPath(import.meta.url), "..");
+
+function parseDotEnv(content: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const rawLine of content.split("\n")) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) {
+      continue;
+    }
+    const idx = line.indexOf("=");
+    if (idx <= 0) {
+      continue;
+    }
+    const key = line.slice(0, idx).trim();
+    let value = line.slice(idx + 1).trim();
+    if (
+      (value.startsWith("\"") && value.endsWith("\"")) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    if (!key || !value) {
+      continue;
+    }
+    out[key] = value;
+  }
+  return out;
+}
+
+function loadMainProcessEnvFromDotEnv(): void {
+  const envPathCandidates = [
+    resolve(__dirname, "../../.env"),
+    resolve(__dirname, "../.env"),
+    resolve(process.cwd(), ".env"),
+  ];
+  for (const envPath of envPathCandidates) {
+    if (!existsSync(envPath)) {
+      continue;
+    }
+    try {
+      const parsed = parseDotEnv(readFileSync(envPath, "utf-8"));
+      for (const [key, value] of Object.entries(parsed)) {
+        if (!process.env[key]?.trim()) {
+          process.env[key] = value;
+        }
+      }
+      break;
+    } catch (error) {
+      console.error(`[Env] Failed to load ${envPath}:`, error);
+    }
+  }
+}
+
+loadMainProcessEnvFromDotEnv();
+
 const autoUpdater = updater.autoUpdater;
 const APP_PROTOCOL = "bustly";
 const DEEP_LINK_CHANNEL = "deep-link";
@@ -221,10 +262,175 @@ const BUSTLY_LOGIN_HASH = "/bustly-login";
 const PROVIDER_SETUP_HASH = "/provider-setup";
 const DEV_PANEL_SHORTCUT = "CommandOrControl+Shift+Alt+D";
 const DASHBOARD_CHANNEL_PLUGIN_IDS = ["whatsapp"] as const;
+const BUSTLY_PROVIDER_ID = "bustly";
+const BUSTLY_PROVIDER_PROFILE_ID = `${BUSTLY_PROVIDER_ID}:default`;
+const BUSTLY_MODEL_GATEWAY_BASE_URL =
+  process.env.BUSTLY_MODEL_GATEWAY_BASE_URL?.trim() || "https://gw.bustly.ai/api/v1";
+const BUSTLY_MODEL_GATEWAY_USER_AGENT =
+  process.env.BUSTLY_MODEL_GATEWAY_USER_AGENT?.trim() || "openclaw/2026.2.24";
+const BUSTLY_ROUTE_MODELS = [
+  {
+    routeKey: "chat.lite",
+    modelRef: "bustly/chat.lite",
+    alias: "Lite",
+    description: "Fast & efficient for daily tasks.",
+    reasoning: false,
+  },
+  {
+    routeKey: "chat.pro",
+    modelRef: "bustly/chat.pro",
+    alias: "Pro",
+    description: "Balanced performance for complex reasoning.",
+    reasoning: true,
+  },
+  {
+    routeKey: "chat.max",
+    modelRef: "bustly/chat.max",
+    alias: "Max",
+    description: "Frontier intelligence for critical challenges.",
+    reasoning: true,
+  },
+] as const;
+const BUSTLY_MODEL_REF_SET = new Set<string>(BUSTLY_ROUTE_MODELS.map((entry) => entry.modelRef));
+const BUSTLY_ROUTE_KEY_SET = new Set<string>(BUSTLY_ROUTE_MODELS.map((entry) => entry.routeKey));
 const PRELOAD_PATH = process.env.NODE_ENV === "development"
   ? resolve(__dirname, "main/preload.js")
   : resolve(__dirname, "preload.js");
 const UPDATE_STATUS_CHANNEL = "update-status";
+
+function resolveBustlyWorkspaceIdFromOAuthState(): string {
+  const oauthState = BustlyOAuth.readBustlyOAuthState();
+  return oauthState?.user?.workspaceId?.trim() || "";
+}
+
+function normalizeBustlyModelRef(value: unknown): string {
+  const raw = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (BUSTLY_MODEL_REF_SET.has(raw)) {
+    return raw;
+  }
+  if (raw.startsWith(`${BUSTLY_PROVIDER_ID}/`)) {
+    const routeKey = raw.slice(`${BUSTLY_PROVIDER_ID}/`.length);
+    if (BUSTLY_ROUTE_KEY_SET.has(routeKey)) {
+      return `${BUSTLY_PROVIDER_ID}/${routeKey}`;
+    }
+  }
+  if (BUSTLY_ROUTE_KEY_SET.has(raw)) {
+    return `${BUSTLY_PROVIDER_ID}/${raw}`;
+  }
+  if (raw === "lite" || raw === "auto") {
+    return "bustly/chat.lite";
+  }
+  if (raw === "pro") {
+    return "bustly/chat.pro";
+  }
+  if (raw === "max") {
+    return "bustly/chat.max";
+  }
+  return "bustly/chat.lite";
+}
+
+function buildBustlyProviderHeaders(workspaceId?: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    "User-Agent": BUSTLY_MODEL_GATEWAY_USER_AGENT,
+  };
+  if (workspaceId?.trim()) {
+    headers["X-Workspace-Id"] = workspaceId.trim();
+  }
+  return headers;
+}
+
+function buildBustlyProviderModels(headers: Record<string, string>) {
+  return BUSTLY_ROUTE_MODELS.map((entry) => ({
+    id: entry.routeKey,
+    name: entry.alias,
+    reasoning: entry.reasoning,
+    input: ["text", "image"] as Array<"text" | "image">,
+    cost: {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+    },
+    contextWindow: 200_000,
+    maxTokens: 8_192,
+    headers: { ...headers },
+  }));
+}
+
+function resolveBustlyGatewayBaseUrl(cfg: OpenClawConfig): string {
+  const configured = cfg.models?.providers?.[BUSTLY_PROVIDER_ID]?.baseUrl?.trim();
+  if (configured) {
+    return configured;
+  }
+  return BUSTLY_MODEL_GATEWAY_BASE_URL;
+}
+
+function applyBustlyOnlyConfig(cfg: OpenClawConfig, selectedModelInput?: string): OpenClawConfig {
+  const selectedModel = normalizeBustlyModelRef(selectedModelInput);
+  const workspaceId = resolveBustlyWorkspaceIdFromOAuthState();
+  const bustlyHeaders = buildBustlyProviderHeaders(workspaceId);
+  const nextAgentModels: Record<string, { alias?: string }> = {};
+  for (const entry of BUSTLY_ROUTE_MODELS) {
+    nextAgentModels[entry.modelRef] = { alias: entry.alias };
+  }
+  const existingDefaults = cfg.agents?.defaults ?? {};
+  const existingModelConfig = existingDefaults.model;
+  const preservedFallbacks =
+    typeof existingModelConfig === "object" &&
+    existingModelConfig !== null &&
+    Array.isArray((existingModelConfig as { fallbacks?: unknown }).fallbacks)
+      ? (existingModelConfig as { fallbacks?: string[] }).fallbacks
+      : undefined;
+
+  return {
+    ...cfg,
+    auth: {
+      ...cfg.auth,
+      profiles: {
+        [BUSTLY_PROVIDER_PROFILE_ID]: {
+          provider: BUSTLY_PROVIDER_ID,
+          mode: "token",
+        },
+      },
+      order: {
+        [BUSTLY_PROVIDER_ID]: [BUSTLY_PROVIDER_PROFILE_ID],
+      },
+    },
+    agents: {
+      ...cfg.agents,
+      defaults: {
+        ...existingDefaults,
+        model: {
+          ...(preservedFallbacks ? { fallbacks: preservedFallbacks } : {}),
+          primary: selectedModel,
+        },
+        models: nextAgentModels,
+      },
+    },
+    models: {
+      ...cfg.models,
+      providers: {
+        [BUSTLY_PROVIDER_ID]: {
+          baseUrl: resolveBustlyGatewayBaseUrl(cfg),
+          auth: "token",
+          api: "openai-completions",
+          headers: bustlyHeaders,
+          models: buildBustlyProviderModels(bustlyHeaders),
+        },
+      },
+    },
+  };
+}
+
+function syncBustlyConfigFile(configPath: string, selectedModelInput?: string): void {
+  if (!existsSync(configPath)) {
+    return;
+  }
+  const raw = readFileSync(configPath, "utf-8");
+  const config = JSON.parse(raw) as OpenClawConfig;
+  const nextConfig = applyBustlyOnlyConfig(config, selectedModelInput);
+  writeFileSync(configPath, JSON.stringify(nextConfig, null, 2));
+}
 
 function resolveUserPath(input: string, homeDir: string): string {
   const trimmed = input.trim();
@@ -1425,12 +1631,13 @@ function setupIpcHandlers(): void {
           const searchDataConfig = apiResponse.data.extras?.["bustly-search-data"];
 
           // Complete login - store user info and search data config in bustlyOauth.json
-          // Supabase access token is stored within bustlySearchData.SEARCH_DATA_SUPABASE_ACCESS_TOKEN
+          // Supabase access token is mirrored to user.userAccessToken
           BustlyOAuth.completeBustlyLogin({
             user: {
               userId: apiResponse.data.userId,
               userName: apiResponse.data.userName,
               userEmail: apiResponse.data.userEmail,
+              userAccessToken: supabaseAccessToken,
               workspaceId: apiResponse.data.workspaceId,
               skills: apiResponse.data.extras?.["bustly-search-data"]
                 ? ["search-data"]
@@ -1447,6 +1654,13 @@ function setupIpcHandlers(): void {
 
           // Stop OAuth callback server
           stopOAuthCallbackServer();
+
+          // Keep configured workspace header/token source aligned with latest login state.
+          try {
+            syncBustlyConfigFile(resolveElectronConfigPath());
+          } catch (syncError) {
+            console.warn("[Bustly Login] Failed to sync bustly provider config:", syncError);
+          }
 
           console.log("[Bustly Login] Login successful! Config stored in bustlyOauth.json");
           return { success: true };
@@ -1551,6 +1765,14 @@ function setupIpcHandlers(): void {
 
   // Authenticate with API key
   ipcMain.handle("onboard-auth-api-key", async (_event, provider: string, apiKey: string) => {
+    if (normalizeProviderId(provider) !== BUSTLY_PROVIDER_ID) {
+      return {
+        success: false,
+        provider,
+        method: "api_key",
+        error: "Only bustly provider is supported.",
+      };
+    }
     try {
       const result = await authenticateWithApiKey({ provider: provider as ProviderId, apiKey });
       return result;
@@ -1566,6 +1788,14 @@ function setupIpcHandlers(): void {
 
   // Authenticate with token
   ipcMain.handle("onboard-auth-token", async (_event, provider: string, token: string) => {
+    if (normalizeProviderId(provider) !== BUSTLY_PROVIDER_ID) {
+      return {
+        success: false,
+        provider,
+        method: "token",
+        error: "Only bustly provider is supported.",
+      };
+    }
     try {
       const result = await authenticateWithToken({ provider: provider as ProviderId, token });
       return result;
@@ -1581,6 +1811,14 @@ function setupIpcHandlers(): void {
 
   // Authenticate with OAuth
   ipcMain.handle("onboard-auth-oauth", async (_event, provider: string) => {
+    if (normalizeProviderId(provider) !== BUSTLY_PROVIDER_ID) {
+      return {
+        success: false,
+        provider,
+        method: "oauth",
+        error: "Only bustly provider is supported.",
+      };
+    }
     try {
       const result = await authenticateWithOAuth({
         provider: provider as ProviderId,
@@ -1616,39 +1854,19 @@ function setupIpcHandlers(): void {
   // List available models for provider
   ipcMain.handle("onboard-list-models", async (_event, provider: string) => {
     try {
-      const cfg = loadConfig();
-      const catalog = await loadModelCatalog({ config: cfg, useCache: false });
-      const aliasIndex = buildModelAliasIndex({ cfg, defaultProvider: DEFAULT_PROVIDER });
-      const filteredCatalog = catalog;
       const normalizedProvider = normalizeProviderId(provider);
-      const hiddenKeys = new Set(["openrouter/auto"]);
-      const directMatches = filteredCatalog.filter(
-        (entry) => normalizeProviderId(entry.provider) === normalizedProvider,
-      );
-      const mappedCatalog =
-        directMatches.length > 0
-          ? directMatches
-          : normalizedProvider === "google-antigravity"
-            ? filteredCatalog
-                .filter((entry) => normalizeProviderId(entry.provider) === "google")
-                .map((entry) => ({
-                  ...entry,
-                  provider: "google-antigravity",
-                }))
-            : normalizedProvider === "openai-codex"
-              ? filteredCatalog
-                  .filter((entry) => normalizeProviderId(entry.provider) === "openai")
-                  .map((entry) => ({
-                    ...entry,
-                    provider: "openai-codex",
-                  }))
-              : [];
-      return mappedCatalog
-        .filter((entry) => !hiddenKeys.has(modelKey(entry.provider, entry.id)))
-        .map((entry) => ({
-          ...entry,
-          aliases: aliasIndex.byKey.get(modelKey(entry.provider, entry.id)) ?? [],
+      if (normalizedProvider === BUSTLY_PROVIDER_ID) {
+        return BUSTLY_ROUTE_MODELS.map((entry) => ({
+          id: entry.routeKey,
+          name: `${entry.alias} · ${entry.description}`,
+          provider: BUSTLY_PROVIDER_ID,
+          contextWindow: 200_000,
+          reasoning: entry.reasoning,
+          input: ["text", "image"] as Array<"text" | "image">,
+          aliases: [entry.alias.toLowerCase()],
         }));
+      }
+      return [];
     } catch (error) {
       console.warn("[Onboard] Failed to load model catalog:", error);
       return [];
@@ -1664,129 +1882,63 @@ function setupIpcHandlers(): void {
       options?: { model?: string; openControlUi?: boolean },
     ) => {
       try {
-      const resolveAuthProvider = (result: AuthResult) => {
-        if (result.provider === "openai" && result.method === "oauth") {
-          return "openai-codex";
+        const resolveAuthProvider = (result: AuthResult) => {
+          if (result.provider === "openai" && result.method === "oauth") {
+            return "openai-codex";
+          }
+          if (result.provider === "google" && result.method === "oauth") {
+            return "google-antigravity";
+          }
+          return result.provider;
+        };
+
+        const provider = resolveAuthProvider(authResult);
+        if (provider !== BUSTLY_PROVIDER_ID) {
+          return { success: false, error: "Only bustly provider is supported." };
         }
-        if (result.provider === "google" && result.method === "oauth") {
-          return "google-antigravity";
-        }
-        return result.provider;
-      };
 
-      const provider = resolveAuthProvider(authResult);
-      const credential = authResult.credential;
-      if (!credential) {
-        return { success: false, error: "Missing credentials from onboarding" };
-      }
-
-      // Initialize with the API key in env
-      const result = await initializeOpenClaw({
-        force: true,
-        openrouterApiKey:
-          authResult.provider === "openrouter" && credential.type === "api_key"
-            ? credential.key
-            : undefined,
-      });
-
-      if (!result.success) {
-        return { success: false, error: result.error };
-      }
-
-      // Update config with the credential
-      const configPath = resolveElectronConfigPath();
-      const config = JSON.parse(readFileSync(configPath, "utf-8"));
-
-      let nextConfig = config;
-      if (credential.type === "oauth") {
-        const email =
-          typeof credential.email === "string" && credential.email.trim()
-            ? credential.email.trim()
-            : "default";
-        await writeOAuthCredentials(provider, {
-          access: credential.access || "",
-          refresh: credential.refresh || "",
-          expires: credential.expires || 0,
-          email: credential.email || "default",
-          projectId: credential.projectId,
+        // Initialize gateway and state directories.
+        const result = await initializeOpenClaw({
+          force: true,
         });
-        nextConfig = applyAuthProfileConfig(nextConfig, {
-          profileId: `${provider}:${email}`,
-          provider,
-          mode: "oauth",
-          ...(email !== "default" ? { email } : {}),
-        });
-      } else if (credential.type === "token") {
-        if (!credential.token?.trim()) {
-          return { success: false, error: "Missing token credential" };
+
+        if (!result.success) {
+          return { success: false, error: result.error };
         }
-        upsertAuthProfile({
-          profileId: `${provider}:default`,
-          credential: {
-            type: "token",
-            provider,
-            token: credential.token,
-          },
-        });
-        nextConfig = applyAuthProfileConfig(nextConfig, {
-          profileId: `${provider}:default`,
-          provider,
-          mode: "token",
-        });
-      } else if (credential.type === "api_key") {
-        if (!credential.key?.trim()) {
-          return { success: false, error: "Missing API key credential" };
+
+        // Update config with the credential
+        const configPath = resolveElectronConfigPath();
+        const config = JSON.parse(readFileSync(configPath, "utf-8")) as OpenClawConfig;
+
+        const nextConfig = applyBustlyOnlyConfig(
+          config,
+          options?.model?.trim() || authResult.defaultModel,
+        );
+
+        // Write updated config
+        writeFileSync(configPath, JSON.stringify(nextConfig, null, 2));
+
+        // Update gateway settings
+        gatewayPort = nextConfig.gateway?.port || 17999;
+        gatewayBind = nextConfig.gateway?.bind || "loopback";
+        if (nextConfig.gateway?.auth?.token) {
+          gatewayToken = nextConfig.gateway.auth.token;
         }
-        if (provider === "openrouter") {
-          await setOpenrouterApiKey(credential.key);
-        } else {
-          upsertAuthProfile({
-            profileId: `${provider}:default`,
-            credential: {
-              type: "api_key",
-              provider,
-              key: credential.key,
-            },
-          });
+
+        initResult = result;
+
+        try {
+          await startGateway();
+          if (options?.openControlUi !== false) {
+            openControlUiInMainWindow();
+          }
+        } catch (error) {
+          console.warn("[Gateway] Failed to auto-start or open Control UI:", error);
         }
-        nextConfig = applyAuthProfileConfig(nextConfig, {
-          profileId: `${provider}:default`,
-          provider,
-          mode: "api_key",
-        });
-      }
 
-      // Update model config
-      const selectedModel = options?.model?.trim();
-      const resolvedModel = selectedModel || authResult.defaultModel;
-      if (resolvedModel) {
-        nextConfig = applyPrimaryModel(nextConfig, resolvedModel);
-      }
-
-      // Write updated config
-      writeFileSync(configPath, JSON.stringify(nextConfig, null, 2));
-
-      // Update gateway settings
-      gatewayPort = nextConfig.gateway?.port || 17999;
-      gatewayBind = nextConfig.gateway?.bind || "loopback";
-      if (nextConfig.gateway?.auth?.token) {
-        gatewayToken = nextConfig.gateway.auth.token;
-      }
-
-      initResult = result;
-
-      try {
-        await startGateway();
-        if (options?.openControlUi !== false) {
-          openControlUiInMainWindow();
-        }
+        return { success: true };
       } catch (error) {
-        console.warn("[Gateway] Failed to auto-start or open Control UI:", error);
-      }
-
-      return { success: true };
-    } catch (error) {
-      return {
+        return {
           success: false,
           error: error instanceof Error ? error.message : String(error),
         };
@@ -2007,6 +2159,14 @@ void app.whenReady().then(async () => {
     writeMainLog(`[Init] bustlyOauth.json missing; keeping stateDir=${stateDir}`);
   } else {
     writeMainLog(`[Init] bustlyOauth.json found at ${bustlyOauthPath}`);
+    try {
+      syncBustlyConfigFile(resolveElectronConfigPath());
+      writeMainLog("[Init] Synced openclaw.json to bustly-only provider config");
+    } catch (error) {
+      writeMainLog(
+        `[Init] Failed to sync bustly provider config: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   setupIpcHandlers();

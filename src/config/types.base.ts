@@ -256,6 +256,8 @@ export type BustlyOAuthState = {
     userName: string;
     /** User email. */
     userEmail: string;
+    /** Supabase access token used as Bustly user JWT for gateway auth. */
+    userAccessToken?: string;
     /** Workspace ID. */
     workspaceId: string;
     /** Assigned skills. */

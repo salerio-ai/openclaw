@@ -926,7 +926,7 @@ function buildTimelineNodes(props: ChatProps): TimelineNode[] {
     }
   }
 
-  if (props.thinkingStream !== null) {
+  if (typeof props.thinkingStream === "string") {
     const thinkingTimestamp =
       props.thinkingStreamUpdatedAt ??
       props.thinkingStreamStartedAt ??

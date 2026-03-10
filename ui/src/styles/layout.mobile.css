@@ -94,6 +94,16 @@
     display: none;
   }
 
+  .bustly-user-controls {
+    gap: 6px;
+  }
+
+  .bustly-provider-setup-btn,
+  .bustly-login-btn {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
   /* Nav */
   .nav {
     padding: 8px 10px;
