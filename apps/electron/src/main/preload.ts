@@ -73,6 +73,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   bustlyIsLoggedIn: () => ipcRenderer.invoke("bustly-is-logged-in"),
   bustlyGetUserInfo: () => ipcRenderer.invoke("bustly-get-user-info"),
   bustlyGetSupabaseConfig: () => ipcRenderer.invoke("bustly-get-supabase-config"),
+  bustlySetActiveWorkspace: (workspaceId: string) =>
+    ipcRenderer.invoke("bustly-set-active-workspace", workspaceId),
   bustlyLogout: () => ipcRenderer.invoke("bustly-logout"),
   bustlyOpenLogin: () => ipcRenderer.invoke("bustly-open-login"),
   bustlyOpenSettings: () => ipcRenderer.invoke("bustly-open-settings"),

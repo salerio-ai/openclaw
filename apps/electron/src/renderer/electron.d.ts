@@ -167,6 +167,7 @@ interface ElectronAPI {
   bustlyIsLoggedIn: () => Promise<boolean>;
   bustlyGetUserInfo: () => Promise<BustlyUserInfo | null>;
   bustlyGetSupabaseConfig: () => Promise<BustlySupabaseConfig | null>;
+  bustlySetActiveWorkspace: (workspaceId: string) => Promise<{ success: boolean; error?: string }>;
   bustlyLogout: () => Promise<{ success: boolean; error?: string }>;
   bustlyOpenLogin: () => Promise<{ success: boolean; error?: string }>;
   bustlyOpenProviderSetup: () => Promise<{ success: boolean; error?: string }>;

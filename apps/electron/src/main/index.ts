@@ -129,8 +129,8 @@ function resolveBustlyWebBaseUrl(): string {
   return baseUrl.replace(/\/+$/, "");
 }
 
-function buildBustlyAdminUrl(params: Record<string, string | null | undefined>): string {
-  const url = new URL(`${resolveBustlyWebBaseUrl()}/admin`);
+function buildBustlyAdminUrl(params: Record<string, string | null | undefined>, path?:string): string {
+  const url = new URL(`${resolveBustlyWebBaseUrl()}/admin${path ?? ""}`);
   for (const [key, value] of Object.entries(params)) {
     if (value) {
       url.searchParams.set(key, value);
@@ -1535,6 +1535,21 @@ function setupIpcHandlers(): void {
     };
   });
 
+  ipcMain.handle("bustly-set-active-workspace", async (_event, workspaceId: string) => {
+    try {
+      BustlyOAuth.setActiveWorkspaceId(workspaceId);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("bustly-login-refresh");
+      }
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  });
+
   // Open Bustly login page (standalone)
   ipcMain.handle("bustly-open-login", () => {
     try {
@@ -1731,7 +1746,7 @@ function setupIpcHandlers(): void {
 
   ipcMain.handle("bustly-open-workspace-create", async () => {
     try {
-      const url = buildBustlyAdminUrl({ create_workspace: "1" });
+      const url = buildBustlyAdminUrl({}, "/onboarding");
       await shell.openExternal(url);
       return { success: true };
     } catch (error) {

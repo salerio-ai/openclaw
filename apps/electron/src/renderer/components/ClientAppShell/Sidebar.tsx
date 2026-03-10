@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import bustlyWordmark from "../../assets/imgs/bustly_wordmark.png";
 import logoIcon from "../../assets/imgs/collapsed_logo_v2.svg";
@@ -72,6 +72,14 @@ function DotsThreeIcon({ className }: IconProps) {
       <circle cx="6" cy="12" r="1.8" />
       <circle cx="12" cy="12" r="1.8" />
       <circle cx="18" cy="12" r="1.8" />
+    </svg>
+  );
+}
+
+function CheckIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className={className}>
+      <path d="m5 12.5 4.2 4.2L19 7" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -263,11 +271,25 @@ function TaskItemSkeleton() {
   );
 }
 
+function WorkspaceItemSkeleton() {
+  return (
+    <div className="flex items-center justify-between rounded-lg px-3 py-2">
+      <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
+        <Skeleton className="h-8 w-8 rounded-lg" />
+        <Skeleton className="h-5 w-28 rounded-md" />
+      </div>
+      <Skeleton className="h-5 w-14 rounded-md" />
+    </div>
+  );
+}
+
 function WorkspaceSwitcher(props: {
   collapsed: boolean;
   workspaces: WorkspaceSummary[];
   activeWorkspaceId: string;
   loading: boolean;
+  onBeforeOpen: () => void;
+  onSwitchWorkspace: (workspaceId: string) => void;
   onOpenSettings: (workspaceId: string) => void;
   onOpenInvite: (workspaceId: string) => void;
   onOpenManage: (workspaceId: string) => void;
@@ -340,6 +362,8 @@ function WorkspaceSwitcher(props: {
       role: "member",
       status: "ACTIVE",
       members: 0,
+      plan: null,
+      expired: false,
     };
 
   const handleOpenSettings = () => {
@@ -372,6 +396,7 @@ function WorkspaceSwitcher(props: {
         <button
           type="button"
           onClick={() => {
+            props.onBeforeOpen();
             computeMenuLayout();
             setIsOpen((prev) => !prev);
           }}
@@ -387,6 +412,7 @@ function WorkspaceSwitcher(props: {
         <button
           type="button"
           onClick={() => {
+            props.onBeforeOpen();
             computeMenuLayout();
             setIsOpen((prev) => !prev);
           }}
@@ -451,25 +477,36 @@ function WorkspaceSwitcher(props: {
 
                 <div className="mx-4 mb-4 flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 p-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-gray-900">Workspace plan</span>
+                    <span className="text-sm font-semibold text-gray-900">
+                      {activeWorkspace.expired
+                        ? "Trial Expired"
+                        : activeWorkspace.plan
+                          ? activeWorkspace.plan
+                          : "Workspace plan"}
+                    </span>
                   </div>
                   <button
                     type="button"
                     onClick={handleOpenManage}
-                    className="rounded-lg border border-gray-300 bg-white px-4 py-1.5 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    className={`rounded-lg px-4 py-1.5 text-xs font-semibold shadow-sm disabled:cursor-not-allowed disabled:opacity-60 ${
+                      activeWorkspace.expired
+                        ? "border border-transparent bg-[#1A162F] text-white hover:bg-[#1A162F]/90"
+                        : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                    }`}
                     disabled={!activeWorkspace.id}
                   >
-                    Manage
+                    {activeWorkspace.expired ? "Renew" : "Manage"}
                   </button>
                 </div>
 
                 <div className="mx-0 mb-2 h-px bg-gray-100" />
                 <div className="px-4 py-2 text-xs font-medium text-gray-500">All workspaces</div>
                 <div className="space-y-0.5 px-2 pb-2">
-                  {props.loading ? (
+                  {props.loading && props.workspaces.length === 0 ? (
                     <>
-                      <TaskItemSkeleton />
-                      <TaskItemSkeleton />
+                      <WorkspaceItemSkeleton />
+                      <WorkspaceItemSkeleton />
+                      <WorkspaceItemSkeleton />
                     </>
                   ) : (
                     props.workspaces.map((workspace) => {
@@ -477,8 +514,12 @@ function WorkspaceSwitcher(props: {
                       return (
                         <div
                           key={workspace.id}
-                          className={`group flex items-center justify-between rounded-lg px-3 py-2 ${
-                            isActive ? "bg-[#1A162F]/6" : "hover:bg-gray-50"
+                          onClick={() => {
+                            props.onSwitchWorkspace(workspace.id);
+                            setIsOpen(false);
+                          }}
+                          className={`group flex cursor-pointer items-center justify-between rounded-lg px-3 py-2 hover:bg-gray-50 ${
+                            isActive ? "bg-gray-50" : ""
                           }`}
                         >
                           <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
@@ -491,15 +532,19 @@ function WorkspaceSwitcher(props: {
                             </div>
                             <div className="min-w-0">
                               <div className="truncate text-sm font-medium text-gray-900">{workspace.name}</div>
-                              <div className="text-[11px] text-gray-400">
-                                {workspace.members} member{workspace.members === 1 ? "" : "s"}
-                              </div>
                             </div>
+                            {workspace.expired ? (
+                              <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase bg-gray-100 text-gray-600">
+                                Expired
+                              </span>
+                            ) : workspace.plan ? (
+                              <span className="shrink-0 rounded bg-[#1A162F] px-1.5 py-0.5 text-[10px] font-bold uppercase text-white">
+                                {workspace.plan}
+                              </span>
+                            ) : null}
                           </div>
                           {isActive ? (
-                            <span className="rounded-full bg-[#1A162F]/8 px-2 py-0.5 text-[10px] font-semibold text-[#1A162F]">
-                              Current
-                            </span>
+                            <CheckIcon className="ml-2 h-4 w-4 shrink-0 text-gray-900" />
                           ) : null}
                         </div>
                       );
@@ -539,8 +584,9 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
   const [tasksLoading, setTasksLoading] = useState(true);
   const [bustlyUserInfo, setBustlyUserInfo] = useState<BustlyUserInfo | null>(null);
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
-  const [workspaceLoading, setWorkspaceLoading] = useState(true);
+  const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState("");
+  const [hasLoadedWorkspaces, setHasLoadedWorkspaces] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
   const location = useLocation();
@@ -584,36 +630,35 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
     };
   }, []);
 
-  useEffect(() => {
-    let disposed = false;
-
-    const loadWorkspaces = async () => {
+  const loadWorkspaces = useCallback(
+    async (force = false) => {
+      if (workspaceLoading) {
+        return;
+      }
+      if (hasLoadedWorkspaces && !force) {
+        return;
+      }
       setWorkspaceLoading(true);
       try {
         const result = await listWorkspaceSummaries();
-        if (!disposed) {
-          setWorkspaces(result.workspaces);
-          setActiveWorkspaceId(result.activeWorkspaceId);
-        }
+        setWorkspaces(result.workspaces);
+        setActiveWorkspaceId(result.activeWorkspaceId);
+        setHasLoadedWorkspaces(true);
       } catch {
-        if (!disposed) {
-          setWorkspaces([]);
-          setActiveWorkspaceId("");
-        }
+        setWorkspaces([]);
+        setActiveWorkspaceId("");
       } finally {
-        if (!disposed) {
-          setWorkspaceLoading(false);
-        }
+        setWorkspaceLoading(false);
       }
-    };
+    },
+    [hasLoadedWorkspaces, workspaceLoading],
+  );
 
-    void loadWorkspaces();
+  useEffect(() => {
     const unsubscribe = window.electronAPI.onBustlyLoginRefresh(() => {
-      void loadWorkspaces();
+      setHasLoadedWorkspaces(false);
     });
-
     return () => {
-      disposed = true;
       unsubscribe();
     };
   }, []);
@@ -785,6 +830,14 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
     void window.electronAPI.bustlyOpenWorkspaceCreate();
   };
 
+  const handleSwitchWorkspace = async (workspaceId: string) => {
+    const result = await window.electronAPI.bustlySetActiveWorkspace(workspaceId);
+    if (!result.success) {
+      return;
+    }
+    setActiveWorkspaceId(workspaceId);
+  };
+
   const handleSignOut = async () => {
     if (isLoggingOut) {
       return;
@@ -851,6 +904,10 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
                 workspaces={workspaces}
                 activeWorkspaceId={activeWorkspaceId || bustlyUserInfo?.workspaceId || ""}
                 loading={workspaceLoading}
+                onBeforeOpen={() => {
+                  void loadWorkspaces();
+                }}
+                onSwitchWorkspace={handleSwitchWorkspace}
                 onOpenSettings={handleOpenWorkspaceSettings}
                 onOpenInvite={handleOpenWorkspaceInvite}
                 onOpenManage={handleOpenWorkspaceManage}

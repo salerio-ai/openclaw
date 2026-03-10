@@ -249,6 +249,25 @@ export function completeBustlyLogin(params: {
   console.log("[BustlyOAuth] Login completed for user:", params.user.userEmail);
 }
 
+export function setActiveWorkspaceId(workspaceId: string): void {
+  const nextWorkspaceId = workspaceId.trim();
+  if (!nextWorkspaceId) {
+    throw new Error("[BustlyOAuth] Missing workspaceId");
+  }
+  const state = readBustlyOAuthState();
+  if (!state) {
+    throw new Error("[BustlyOAuth] No OAuth state found");
+  }
+  if (state.user) {
+    state.user.workspaceId = nextWorkspaceId;
+  }
+  if (state.bustlySearchData) {
+    state.bustlySearchData.SEARCH_DATA_WORKSPACE_ID = nextWorkspaceId;
+  }
+  writeBustlyOAuthState(state);
+  console.log("[BustlyOAuth] Active workspace updated:", nextWorkspaceId);
+}
+
 /**
  * Logout / clear OAuth state
  */
