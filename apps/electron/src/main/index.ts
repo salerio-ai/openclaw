@@ -121,6 +121,24 @@ function normalizeDeepLinkRoute(route: string | null | undefined): string | null
   return normalized.startsWith("/") ? normalized : `/${normalized}`;
 }
 
+function resolveBustlyWebBaseUrl(): string {
+  const baseUrl = process.env.BUSTLY_WEB_BASE_URL?.trim();
+  if (!baseUrl) {
+    throw new Error("Missing BUSTLY_WEB_BASE_URL");
+  }
+  return baseUrl.replace(/\/+$/, "");
+}
+
+function buildBustlyAdminUrl(params: Record<string, string | null | undefined>): string {
+  const url = new URL(`${resolveBustlyWebBaseUrl()}/admin`);
+  for (const [key, value] of Object.entries(params)) {
+    if (value) {
+      url.searchParams.set(key, value);
+    }
+  }
+  return url.toString();
+}
+
 function parseDeepLink(url: string): { url: string; route: string | null } | null {
   let parsed: URL;
   try {
@@ -1500,6 +1518,23 @@ function setupIpcHandlers(): void {
     return await BustlyOAuth.getBustlyUserInfo();
   });
 
+  ipcMain.handle("bustly-get-supabase-config", async () => {
+    const state = BustlyOAuth.readBustlyOAuthState();
+    const searchData = state?.bustlySearchData;
+    if (!searchData?.SEARCH_DATA_SUPABASE_URL || !searchData.SEARCH_DATA_SUPABASE_ANON_KEY || !searchData.SEARCH_DATA_SUPABASE_ACCESS_TOKEN) {
+      return null;
+    }
+    return {
+      url: searchData.SEARCH_DATA_SUPABASE_URL,
+      anonKey: searchData.SEARCH_DATA_SUPABASE_ANON_KEY,
+      accessToken: searchData.SEARCH_DATA_SUPABASE_ACCESS_TOKEN,
+      workspaceId: searchData.SEARCH_DATA_WORKSPACE_ID || state?.user?.workspaceId || "",
+      userId: state?.user?.userId || "",
+      userEmail: state?.user?.userEmail || "",
+      userName: state?.user?.userName || "",
+    };
+  });
+
   // Open Bustly login page (standalone)
   ipcMain.handle("bustly-open-login", () => {
     try {
@@ -1631,15 +1666,76 @@ function setupIpcHandlers(): void {
 
   ipcMain.handle("bustly-open-settings", async () => {
     try {
-      const baseUrl = process.env.BUSTLY_WEB_BASE_URL;
-      if (!baseUrl) {
-        throw new Error("Missing BUSTLY_WEB_BASE_URL");
-      }
-      const url = `${baseUrl.replace(/\/+$/, "")}/admin?setting_modal=profile`;
+      const url = buildBustlyAdminUrl({ setting_modal: "profile" });
       await shell.openExternal(url);
       return { success: true };
     } catch (error) {
       console.error("[Bustly Settings] Error:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  });
+
+  ipcMain.handle("bustly-open-workspace-settings", async (_event, workspaceId: string) => {
+    try {
+      const url = buildBustlyAdminUrl({
+        setting_modal: "workspace-settings",
+        workspace_id: workspaceId,
+      });
+      await shell.openExternal(url);
+      return { success: true };
+    } catch (error) {
+      console.error("[Bustly Workspace Settings] Error:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  });
+
+  ipcMain.handle("bustly-open-workspace-invite", async (_event, workspaceId: string) => {
+    try {
+      const url = buildBustlyAdminUrl({
+        setting_modal: "members",
+        workspace_id: workspaceId,
+      });
+      await shell.openExternal(url);
+      return { success: true };
+    } catch (error) {
+      console.error("[Bustly Workspace Invite] Error:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  });
+
+  ipcMain.handle("bustly-open-workspace-manage", async (_event, workspaceId: string) => {
+    try {
+      const url = buildBustlyAdminUrl({
+        setting_modal: "billing",
+        workspace_id: workspaceId,
+      });
+      await shell.openExternal(url);
+      return { success: true };
+    } catch (error) {
+      console.error("[Bustly Workspace Manage] Error:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  });
+
+  ipcMain.handle("bustly-open-workspace-create", async () => {
+    try {
+      const url = buildBustlyAdminUrl({ create_workspace: "1" });
+      await shell.openExternal(url);
+      return { success: true };
+    } catch (error) {
+      console.error("[Bustly Workspace Create] Error:", error);
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error),

@@ -760,26 +760,6 @@ function buildTimelineNodes(props: ChatProps): TimelineNode[] {
     const normalized = normalizeMessage(msg);
     const timestamp = resolveMessageTimestamp(msg, envelope, fallbackBaseTs + i);
     const seq = resolveMessageSeq(msg, envelope);
-    const marker =
-      (envelope.__openclaw as Record<string, unknown> | undefined) ??
-      (msg.__openclaw as Record<string, unknown> | undefined);
-    if (marker && marker.kind === "compaction") {
-      pushNode(
-        {
-          kind: "divider",
-          key:
-            typeof marker.id === "string"
-              ? `divider:compaction:${marker.id}`
-              : `divider:compaction:${timestamp}:${i}`,
-          label: "Compaction",
-          timestamp,
-        },
-        timestamp,
-        seq,
-      );
-      continue;
-    }
-
     // Filter out system notification messages (e.g., "Exec completed", background process updates)
     // These are internal OpenClaw events that shouldn't be shown to users
     if (normalized.role.toLowerCase() === "system") {
@@ -1054,11 +1034,7 @@ function toToolNodes(
   timestamp: number,
 ): Array<Extract<TimelineNode, { kind: "tool" }>> {
   const m = message as Record<string, unknown>;
-  const marker =
-    m.__openclaw && typeof m.__openclaw === "object"
-      ? (m.__openclaw as Record<string, unknown>)
-      : undefined;
-  const toolPhase = typeof marker?.toolPhase === "string" ? marker.toolPhase.toLowerCase() : "";
+  const toolPhase = typeof m.toolPhase === "string" ? m.toolPhase.toLowerCase() : "";
   const content = Array.isArray(m.content) ? (m.content as Array<Record<string, unknown>>) : [];
   const role = typeof m.role === "string" ? m.role.toLowerCase() : "";
   const messageToolCallId =
@@ -1248,20 +1224,7 @@ function resolveMessageSeq(
   message: Record<string, unknown>,
   envelope: Record<string, unknown>,
 ): number | null {
-  const messageMeta =
-    message.__openclaw && typeof message.__openclaw === "object"
-      ? (message.__openclaw as Record<string, unknown>)
-      : null;
-  const envelopeMeta =
-    envelope.__openclaw && typeof envelope.__openclaw === "object"
-      ? (envelope.__openclaw as Record<string, unknown>)
-      : null;
-  return (
-    parseSeq(messageMeta?.seq) ??
-    parseSeq(envelopeMeta?.seq) ??
-    parseSeq(message.seq) ??
-    parseSeq(envelope.seq)
-  );
+  return parseSeq(message.seq) ?? parseSeq(envelope.seq);
 }
 
 function parseToolDetailSections(detail: string): Record<string, string> {

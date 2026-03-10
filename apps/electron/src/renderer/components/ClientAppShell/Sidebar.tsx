@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import bustlyWordmark from "../../assets/imgs/bustly_wordmark.png";
 import logoIcon from "../../assets/imgs/collapsed_logo_v2.svg";
 import openSidebarIcon from "../../assets/imgs/open_sidebar.svg";
+import { listWorkspaceSummaries, type WorkspaceSummary } from "../../lib/bustly-supabase";
 import { GatewayBrowserClient } from "../../lib/gateway-client";
 import Skeleton from "../ui/Skeleton";
 
@@ -262,7 +263,16 @@ function TaskItemSkeleton() {
   );
 }
 
-function WorkspaceSwitcher(props: { collapsed: boolean }) {
+function WorkspaceSwitcher(props: {
+  collapsed: boolean;
+  workspaces: WorkspaceSummary[];
+  activeWorkspaceId: string;
+  loading: boolean;
+  onOpenSettings: (workspaceId: string) => void;
+  onOpenInvite: (workspaceId: string) => void;
+  onOpenManage: (workspaceId: string) => void;
+  onCreateWorkspace: () => void;
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [menuLayout, setMenuLayout] = useState({ top: 0, left: 0, maxHeight: 520 });
@@ -321,10 +331,39 @@ function WorkspaceSwitcher(props: { collapsed: boolean }) {
     return () => window.removeEventListener("resize", onResize);
   }, [isOpen]);
 
-  const activeWorkspace = {
-    name: "Bustly Workspace",
-    logo: logoIcon,
-    members: 1,
+  const activeWorkspace =
+    props.workspaces.find((workspace) => workspace.id === props.activeWorkspaceId) ??
+    props.workspaces[0] ?? {
+      id: "",
+      name: props.loading ? "Loading workspace..." : "Workspace",
+      logoUrl: null,
+      role: "member",
+      status: "ACTIVE",
+      members: 0,
+    };
+
+  const handleOpenSettings = () => {
+    if (!activeWorkspace.id) {
+      return;
+    }
+    setIsOpen(false);
+    props.onOpenSettings(activeWorkspace.id);
+  };
+
+  const handleOpenInvite = () => {
+    if (!activeWorkspace.id) {
+      return;
+    }
+    setIsOpen(false);
+    props.onOpenInvite(activeWorkspace.id);
+  };
+
+  const handleOpenManage = () => {
+    if (!activeWorkspace.id) {
+      return;
+    }
+    setIsOpen(false);
+    props.onOpenManage(activeWorkspace.id);
   };
 
   return (
@@ -342,7 +381,7 @@ function WorkspaceSwitcher(props: { collapsed: boolean }) {
               : "border-transparent bg-transparent text-gray-700 hover:border-gray-200 hover:bg-white"
           }`}
         >
-          <img src={activeWorkspace.logo} alt="Workspace" className="h-6 w-6 object-contain" />
+          <img src={activeWorkspace.logoUrl || logoIcon} alt="Workspace" className="h-6 w-6 object-contain" />
         </button>
       ) : (
         <button
@@ -358,7 +397,7 @@ function WorkspaceSwitcher(props: { collapsed: boolean }) {
           }`}
         >
           <div className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded border border-gray-100 bg-gray-100 text-gray-700 transition-colors group-hover:border-gray-200">
-            <img src={activeWorkspace.logo} alt="Workspace" className="h-full w-full object-contain p-0.5" />
+            <img src={activeWorkspace.logoUrl || logoIcon} alt="Workspace" className="h-full w-full object-contain p-0.5" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-semibold text-gray-900">{activeWorkspace.name}</div>
@@ -378,21 +417,33 @@ function WorkspaceSwitcher(props: { collapsed: boolean }) {
                 <div className="p-4 pb-2">
                   <div className="flex items-start gap-3">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm">
-                      <img src={activeWorkspace.logo} alt={activeWorkspace.name} className="h-full w-full object-contain p-1" />
+                      <img src={activeWorkspace.logoUrl || logoIcon} alt={activeWorkspace.name} className="h-full w-full object-contain p-1" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="mb-0.5 truncate text-base leading-tight font-bold text-gray-900">{activeWorkspace.name}</div>
-                      <div className="flex items-center gap-1 text-xs text-gray-500">{activeWorkspace.members} member</div>
+                      <div className="flex items-center gap-1 text-xs text-gray-500">
+                        {activeWorkspace.members} member{activeWorkspace.members === 1 ? "" : "s"}
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 px-4 pb-4">
-                  <button className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50">
+                  <button
+                    type="button"
+                    onClick={handleOpenSettings}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={!activeWorkspace.id}
+                  >
                     <GearIcon className="h-4 w-4" />
                     Settings
                   </button>
-                  <button className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50">
+                  <button
+                    type="button"
+                    onClick={handleOpenInvite}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={!activeWorkspace.id}
+                  >
                     <span className="text-sm font-bold">+</span>
                     Invite members
                   </button>
@@ -400,9 +451,14 @@ function WorkspaceSwitcher(props: { collapsed: boolean }) {
 
                 <div className="mx-4 mb-4 flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 p-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-gray-900">Basic Plan</span>
+                    <span className="text-sm font-semibold text-gray-900">Workspace plan</span>
                   </div>
-                  <button className="rounded-lg border border-gray-300 bg-white px-4 py-1.5 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50">
+                  <button
+                    type="button"
+                    onClick={handleOpenManage}
+                    className="rounded-lg border border-gray-300 bg-white px-4 py-1.5 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={!activeWorkspace.id}
+                  >
                     Manage
                   </button>
                 </div>
@@ -410,21 +466,57 @@ function WorkspaceSwitcher(props: { collapsed: boolean }) {
                 <div className="mx-0 mb-2 h-px bg-gray-100" />
                 <div className="px-4 py-2 text-xs font-medium text-gray-500">All workspaces</div>
                 <div className="space-y-0.5 px-2 pb-2">
-                  <div className="group flex cursor-pointer items-center justify-between rounded-lg px-3 py-2 hover:bg-gray-50">
-                    <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-gray-100 bg-white text-gray-700">
-                        <img src={activeWorkspace.logo} alt={activeWorkspace.name} className="h-full w-full object-contain p-1" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium text-gray-900">{activeWorkspace.name}</div>
-                      </div>
-                    </div>
-                  </div>
+                  {props.loading ? (
+                    <>
+                      <TaskItemSkeleton />
+                      <TaskItemSkeleton />
+                    </>
+                  ) : (
+                    props.workspaces.map((workspace) => {
+                      const isActive = workspace.id === props.activeWorkspaceId;
+                      return (
+                        <div
+                          key={workspace.id}
+                          className={`group flex items-center justify-between rounded-lg px-3 py-2 ${
+                            isActive ? "bg-[#1A162F]/6" : "hover:bg-gray-50"
+                          }`}
+                        >
+                          <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-gray-100 bg-white text-gray-700">
+                              <img
+                                src={workspace.logoUrl || logoIcon}
+                                alt={workspace.name}
+                                className="h-full w-full object-contain p-1"
+                              />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-medium text-gray-900">{workspace.name}</div>
+                              <div className="text-[11px] text-gray-400">
+                                {workspace.members} member{workspace.members === 1 ? "" : "s"}
+                              </div>
+                            </div>
+                          </div>
+                          {isActive ? (
+                            <span className="rounded-full bg-[#1A162F]/8 px-2 py-0.5 text-[10px] font-semibold text-[#1A162F]">
+                              Current
+                            </span>
+                          ) : null}
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </div>
 
               <div className="mt-auto border-t border-gray-100 bg-white p-2">
-                <button className="group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOpen(false);
+                    props.onCreateWorkspace();
+                  }}
+                  className="group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900"
+                >
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-100 text-gray-400 transition-colors group-hover:border-gray-400 group-hover:text-gray-600">
                     <span className="text-base font-bold">+</span>
                   </div>
@@ -446,6 +538,9 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
   const [recentTasks, setRecentTasks] = useState<SidebarTask[]>([]);
   const [tasksLoading, setTasksLoading] = useState(true);
   const [bustlyUserInfo, setBustlyUserInfo] = useState<BustlyUserInfo | null>(null);
+  const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
+  const [workspaceLoading, setWorkspaceLoading] = useState(true);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState("");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
   const location = useLocation();
@@ -481,6 +576,40 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
 
     const unsubscribe = window.electronAPI.onNativeFullscreenChange((state) => {
       setIsWindowFullscreen(state.isNativeFullscreen === true);
+    });
+
+    return () => {
+      disposed = true;
+      unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    let disposed = false;
+
+    const loadWorkspaces = async () => {
+      setWorkspaceLoading(true);
+      try {
+        const result = await listWorkspaceSummaries();
+        if (!disposed) {
+          setWorkspaces(result.workspaces);
+          setActiveWorkspaceId(result.activeWorkspaceId);
+        }
+      } catch {
+        if (!disposed) {
+          setWorkspaces([]);
+          setActiveWorkspaceId("");
+        }
+      } finally {
+        if (!disposed) {
+          setWorkspaceLoading(false);
+        }
+      }
+    };
+
+    void loadWorkspaces();
+    const unsubscribe = window.electronAPI.onBustlyLoginRefresh(() => {
+      void loadWorkspaces();
     });
 
     return () => {
@@ -640,6 +769,22 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
     void navigate("/chat");
   };
 
+  const handleOpenWorkspaceSettings = (workspaceId: string) => {
+    void window.electronAPI.bustlyOpenWorkspaceSettings(workspaceId);
+  };
+
+  const handleOpenWorkspaceInvite = (workspaceId: string) => {
+    void window.electronAPI.bustlyOpenWorkspaceInvite(workspaceId);
+  };
+
+  const handleOpenWorkspaceManage = (workspaceId: string) => {
+    void window.electronAPI.bustlyOpenWorkspaceManage(workspaceId);
+  };
+
+  const handleCreateWorkspace = () => {
+    void window.electronAPI.bustlyOpenWorkspaceCreate();
+  };
+
   const handleSignOut = async () => {
     if (isLoggingOut) {
       return;
@@ -701,7 +846,16 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
                   />
                 </button>
               ) : null}
-              <WorkspaceSwitcher collapsed={props.collapsed} />
+              <WorkspaceSwitcher
+                collapsed={props.collapsed}
+                workspaces={workspaces}
+                activeWorkspaceId={activeWorkspaceId || bustlyUserInfo?.workspaceId || ""}
+                loading={workspaceLoading}
+                onOpenSettings={handleOpenWorkspaceSettings}
+                onOpenInvite={handleOpenWorkspaceInvite}
+                onOpenManage={handleOpenWorkspaceManage}
+                onCreateWorkspace={handleCreateWorkspace}
+              />
             </div>
           </>
         )}

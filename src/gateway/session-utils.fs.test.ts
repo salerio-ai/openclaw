@@ -491,18 +491,9 @@ describe("readSessionMessages", () => {
     fs.writeFileSync(transcriptPath, lines.join("\n"), "utf-8");
 
     const out = readSessionMessages(sessionId, storePath);
-    expect(out).toHaveLength(3);
-    const marker = out[1] as {
-      role: string;
-      content?: Array<{ text?: string }>;
-      __openclaw?: { kind?: string; id?: string };
-      timestamp?: number;
-    };
-    expect(marker.role).toBe("system");
-    expect(marker.content?.[0]?.text).toBe("Compaction");
-    expect(marker.__openclaw?.kind).toBe("compaction");
-    expect(marker.__openclaw?.id).toBe("comp-1");
-    expect(typeof marker.timestamp).toBe("number");
+    expect(out).toHaveLength(2);
+    expect(out[0]).toMatchObject({ role: "user", content: "Hello" });
+    expect(out[1]).toMatchObject({ role: "assistant", content: "World" });
   });
 
   test("reads cross-agent absolute sessionFile across store-root layouts", () => {

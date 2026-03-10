@@ -74,6 +74,16 @@ interface BustlyUserInfo {
   skills: string[];
 }
 
+interface BustlySupabaseConfig {
+  url: string;
+  anonKey: string;
+  accessToken: string;
+  workspaceId: string;
+  userId: string;
+  userEmail: string;
+  userName: string;
+}
+
 // Onboarding types
 interface ProviderConfig {
   id: string;
@@ -156,9 +166,14 @@ interface ElectronAPI {
   bustlyLogin: () => Promise<{ success: boolean; error?: string }>;
   bustlyIsLoggedIn: () => Promise<boolean>;
   bustlyGetUserInfo: () => Promise<BustlyUserInfo | null>;
+  bustlyGetSupabaseConfig: () => Promise<BustlySupabaseConfig | null>;
   bustlyLogout: () => Promise<{ success: boolean; error?: string }>;
   bustlyOpenLogin: () => Promise<{ success: boolean; error?: string }>;
   bustlyOpenProviderSetup: () => Promise<{ success: boolean; error?: string }>;
+  bustlyOpenWorkspaceSettings: (workspaceId: string) => Promise<{ success: boolean; error?: string }>;
+  bustlyOpenWorkspaceInvite: (workspaceId: string) => Promise<{ success: boolean; error?: string }>;
+  bustlyOpenWorkspaceManage: (workspaceId: string) => Promise<{ success: boolean; error?: string }>;
+  bustlyOpenWorkspaceCreate: () => Promise<{ success: boolean; error?: string }>;
   onboardBetaOpenRouterApiKey: () => Promise<string>;
   onboardListProviders: () => Promise<ProviderConfig[]>;
   onboardAuthApiKey: (provider: string, apiKey: string) => Promise<AuthResult>;

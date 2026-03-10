@@ -72,10 +72,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
   bustlyLogin: () => ipcRenderer.invoke("bustly-login"),
   bustlyIsLoggedIn: () => ipcRenderer.invoke("bustly-is-logged-in"),
   bustlyGetUserInfo: () => ipcRenderer.invoke("bustly-get-user-info"),
+  bustlyGetSupabaseConfig: () => ipcRenderer.invoke("bustly-get-supabase-config"),
   bustlyLogout: () => ipcRenderer.invoke("bustly-logout"),
   bustlyOpenLogin: () => ipcRenderer.invoke("bustly-open-login"),
   bustlyOpenSettings: () => ipcRenderer.invoke("bustly-open-settings"),
   bustlyOpenProviderSetup: () => ipcRenderer.invoke("bustly-open-provider-setup"),
+  bustlyOpenWorkspaceSettings: (workspaceId: string) =>
+    ipcRenderer.invoke("bustly-open-workspace-settings", workspaceId),
+  bustlyOpenWorkspaceInvite: (workspaceId: string) =>
+    ipcRenderer.invoke("bustly-open-workspace-invite", workspaceId),
+  bustlyOpenWorkspaceManage: (workspaceId: string) =>
+    ipcRenderer.invoke("bustly-open-workspace-manage", workspaceId),
+  bustlyOpenWorkspaceCreate: () => ipcRenderer.invoke("bustly-open-workspace-create"),
   bustlyReonboard: () => ipcRenderer.invoke("bustly-reonboard"),
   onboardBetaOpenRouterApiKey: () => ipcRenderer.invoke("onboard-beta-openrouter-api-key"),
   onboardListProviders: () => ipcRenderer.invoke("onboard-list-providers"),

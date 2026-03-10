@@ -327,7 +327,6 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
         {
           role,
           content: [{ type: "text", text: trimmed }],
-          __openclaw: typeof seq === "number" ? { seq } : undefined,
           seq: typeof seq === "number" ? seq : undefined,
           timestamp: Date.now(),
         },
@@ -473,7 +472,6 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
             {
               role: "assistant",
               content: [{ type: "text", text: streamText }],
-              __openclaw: typeof payload.seq === "number" ? { seq: payload.seq } : undefined,
               seq: typeof payload.seq === "number" ? payload.seq : undefined,
               timestamp: Date.now(),
               stopReason: phase === "error" ? "error" : "stop",
@@ -490,7 +488,6 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
               role: "assistant",
               content: [],
               errorMessage: abortedMessage,
-              __openclaw: typeof payload.seq === "number" ? { seq: payload.seq } : undefined,
               seq: typeof payload.seq === "number" ? payload.seq : undefined,
               timestamp: Date.now(),
               stopReason: "aborted",
@@ -507,7 +504,6 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
                 content: [
                   { type: "text", text: /^(error:|err:)/i.test(error) ? error : `Error: ${error}` },
                 ],
-                __openclaw: typeof payload.seq === "number" ? { seq: payload.seq } : undefined,
                 seq: typeof payload.seq === "number" ? payload.seq : undefined,
                 timestamp: Date.now(),
                 stopReason: "error",

@@ -343,7 +343,7 @@ function ArrowUpIcon() {
 }
 
 function StopIcon() {
-  return <div className="h-2.5 w-2.5 rounded-[1px] bg-white" />;
+  return <div className="h-[9px] w-[9px] rounded-[1px] bg-white" />;
 }
 
 function CloseIcon() {
@@ -1606,7 +1606,7 @@ export default function ChatPage() {
 
       <div className="relative flex-1 overflow-hidden">
         <div ref={scrollRef} className="chat-page-timeline h-full">
-          <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 pt-8 pb-44">
+          <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 pt-8 pb-48">
             {loading ? (
               <div className="rounded-2xl border border-gray-100 bg-white px-4 py-3 text-sm text-gray-500">
                 Loading chat history...
@@ -1642,7 +1642,7 @@ export default function ChatPage() {
                   e.currentTarget.value = "";
                 }}
               />
-              <div className="group relative rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition-all hover:border-gray-300 focus-within:border-gray-400 focus-within:shadow-md">
+              <div className="group relative rounded-[32px] border border-gray-200 bg-white p-4 shadow-sm transition-all hover:border-gray-300 focus-within:border-gray-400 focus-within:shadow-md">
                 {attachments.length > 0 ? (
                   <div className="relative z-10 mb-2 flex flex-wrap gap-2">
                     {attachments.map((att) => (
@@ -1674,7 +1674,7 @@ export default function ChatPage() {
                   placeholder={
                     connected ? "Ask for follow-up changes..." : "Connect to gateway to chat..."
                   }
-                  className="relative z-10 min-h-[44px] max-h-[200px] w-full resize-none border-none bg-transparent px-1 text-base font-normal text-gray-900 outline-none placeholder:text-gray-400 disabled:cursor-not-allowed disabled:text-gray-400"
+                  className="relative z-10 min-h-[44px] max-h-[200px] w-full resize-none border-none bg-transparent px-1 pr-14 text-base font-normal text-gray-900 outline-none placeholder:text-gray-400 disabled:cursor-not-allowed disabled:text-gray-400"
                   onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
@@ -1687,6 +1687,17 @@ export default function ChatPage() {
                     void handleAttachmentFiles(items as unknown as FileList);
                   }}
                 />
+
+                {activeRunId ? (
+                  <button
+                    type="button"
+                    className="absolute right-3 bottom-3 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-[#17152F] text-white shadow-[0_8px_18px_rgba(23,21,47,0.18)] transition-transform duration-150 hover:scale-[1.02] active:scale-95"
+                    onClick={handleAbort}
+                    aria-label="Stop"
+                  >
+                    <StopIcon />
+                  </button>
+                ) : null}
 
                 <div className="mt-1 flex items-center justify-between pt-2">
                   <div className="flex items-center gap-2">
@@ -1706,19 +1717,13 @@ export default function ChatPage() {
                       onClick={() => {
                         void handleNewChannel();
                       }}
-                    >
+                      >
                       New channel
                     </button>
                   </div>
 
                   {activeRunId ? (
-                    <button
-                      type="button"
-                      className="flex h-7 w-7 items-center justify-center rounded-full bg-text-main text-white shadow-sm transition-all active:scale-95 hover:bg-text-main/90"
-                      onClick={handleAbort}
-                    >
-                      <StopIcon />
-                    </button>
+                    <div className="h-7 w-7" aria-hidden="true" />
                   ) : (
                     <button
                       type="button"

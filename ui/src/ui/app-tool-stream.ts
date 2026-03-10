@@ -192,7 +192,8 @@ function buildToolStreamMessage(entry: ToolStreamEntry): Record<string, unknown>
     role: "assistant",
     toolCallId: entry.toolCallId,
     runId: entry.runId,
-    __openclaw: { seq: entry.seq, toolPhase: entry.phase },
+    seq: entry.seq,
+    toolPhase: entry.phase,
     content,
     timestamp: entry.startedAt,
   };
