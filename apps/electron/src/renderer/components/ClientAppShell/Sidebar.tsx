@@ -46,6 +46,17 @@ function stripLeadingMessageTimestamp(text: string): string {
   return cleaned || text.trim();
 }
 
+function sanitizeSessionTitle(text: string | undefined): string | null {
+  if (!text?.trim()) {
+    return null;
+  }
+  const cleaned = stripLeadingMessageTimestamp(text).trim();
+  if (!cleaned) {
+    return null;
+  }
+  return cleaned;
+}
+
 type IconProps = {
   className?: string;
 };
@@ -666,10 +677,13 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
   useEffect(() => {
     let disposed = false;
     const clientRef: { current: GatewayBrowserClient | null } = { current: null };
+    let requestSettled = false;
 
     const loadTasks = async () => {
+      requestSettled = false;
       if (!disposed) {
         setTasksLoading(true);
+        setRecentTasks([]);
       }
       try {
         const status = await window.electronAPI.gatewayStatus();
@@ -711,17 +725,16 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
                 if (disposed) {
                   return;
                 }
+                requestSettled = true;
                 setRecentTasks(
                   result.sessions
                     .filter((session) => isMainChannelSessionKey(session.key))
                     .map((session) => ({
                       id: session.key,
                       name:
-                        session.displayName?.trim() ||
-                        (session.derivedTitle?.trim()
-                          ? stripLeadingMessageTimestamp(session.derivedTitle)
-                          : undefined) ||
-                        session.label?.trim() ||
+                        sanitizeSessionTitle(session.displayName) ||
+                        sanitizeSessionTitle(session.derivedTitle) ||
+                        sanitizeSessionTitle(session.label) ||
                         session.key,
                     })),
                 );
@@ -731,12 +744,13 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
                 if (disposed) {
                   return;
                 }
+                requestSettled = true;
                 setRecentTasks([]);
                 setTasksLoading(false);
               });
           },
           onClose: () => {
-            if (!disposed) {
+            if (!disposed && requestSettled) {
               setTasksLoading(false);
             }
           },
