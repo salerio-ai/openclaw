@@ -814,6 +814,8 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [renameModalOpen, setRenameModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [createSaving, setCreateSaving] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [renameSaving, setRenameSaving] = useState(false);
   const [renameError, setRenameError] = useState<string | null>(null);
   const [draftScenarioName, setDraftScenarioName] = useState("");
@@ -1104,20 +1106,37 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
 
   const selectedTask = recentTasks.find((entry) => entry.id === selectedTaskId) ?? null;
 
-  const handleCreateScenario = () => {
+  const handleCreateScenario = async () => {
     const name = draftScenarioName.trim() || "New scenario";
+    if (createSaving) {
+      return;
+    }
     const nextSessionKey = buildChannelSessionKey(DEFAULT_SESSION_KEY);
-    const nextLabels = { ...customSessionLabels, [nextSessionKey]: name };
-    setCustomSessionLabels(nextLabels);
-    writeCustomSessionLabels(nextLabels);
-    setRecentTasks((prev) => [
-      ...prev.filter((entry) => entry.id !== nextSessionKey),
-      { id: nextSessionKey, name, isMain: false },
-    ]);
-    setHasLoadedTasks(true);
-    setDraftScenarioName("");
-    setCreateModalOpen(false);
-    void navigate(`/chat?session=${encodeURIComponent(nextSessionKey)}&label=${encodeURIComponent(name)}`);
+    setCreateSaving(true);
+    setCreateError(null);
+    try {
+      const result = await window.electronAPI.gatewayPatchSessionLabel(nextSessionKey, name);
+      if (!result.success) {
+        setCreateError(result.error ?? "Failed to create scenario.");
+        return;
+      }
+      const nextLabels = { ...customSessionLabels, [nextSessionKey]: name };
+      setCustomSessionLabels(nextLabels);
+      writeCustomSessionLabels(nextLabels);
+      setRecentTasks((prev) => [
+        ...prev.filter((entry) => entry.id !== nextSessionKey),
+        { id: nextSessionKey, name, isMain: false },
+      ]);
+      setHasLoadedTasks(true);
+      setDraftScenarioName("");
+      setCreateModalOpen(false);
+      notifySidebarTasksRefresh();
+      void navigate(`/chat?session=${encodeURIComponent(nextSessionKey)}&label=${encodeURIComponent(name)}`);
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setCreateSaving(false);
+    }
   };
 
   const handleRenameScenario = async () => {
@@ -1290,6 +1309,7 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
                 type="button"
                 onClick={() => {
                   setDraftScenarioName("");
+                  setCreateError(null);
                   setCreateModalOpen(true);
                 }}
                 className="mx-4 flex w-[calc(100%-2rem)] items-center gap-3 rounded-xl px-4 py-2.5 text-left text-text-sub transition-all duration-200 hover:bg-[#1A162F]/5 hover:text-text-main"
@@ -1341,6 +1361,7 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
                 type="button"
                 onClick={() => {
                   setDraftScenarioName("");
+                  setCreateError(null);
                   setCreateModalOpen(true);
                 }}
                 className="flex h-10 w-10 items-center justify-center rounded-xl text-text-sub transition-all hover:bg-[#1A162F]/5 hover:text-text-main"
@@ -1447,6 +1468,7 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
         onClose={() => {
           setCreateModalOpen(false);
           setDraftScenarioName("");
+          setCreateError(null);
         }}
       >
         <div className="space-y-5">
@@ -1461,23 +1483,29 @@ export function ClientAppSidebar(props: ClientAppSidebarProps) {
               className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-normal transition-all focus:border-[#1A162F] focus:outline-none focus:ring-2 focus:ring-[#1A162F]/5"
             />
           </div>
+          {createError ? <p className="text-sm text-red-600">{createError}</p> : null}
           <div className="flex justify-end gap-3">
             <button
               type="button"
               className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100"
+              disabled={createSaving}
               onClick={() => {
                 setCreateModalOpen(false);
                 setDraftScenarioName("");
+                setCreateError(null);
               }}
             >
               Cancel
             </button>
             <button
               type="button"
-              className="rounded-lg bg-[#1A162F] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#27223F]"
-              onClick={handleCreateScenario}
+              className="rounded-lg bg-[#1A162F] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#27223F] disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={createSaving}
+              onClick={() => {
+                void handleCreateScenario();
+              }}
             >
-              Create scenario
+              {createSaving ? "Creating..." : "Create scenario"}
             </button>
           </div>
         </div>

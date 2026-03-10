@@ -9,8 +9,21 @@ import {
   File,
   Folder,
   Image,
+  ChartBar,
+  ChatCircleText,
+  Database,
+  Globe,
+  Heart,
+  MagnifyingGlass,
   Paperclip,
+  PencilSimpleLine,
+  Robot,
+  ShoppingBag,
   Stop,
+  StackOverflowLogo,
+  TrendUp,
+  User,
+  Users,
   WarningCircle,
   X,
 } from "@phosphor-icons/react";
@@ -104,14 +117,6 @@ function notifySidebarTasksRefresh() {
   window.dispatchEvent(new Event(SIDEBAR_TASKS_REFRESH_EVENT));
 }
 
-function resolveChannelBaseSessionKey(sessionKey: string) {
-  return sessionKey.replace(/:(thread|topic|channel|group):[^:]+$/i, "");
-}
-
-function buildChannelSessionKey(sessionKey: string) {
-  return `${resolveChannelBaseSessionKey(sessionKey)}:channel:${globalThis.crypto.randomUUID()}`;
-}
-
 function hashString(value: string): number {
   let hash = 0;
   for (let index = 0; index < value.length; index += 1) {
@@ -129,6 +134,47 @@ function sessionAccentClasses(sessionKey: string) {
     "bg-[#FDECEF] text-[#B43C59]",
   ] as const;
   return palette[hashString(sessionKey) % palette.length] ?? palette[0];
+}
+
+function resolveSessionIcon(label: string, sessionKey: string) {
+  const value = `${label} ${sessionKey}`.toLowerCase();
+  if (value.includes("heart")) {
+    return Heart;
+  }
+  if (value.includes("shop") || value.includes("order") || value.includes("source") || value.includes("product")) {
+    return ShoppingBag;
+  }
+  if (value.includes("sale") || value.includes("revenue") || value.includes("growth") || value.includes("trend")) {
+    return TrendUp;
+  }
+  if (value.includes("data") || value.includes("report") || value.includes("chart") || value.includes("analytics")) {
+    return ChartBar;
+  }
+  if (value.includes("inventory") || value.includes("db") || value.includes("database")) {
+    return Database;
+  }
+  if (value.includes("user") || value.includes("profile")) {
+    return User;
+  }
+  if (value.includes("team") || value.includes("member") || value.includes("customer")) {
+    return Users;
+  }
+  if (value.includes("search") || value.includes("find") || value.includes("research")) {
+    return MagnifyingGlass;
+  }
+  if (value.includes("write") || value.includes("draft") || value.includes("content")) {
+    return PencilSimpleLine;
+  }
+  if (value.includes("web") || value.includes("browser")) {
+    return Globe;
+  }
+  if (value.includes("chat") || value.includes("support")) {
+    return ChatCircleText;
+  }
+  if (value.includes("openclaw") || value.includes("codex") || value.includes("stack")) {
+    return StackOverflowLogo;
+  }
+  return Robot;
 }
 
 function deriveScenarioLabel(sessionKey: string, rawLabel?: string | null) {
@@ -511,8 +557,8 @@ export default function ChatPage() {
     const searchParams = new URLSearchParams(location.search);
     return deriveScenarioLabel(currentSessionKey, searchParams.get("label"));
   }, [currentSessionKey, location.search]);
-  const currentScenarioAccent = useMemo(
-    () => sessionAccentClasses(`${currentSessionKey}:${currentScenarioLabel}`),
+  const CurrentScenarioIcon = useMemo(
+    () => resolveSessionIcon(currentScenarioLabel, currentSessionKey),
     [currentScenarioLabel, currentSessionKey],
   );
 
@@ -1584,11 +1630,6 @@ export default function ChatPage() {
     }
   }, [activeRunId, connected, currentSessionKey, finalizeRunState]);
 
-  const handleNewChannel = useCallback(async () => {
-    const nextSessionKey = buildChannelSessionKey(currentSessionKey);
-    void navigate(`/chat?session=${encodeURIComponent(nextSessionKey)}`);
-  }, [currentSessionKey, navigate]);
-
   const handleOpenPricing = useCallback(async () => {
     if (!activeWorkspaceId) {
       return;
@@ -1897,9 +1938,9 @@ export default function ChatPage() {
         <div ref={scrollRef} className="chat-page-timeline h-full">
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-6 pt-8" style={{ paddingBottom: composerAreaHeight + 16 }}>
             {!loading && timeline.length === 0 ? (
-              <div className="flex min-h-[40vh] flex-col items-center justify-center pb-8 pt-4 text-center">
-                <div className={`mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-white shadow-lg shadow-[#1A162F]/5 ${currentScenarioAccent}`}>
-                  <span className="text-2xl font-semibold">{currentScenarioLabel.slice(0, 1).toUpperCase()}</span>
+              <div className="flex min-h-[52vh] flex-col items-center justify-center py-8 text-center">
+                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-[#1A162F] shadow-lg shadow-[#1A162F]/5">
+                  <CurrentScenarioIcon size={28} weight="bold" />
                 </div>
                 <h1 className="mb-2 text-2xl font-semibold tracking-tight text-[#1A162F]">
                   {currentScenarioLabel}
@@ -2087,16 +2128,6 @@ export default function ChatPage() {
                       title="Add photos & files"
                     >
                       <Paperclip size={18} weight="bold" />
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded-lg px-3 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40"
-                      disabled={sending || Boolean(activeRunId) || subscriptionExpired}
-                      onClick={() => {
-                        void handleNewChannel();
-                      }}
-                      >
-                      New channel
                     </button>
                   </div>
 
