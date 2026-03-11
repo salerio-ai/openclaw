@@ -50,6 +50,13 @@ export type TimelineNode =
       durationMs: number | null;
       items: TimelineNode[];
     }
+  | {
+      kind: "streamFold";
+      key: string;
+      timestamp: number;
+      hiddenCount: number;
+      items: TimelineNode[];
+    }
   | { kind: "divider"; key: string; label: string; timestamp: number };
 
 export type CompactionIndicatorStatus = {

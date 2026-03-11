@@ -258,6 +258,56 @@ function shouldTightJoin(prev: TimelineNode | null, next: TimelineNode | null): 
   return isProcessNode(prev) && isProcessNode(next);
 }
 
+const StreamFoldNode = memo(function StreamFoldNode({
+  node,
+  activeRunningToolKey,
+  onCopyText,
+  onPreviewImage,
+}: {
+  node: Extract<TimelineNode, { kind: "streamFold" }>;
+  activeRunningToolKey: string | null;
+  onCopyText?: (text: string) => void;
+  onPreviewImage?: (url: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const stepLabel = `${node.hiddenCount} step${node.hiddenCount === 1 ? "" : "s"} hidden`;
+
+  if (expanded) {
+    return (
+      <TimelineStack
+        items={node.items}
+        activeRunningToolKey={activeRunningToolKey}
+        onCopyText={onCopyText}
+        onPreviewImage={onPreviewImage}
+      />
+    );
+  }
+
+  return (
+    <div className="py-2 pl-11">
+      {!expanded ? (
+        <button
+          type="button"
+          onClick={() => {
+            setExpanded(true);
+          }}
+          className="group flex w-full items-center justify-center gap-3 rounded-[22px] border border-dashed border-[#D8DCE7] bg-[#FBFBFD] px-4 py-3 text-center transition-colors hover:border-[#C5CBD9] hover:bg-[#F7F8FC]"
+        >
+          <div className="flex items-center gap-1 opacity-50 transition-opacity group-hover:opacity-100">
+            <div className="h-1.5 w-1.5 rounded-full bg-[#666F8D]/60" />
+            <div className="h-1.5 w-1.5 rounded-full bg-[#666F8D]/60" />
+            <div className="h-1.5 w-1.5 rounded-full bg-[#666F8D]/60" />
+          </div>
+          <span className="text-[15px] font-medium tracking-[-0.01em] text-[#66708F]">
+            {stepLabel} (click to expand)
+          </span>
+        </button>
+      ) : null}
+
+    </div>
+  );
+});
+
 async function copyText(text: string, onCopyText?: (text: string) => void) {
   if (onCopyText) {
     onCopyText(text);
@@ -353,6 +403,17 @@ const TextNode = memo(function TextNode({
         />
         <div
           className={cx(markdownClassName(isErrorText), "relative z-10 !text-gray-500")}
+          dangerouslySetInnerHTML={{ __html: toSanitizedMarkdownHtml(node.text) }}
+        />
+      </div>
+    );
+  }
+
+  if (node.tone === "assistant" && !node.final) {
+    return (
+      <div className="pl-3">
+        <div
+          className={markdownClassName(isErrorText)}
           dangerouslySetInnerHTML={{ __html: toSanitizedMarkdownHtml(node.text) }}
         />
       </div>
@@ -553,6 +614,15 @@ const TimelineItem = memo(function TimelineItem({
       return <ToolNode node={node} activeRunningToolKey={activeRunningToolKey} />;
     case "processed":
       return <ProcessedNode node={node} activeRunningToolKey={activeRunningToolKey} />;
+    case "streamFold":
+      return (
+        <StreamFoldNode
+          node={node}
+          activeRunningToolKey={activeRunningToolKey}
+          onCopyText={onCopyText}
+          onPreviewImage={onPreviewImage}
+        />
+      );
     case "divider":
       return <DividerNode node={node} />;
     default:

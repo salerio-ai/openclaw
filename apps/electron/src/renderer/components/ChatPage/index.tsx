@@ -38,7 +38,7 @@ import {
   type ChatInputArtifact,
   type InputArtifactKind,
 } from "./input-artifacts";
-import { collapseProcessedTurn, resolveToolDisplay, formatToolDetail } from "./utils";
+import { collapseProcessedTurn, collapseStreamingEvents, resolveToolDisplay, formatToolDetail } from "./utils";
 import type { TimelineArtifact, TimelineNode } from "./types";
 import { useAppState } from "../../providers/AppStateProvider";
 
@@ -2045,8 +2045,8 @@ export default function ChatPage() {
         running: item.status === "running",
       };
     });
-    return collapseProcessedTurn(rawNodes);
-  }, [timeline]);
+    return collapseStreamingEvents(collapseProcessedTurn(rawNodes), 5, Boolean(activeRunId || sending));
+  }, [activeRunId, sending, timeline]);
 
   const activeRunningToolKey = activeRunningToolId ? activeRunningToolId : null;
   const contextUsageLabel = useMemo(() => {

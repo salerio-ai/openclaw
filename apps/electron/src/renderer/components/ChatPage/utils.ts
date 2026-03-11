@@ -925,6 +925,129 @@ export function collapseProcessedTurn(nodes: TimelineNode[]): TimelineNode[] {
   return result;
 }
 
+function isLiveStreamNode(node: TimelineNode): boolean {
+  if (node.kind === "tool") {
+    return node.running === true;
+  }
+  return node.kind === "text" && node.streaming === true;
+}
+
+function isStreamEventNode(node: TimelineNode): boolean {
+  if (node.kind === "tool") {
+    return true;
+  }
+  if (node.kind !== "text") {
+    return false;
+  }
+  return node.tone !== "user";
+}
+
+function buildStreamFoldNode(items: TimelineNode[]): Extract<TimelineNode, { kind: "streamFold" }> | null {
+  if (items.length === 0) {
+    return null;
+  }
+  const first = items[0];
+  const last = items[items.length - 1];
+  return {
+    kind: "streamFold",
+    key: `stream-fold:${first?.key ?? "start"}:${last?.key ?? "end"}`,
+    timestamp: first?.timestamp ?? Date.now(),
+    hiddenCount: items.length,
+    items,
+  };
+}
+
+export function collapseStreamingEvents(
+  nodes: TimelineNode[],
+  threshold = 5,
+  keepCollapsedWithoutLive = false,
+): TimelineNode[] {
+  if (nodes.length < threshold) {
+    return nodes;
+  }
+
+  let liveIndex = -1;
+  for (let index = nodes.length - 1; index >= 0; index -= 1) {
+    if (isLiveStreamNode(nodes[index])) {
+      liveIndex = index;
+      break;
+    }
+  }
+  if (liveIndex === -1) {
+    if (!keepCollapsedWithoutLive) {
+      return nodes;
+    }
+    for (let index = nodes.length - 1; index >= 0; index -= 1) {
+      if (isStreamEventNode(nodes[index])) {
+        liveIndex = index;
+        break;
+      }
+    }
+    if (liveIndex === -1) {
+      return nodes;
+    }
+  }
+
+  let turnStart = 0;
+  for (let index = liveIndex - 1; index >= 0; index -= 1) {
+    const node = nodes[index];
+    if (node.kind === "divider") {
+      turnStart = index + 1;
+      break;
+    }
+    if (node.kind === "text" && node.tone === "user") {
+      turnStart = index + 1;
+      break;
+    }
+    if (node.kind === "processed") {
+      turnStart = index + 1;
+      break;
+    }
+  }
+
+  const eventIndices: number[] = [];
+  for (let index = turnStart; index < nodes.length; index += 1) {
+    if (isStreamEventNode(nodes[index])) {
+      eventIndices.push(index);
+    }
+  }
+  if (eventIndices.length < threshold) {
+    return nodes;
+  }
+
+  const firstEventIndex = eventIndices[0];
+  const lastEventIndex = eventIndices[eventIndices.length - 1];
+  if (firstEventIndex === lastEventIndex) {
+    return nodes;
+  }
+
+  const hiddenIndices = eventIndices.slice(1, -1);
+  if (hiddenIndices.length === 0) {
+    return nodes;
+  }
+
+  const hiddenIndexSet = new Set(hiddenIndices);
+  const hiddenItems = hiddenIndices.map((index) => nodes[index]);
+  const foldNode = buildStreamFoldNode(hiddenItems);
+  if (!foldNode) {
+    return nodes;
+  }
+
+  const result: TimelineNode[] = [];
+  let inserted = false;
+  for (let index = 0; index < nodes.length; index += 1) {
+    if (hiddenIndexSet.has(index)) {
+      if (!inserted) {
+        result.push(foldNode);
+        inserted = true;
+      }
+      continue;
+    }
+    result.push(nodes[index]);
+  }
+  return result;
+}
+
 export function hasRunningToolInCurrentTurn(
   nodes: TimelineNode[],
   currentTurnStartedAt: number | null,
