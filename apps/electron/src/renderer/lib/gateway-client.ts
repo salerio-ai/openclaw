@@ -103,11 +103,16 @@ export class GatewayBrowserClient {
     this.ws.addEventListener("message", (event) => this.handleMessage(String(event.data ?? "")));
     this.ws.addEventListener("close", (event) => {
       const reason = String(event.reason ?? "");
+      const wasClosed = this.closed;
       this.ws = null;
       this.flushPending(new Error(`gateway closed (${event.code}): ${reason}`));
-      this.options.onClose?.({ code: event.code, reason, error: this.pendingConnectError });
+      if (!wasClosed) {
+        this.options.onClose?.({ code: event.code, reason, error: this.pendingConnectError });
+      }
       this.pendingConnectError = undefined;
-      this.scheduleReconnect();
+      if (!wasClosed) {
+        this.scheduleReconnect();
+      }
     });
     this.ws.addEventListener("error", () => {
       // Close handler will report details.

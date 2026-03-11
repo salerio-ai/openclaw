@@ -95,6 +95,7 @@ type SessionUsageSummary = {
 };
 
 type RunTerminalState = "final" | "aborted" | "error";
+type ConnectionNoticeTone = "warning" | "error";
 
 const DEFAULT_SESSION_KEY = "agent:main:main";
 const TOOL_RUNNING_MIN_VISIBLE_MS = 600;
@@ -490,7 +491,7 @@ function InputArtifactCard({
 }
 
 export default function ChatPage() {
-  const { gatewayReady } = useAppState();
+  const { ensureGatewayReady, gatewayReady } = useAppState();
   const location = useLocation();
   const navigate = useNavigate();
   const [connected, setConnected] = useState(false);
@@ -501,6 +502,10 @@ export default function ChatPage() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [contextPaths, setContextPaths] = useState<ContextPath[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [connectionNotice, setConnectionNotice] = useState<{
+    message: string;
+    tone: ConnectionNoticeTone;
+  } | null>(null);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [compactingRunId, setCompactingRunId] = useState<string | null>(null);
   const [sessionUsage, setSessionUsage] = useState<SessionUsageSummary>({
@@ -532,6 +537,7 @@ export default function ChatPage() {
   const seqCounterRef = useRef(1_000_000_000);
   const toolTimersRef = useRef<Map<string, number>>(new Map());
   const runSeqBaseRef = useRef<Map<string, number>>(new Map());
+  const settledRunIdsRef = useRef<Set<string>>(new Set());
   const modelMenuRef = useRef<HTMLDivElement | null>(null);
   const modelTriggerRef = useRef<HTMLButtonElement | null>(null);
   const streamSegmentsRef = useRef<
@@ -744,6 +750,7 @@ export default function ChatPage() {
     setActiveRunId((prev) => (prev === runId ? null : prev));
     setCompactingRunId((prev) => (prev === runId ? null : prev));
     if (runId) {
+      settledRunIdsRef.current.add(runId);
       runSeqBaseRef.current.delete(runId);
     }
     streamSegmentsRef.current.delete(runId ?? "__unknown__");
@@ -876,9 +883,11 @@ export default function ChatPage() {
       remainingTokens: null,
     });
     setError(null);
+    setConnectionNotice(null);
     seqCounterRef.current = 1_000_000_000;
     streamSegmentsRef.current.clear();
     runSeqBaseRef.current.clear();
+    settledRunIdsRef.current.clear();
     for (const timer of toolTimersRef.current.values()) {
       window.clearTimeout(timer);
     }
@@ -1004,8 +1013,14 @@ export default function ChatPage() {
     async (status: GatewayStatus) => {
       if (!status.running) {
         setConnected(false);
+        setConnectionNotice({
+          message: "Gateway unavailable. Reconnecting...",
+          tone: "warning",
+        });
+        void ensureGatewayReady();
         return;
       }
+      setConnectionNotice(null);
       let connectConfig: GatewayConnectConfig;
       try {
         connectConfig = await window.electronAPI.gatewayConnectConfig();
@@ -1029,6 +1044,7 @@ export default function ChatPage() {
         onHello: () => {
           setConnected(true);
           setError(null);
+          setConnectionNotice(null);
           void loadHistory(client, currentSessionKey).catch((err) => {
             setError(err instanceof Error ? err.message : String(err));
           });
@@ -1038,8 +1054,22 @@ export default function ChatPage() {
         },
         onClose: ({ code, reason, error: closeError }) => {
           setConnected(false);
-          const message = closeError?.message || `disconnected (${code}): ${reason || "no reason"}`;
-          setError(message);
+          if (closeError) {
+            setConnectionNotice(null);
+            setError(closeError.message);
+          } else {
+            setError(null);
+            setConnectionNotice({
+              message: "Gateway disconnected. Reconnecting...",
+              tone: "warning",
+            });
+            void ensureGatewayReady();
+          }
+          console.warn("[electron-chat] gateway disconnected", {
+            code,
+            reason: reason || "no reason",
+            error: closeError,
+          });
         },
         onEvent: (evt: GatewayEventFrame) => {
           if (evt.event === "health") {
@@ -1058,6 +1088,9 @@ export default function ChatPage() {
               return;
             }
             const runId = typeof payload.runId === "string" ? payload.runId : null;
+            if (runId && settledRunIdsRef.current.has(runId) && payload.state !== "final" && payload.state !== "aborted" && payload.state !== "error") {
+              return;
+            }
             const terminalState = resolveChatTerminalState(payload);
             if (payload.state === "delta") {
               return;
@@ -1160,6 +1193,9 @@ export default function ChatPage() {
               return;
             }
             const runId = typeof payload.runId === "string" ? payload.runId : null;
+            if (runId && settledRunIdsRef.current.has(runId) && payload.stream !== "lifecycle" && payload.stream !== "error") {
+              return;
+            }
             let seq = seqCounterRef.current++;
             if (runId) {
               let base = runSeqBaseRef.current.get(runId);
@@ -1315,6 +1351,7 @@ export default function ChatPage() {
       refreshSessionUsage,
       markLastAssistantAsFinal,
       upsertTool,
+      ensureGatewayReady,
     ],
   );
 
@@ -1354,6 +1391,10 @@ export default function ChatPage() {
     if (!gatewayReady) {
       setConnected(false);
       setLoading(true);
+      setConnectionNotice({
+        message: "Waiting for gateway...",
+        tone: "warning",
+      });
       return;
     }
 
@@ -1381,6 +1422,11 @@ export default function ChatPage() {
         .then((status) => {
           if (!status.running) {
             setConnected(false);
+            setConnectionNotice({
+              message: "Gateway unavailable. Reconnecting...",
+              tone: "warning",
+            });
+            void ensureGatewayReady();
           }
         })
         .catch(() => {});
@@ -1396,7 +1442,7 @@ export default function ChatPage() {
       }
       toolTimersRef.current.clear();
     };
-  }, [connectGateway, gatewayReady, loadGatewayStatus]);
+  }, [connectGateway, ensureGatewayReady, gatewayReady, loadGatewayStatus]);
 
   useEffect(() => {
     resetSessionView();
@@ -1544,6 +1590,7 @@ export default function ChatPage() {
     setError(null);
 
     const idempotencyKey = nextId("run");
+    settledRunIdsRef.current.delete(idempotencyKey);
     setActiveRunId(idempotencyKey);
     setCompactingRunId(null);
 
@@ -1585,7 +1632,8 @@ export default function ChatPage() {
       return;
     }
     try {
-      const res = await clientRef.current.request<{ aborted?: boolean; runIds?: string[] }>("chat.abort", {
+      const client = clientRef.current;
+      const res = await client.request<{ aborted?: boolean; runIds?: string[] }>("chat.abort", {
         sessionKey: currentSessionKey,
         runId: activeRunId ?? undefined,
       });
@@ -1624,11 +1672,16 @@ export default function ChatPage() {
           }
           return next.toSorted(compareTimeline);
         });
+        void loadHistory(client, currentSessionKey).catch((err) => {
+          setError(err instanceof Error ? err.message : String(err));
+        });
+        refreshSessionUsage(client, currentSessionKey);
+        notifySidebarTasksRefresh();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [activeRunId, connected, currentSessionKey, finalizeRunState]);
+  }, [activeRunId, connected, currentSessionKey, finalizeRunState, loadHistory, refreshSessionUsage]);
 
   const handleOpenPricing = useCallback(async () => {
     if (!activeWorkspaceId) {
@@ -1889,9 +1942,15 @@ export default function ChatPage() {
         </div>
       </div>
 
-      {error ? (
-        <div className="mx-auto mt-4 w-full max-w-3xl rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
-          {error}
+      {error || connectionNotice ? (
+        <div
+          className={`mx-auto mt-4 w-full max-w-3xl rounded-2xl px-4 py-3 text-sm ${
+            error != null || connectionNotice?.tone === "error"
+              ? "border border-red-100 bg-red-50 text-red-600"
+              : "border border-amber-100 bg-amber-50 text-amber-700"
+          }`}
+        >
+          {error ?? connectionNotice?.message}
         </div>
       ) : null}
 
