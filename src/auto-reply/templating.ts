@@ -130,6 +130,8 @@ export type MsgContext = {
   GatewayClientScopes?: string[];
   /** Thread identifier (Telegram topic id or Matrix thread event id). */
   MessageThreadId?: string | number;
+  /** Internal-only escape hatch for replaying the same inbound turn without dedupe suppression. */
+  SkipInboundDedupe?: boolean;
   /** Telegram forum supergroup marker. */
   IsForum?: boolean;
   /**

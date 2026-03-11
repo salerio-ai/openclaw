@@ -51,6 +51,26 @@ describe("applyTemplate", () => {
   });
 });
 
+describe("shouldSkipDuplicateInbound", () => {
+  it("bypasses inbound dedupe when explicitly requested", () => {
+    resetInboundDedupe();
+    const ctx: MsgContext = {
+      Provider: "webchat",
+      Surface: "webchat",
+      OriginatingChannel: "webchat",
+      OriginatingTo: "agent:main:main",
+      SessionKey: "agent:main:main",
+      MessageSid: "retry-run-1",
+    };
+
+    expect(shouldSkipDuplicateInbound(ctx, { now: 100 })).toBe(false);
+    expect(shouldSkipDuplicateInbound(ctx, { now: 200 })).toBe(true);
+    expect(shouldSkipDuplicateInbound({ ...ctx, SkipInboundDedupe: true }, { now: 300 })).toBe(
+      false,
+    );
+  });
+});
+
 describe("normalizeInboundTextNewlines", () => {
   it("keeps real newlines", () => {
     expect(normalizeInboundTextNewlines("a\nb")).toBe("a\nb");

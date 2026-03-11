@@ -128,6 +128,35 @@ type PromptBuildHookRunner = {
   ) => Promise<PluginHookBeforeAgentStartResult | undefined>;
 };
 
+function rewindRetryLeafToLatestUserTurn(params: {
+  sessionManager: ReturnType<typeof guardSessionManager>;
+  activeSession: Awaited<ReturnType<typeof createAgentSession>>["session"];
+}): boolean {
+  let leafEntry = params.sessionManager.getLeafEntry();
+  let rewound = false;
+
+  while (leafEntry) {
+    if (leafEntry.type === "message" && leafEntry.message.role === "user") {
+      if (rewound) {
+        params.activeSession.agent.replaceMessages(params.sessionManager.buildSessionContext().messages);
+      }
+      return true;
+    }
+    if (leafEntry.parentId) {
+      params.sessionManager.branch(leafEntry.parentId);
+    } else {
+      params.sessionManager.resetLeaf();
+    }
+    rewound = true;
+    leafEntry = params.sessionManager.getLeafEntry();
+  }
+
+  if (rewound) {
+    params.activeSession.agent.replaceMessages(params.sessionManager.buildSessionContext().messages);
+  }
+  return false;
+}
+
 export function injectHistoryImagesIntoMessages(
   messages: AgentMessage[],
   historyImagesByIndex: Map<number, ImageContent[]>,
@@ -1176,7 +1205,16 @@ export async function runEmbeddedAttempt(
 
           // Only pass images option if there are actually images to pass
           // This avoids potential issues with models that don't expect the images parameter
-          if (imageResult.images.length > 0) {
+          if (params.retryWithoutNewUser) {
+            const canContinue = rewindRetryLeafToLatestUserTurn({
+              sessionManager,
+              activeSession,
+            });
+            if (!canContinue) {
+              throw new Error("Retry could not locate the original user turn.");
+            }
+            await abortable(activeSession.agent.continue());
+          } else if (imageResult.images.length > 0) {
             await abortable(activeSession.prompt(effectivePrompt, { images: imageResult.images }));
           } else {
             await abortable(activeSession.prompt(effectivePrompt));

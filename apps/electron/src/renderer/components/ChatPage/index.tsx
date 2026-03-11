@@ -31,7 +31,7 @@ import { listWorkspaceSummaries } from "../../lib/bustly-supabase";
 import { GatewayBrowserClient, type GatewayEventFrame } from "../../lib/gateway-client";
 import { extractText, extractThinking } from "../../lib/chat-extract";
 import Skeleton from "../ui/Skeleton";
-import { ChatTimeline, ChatTimelineThinkingIndicator } from "./ChatTimeline";
+import { ChatTimeline, ChatTimelineWaitingIndicator } from "./ChatTimeline";
 import {
   buildInputArtifactsMessage,
   inferInputArtifactKind,
@@ -87,7 +87,17 @@ type ToolItem = {
   status: ToolStatus;
 };
 
-type TimelineItem = TextItem | ToolItem;
+type ErrorItem = {
+  kind: "error";
+  id: string;
+  sortSeq: number;
+  timestamp: number;
+  reason: string;
+  description: string;
+  runId?: string;
+};
+
+type TimelineItem = TextItem | ToolItem | ErrorItem;
 
 type SessionUsageSummary = {
   totalTokens: number | null;
@@ -97,6 +107,9 @@ type SessionUsageSummary = {
 
 type RunTerminalState = "final" | "aborted" | "error";
 type ConnectionNoticeTone = "warning" | "error";
+type ReconnectStatus = {
+  runId: string;
+};
 
 const DEFAULT_SESSION_KEY = "agent:main:main";
 const TOOL_RUNNING_MIN_VISIBLE_MS = 600;
@@ -229,9 +242,6 @@ function resolveAgentTerminalState(payload: {
   stream?: string;
   data?: Record<string, unknown>;
 }): RunTerminalState | null {
-  if (payload.stream === "error") {
-    return "error";
-  }
   if (payload.stream !== "lifecycle") {
     return null;
   }
@@ -239,6 +249,49 @@ function resolveAgentTerminalState(payload: {
     return null;
   }
   return payload.data?.aborted === true ? "aborted" : "final";
+}
+
+function describeExecutionError(reason: string): string {
+  const normalized = reason.trim().toLowerCase();
+  if (normalized.includes("connection")) {
+    return "The gateway connection was interrupted before execution could complete. Retry the request after the connection recovers.";
+  }
+  if (normalized.includes("rate limit") || normalized.includes("429")) {
+    return "The upstream model temporarily rejected the request due to rate limiting. Retry in a moment or switch to a different model tier.";
+  }
+  if (
+    normalized.includes("unauthorized") ||
+    normalized.includes("401") ||
+    normalized.includes("forbidden") ||
+    normalized.includes("403")
+  ) {
+    return "The current provider credentials were rejected. Refresh the provider auth and retry the request.";
+  }
+  return "Execution stopped before the agent could finish this run. Retry the request or check the gateway connection and model availability.";
+}
+
+function extractAgentErrorReason(payload: {
+  stream?: string;
+  data?: Record<string, unknown>;
+}): string {
+  const data = payload.data ?? {};
+  const errorMessage =
+    typeof data.error === "string"
+      ? data.error
+      : typeof data.message === "string"
+        ? data.message
+        : typeof data.reason === "string"
+          ? data.reason
+          : typeof data.stopReason === "string"
+            ? data.stopReason
+            : "";
+  if (errorMessage.trim()) {
+    return errorMessage.trim();
+  }
+  if (payload.stream === "error") {
+    return "Execution error.";
+  }
+  return "Connection error.";
 }
 
 function extractToolText(value: unknown): string {
@@ -533,6 +586,7 @@ export default function ChatPage() {
   } | null>(null);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [compactingRunId, setCompactingRunId] = useState<string | null>(null);
+  const [reconnectStatus, setReconnectStatus] = useState<ReconnectStatus | null>(null);
   const [sessionUsage, setSessionUsage] = useState<SessionUsageSummary>({
     totalTokens: null,
     contextTokens: null,
@@ -563,6 +617,8 @@ export default function ChatPage() {
   const toolTimersRef = useRef<Map<string, number>>(new Map());
   const runSeqBaseRef = useRef<Map<string, number>>(new Map());
   const settledRunIdsRef = useRef<Set<string>>(new Set());
+  const discardedRunIdsRef = useRef<Set<string>>(new Set());
+  const retryPayloadsRef = useRef<Map<string, { draft: string; attachments: Attachment[]; contextPaths: ContextPath[] }>>(new Map());
   const modelMenuRef = useRef<HTMLDivElement | null>(null);
   const modelTriggerRef = useRef<HTMLButtonElement | null>(null);
   const streamSegmentsRef = useRef<
@@ -781,6 +837,69 @@ export default function ChatPage() {
     streamSegmentsRef.current.delete(runId ?? "__unknown__");
   }, [markRunFinished, settleToolsForRun]);
 
+  const upsertRunError = useCallback((params: {
+    runId?: string;
+    seq: number;
+    timestamp: number;
+    reason: string;
+    description?: string;
+  }) => {
+    const key = params.runId ? `run:${params.runId}:error` : nextId("run-error");
+    const reason = params.reason.trim() || "Execution error.";
+    const description = params.description?.trim() || describeExecutionError(reason);
+    setTimeline((prev) => {
+      const idx = prev.findIndex((item) => item.kind === "error" && item.id === key);
+      if (idx === -1) {
+        const next: ErrorItem = {
+          kind: "error",
+          id: key,
+          sortSeq: params.seq,
+          timestamp: params.timestamp,
+          reason,
+          description,
+          runId: params.runId,
+        };
+        return [...prev, next].toSorted(compareTimeline);
+      }
+      const current = prev[idx] as ErrorItem;
+      if (current.reason === reason && current.description === description) {
+        return prev;
+      }
+      const next = [...prev];
+      next[idx] = {
+        ...current,
+        sortSeq: Math.min(current.sortSeq, params.seq),
+        timestamp: params.timestamp,
+        reason,
+        description,
+      };
+      return next;
+    });
+  }, []);
+
+  const removeRunError = useCallback((runId: string | null | undefined) => {
+    if (!runId) {
+      return;
+    }
+    const errorKey = `run:${runId}:error`;
+    setTimeline((prev) => {
+      const next = prev.filter((item) => item.id !== errorKey);
+      return next.length === prev.length ? prev : next;
+    });
+  }, []);
+
+  const clearReconnectStatus = useCallback((runId?: string | null) => {
+    setReconnectStatus((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      if (runId && prev.runId !== runId) {
+        return prev;
+      }
+      return null;
+    });
+  }, []);
+
   const upsertTool = useCallback((params: {
     runId?: string;
     toolCallId: string;
@@ -909,10 +1028,13 @@ export default function ChatPage() {
     });
     setError(null);
     setConnectionNotice(null);
+    setReconnectStatus(null);
     seqCounterRef.current = 1_000_000_000;
     streamSegmentsRef.current.clear();
     runSeqBaseRef.current.clear();
     settledRunIdsRef.current.clear();
+    discardedRunIdsRef.current.clear();
+    retryPayloadsRef.current.clear();
     for (const timer of toolTimersRef.current.values()) {
       window.clearTimeout(timer);
     }
@@ -1031,7 +1153,11 @@ export default function ChatPage() {
     }
 
     items.push(...toolsByCallId.values());
-    setTimeline(items.toSorted(compareTimeline));
+    setTimeline((prev) => {
+      const localErrors = prev.filter((item): item is ErrorItem => item.kind === "error");
+      const merged = [...items, ...localErrors];
+      return merged.toSorted(compareTimeline);
+    });
   }, []);
 
   const connectGateway = useCallback(
@@ -1113,6 +1239,9 @@ export default function ChatPage() {
               return;
             }
             const runId = typeof payload.runId === "string" ? payload.runId : null;
+            if (runId && discardedRunIdsRef.current.has(runId)) {
+              return;
+            }
             if (runId && settledRunIdsRef.current.has(runId) && payload.state !== "final" && payload.state !== "aborted" && payload.state !== "error") {
               return;
             }
@@ -1122,6 +1251,7 @@ export default function ChatPage() {
             }
             if (terminalState === "final") {
               finalizeRunState(runId, "completed");
+              clearReconnectStatus(runId);
               if (!payload.message) {
                 return;
               }
@@ -1161,44 +1291,15 @@ export default function ChatPage() {
             }
             if (terminalState === "aborted" || terminalState === "error") {
               finalizeRunState(runId, "error");
-              const statusText =
-                terminalState === "aborted"
-                  ? "Request aborted."
-                  : `Run error: ${payload.errorMessage ?? "unknown error"}`;
-              const statusKey = runId ? `run:${runId}:command:status` : nextId("chat-status");
-              setTimeline((prev) => {
-                const idx = prev.findIndex((item) => item.kind === "text" && item.id === statusKey);
-                if (idx === -1) {
-                  if (terminalState === "aborted" && runId) {
-                    return prev;
-                  }
-                  const next: TextItem = {
-                    kind: "text",
-                    id: statusKey,
-                    sortSeq: seqCounterRef.current++,
-                    timestamp: Date.now(),
-                    role: "system",
-                    text: statusText,
-                    runId: runId ?? undefined,
-                    streaming: false,
-                  };
-                  return [...prev, next].toSorted(compareTimeline);
-                }
-                const current = prev[idx] as TextItem;
-                if (current.text === statusText && current.streaming === false) {
-                  return prev;
-                }
-                const next = [...prev];
-                next[idx] = {
-                  ...current,
-                  text: statusText,
-                  streaming: false,
-                };
-                return next;
-              });
-              void loadHistory(client, currentSessionKey).catch((err) => {
-                setError(err instanceof Error ? err.message : String(err));
-              });
+              clearReconnectStatus(runId);
+              if (terminalState === "error") {
+                upsertRunError({
+                  runId: runId ?? undefined,
+                  seq: seqCounterRef.current++,
+                  timestamp: Date.now(),
+                  reason: payload.errorMessage ?? "Execution error.",
+                });
+              }
               refreshSessionUsage(client, currentSessionKey);
               notifySidebarTasksRefresh();
               return;
@@ -1218,6 +1319,9 @@ export default function ChatPage() {
               return;
             }
             const runId = typeof payload.runId === "string" ? payload.runId : null;
+            if (runId && discardedRunIdsRef.current.has(runId)) {
+              return;
+            }
             if (runId && settledRunIdsRef.current.has(runId) && payload.stream !== "lifecycle" && payload.stream !== "error") {
               return;
             }
@@ -1251,6 +1355,17 @@ export default function ChatPage() {
               stream !== "error"
             ) {
               setActiveRunId(runId);
+            }
+
+            if (runId && (stream === "assistant" || stream === "thinking" || stream === "tool")) {
+              clearReconnectStatus(runId);
+            }
+
+            if (stream === "lifecycle" && data.phase === "reconnecting" && runId) {
+              setReconnectStatus({
+                runId,
+              });
+              return;
             }
 
             if (stream === "assistant") {
@@ -1334,30 +1449,25 @@ export default function ChatPage() {
               return;
             }
 
+            if (stream === "error") {
+              return;
+            }
+
             const terminalState = resolveAgentTerminalState({ stream, data });
             if (terminalState) {
               finalizeRunState(runId, terminalState === "final" ? "completed" : "error");
+              if (terminalState === "aborted" && runId) {
+                discardedRunIdsRef.current.add(runId);
+              }
               if (terminalState === "final") {
                 markLastAssistantAsFinal(runId);
               }
-              if (terminalState === "aborted") {
-                const stopReason = typeof data.stopReason === "string" ? data.stopReason : "aborted";
-                setTimeline((prev) => {
-                  const next: TextItem = {
-                    kind: "text",
-                    id: nextId("aborted"),
-                    sortSeq: seq,
-                    timestamp: ts,
-                    role: "system",
-                    text: `Request aborted (${stopReason}).`,
-                    runId: runId ?? undefined,
-                    streaming: false,
-                  };
-                  return [...prev, next].toSorted(compareTimeline);
-                });
-              }
               refreshSessionUsage(client, currentSessionKey);
               notifySidebarTasksRefresh();
+              return;
+            }
+
+            if (stream === "lifecycle" && data.phase === "error") {
               return;
             }
             return;
@@ -1375,6 +1485,8 @@ export default function ChatPage() {
       loadHistory,
       refreshSessionUsage,
       markLastAssistantAsFinal,
+      clearReconnectStatus,
+      upsertRunError,
       upsertTool,
       ensureGatewayReady,
     ],
@@ -1560,7 +1672,7 @@ export default function ChatPage() {
     textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
   }, [draft]);
 
-  const handleSend = useCallback(async () => {
+  const sendChatMessage = useCallback(async () => {
     const msg = draft.trim();
     if (
       subscriptionExpired ||
@@ -1615,6 +1727,11 @@ export default function ChatPage() {
     setError(null);
 
     const idempotencyKey = nextId("run");
+    retryPayloadsRef.current.set(idempotencyKey, {
+      draft: msg,
+      attachments: attachments.map((attachment) => ({ ...attachment })),
+      contextPaths: contextPaths.map((entry) => ({ ...entry })),
+    });
     settledRunIdsRef.current.delete(idempotencyKey);
     setActiveRunId(idempotencyKey);
     setCompactingRunId(null);
@@ -1652,6 +1769,73 @@ export default function ChatPage() {
     }
   }, [attachments, connected, contextPaths, currentSessionKey, draft, sending, subscriptionExpired]);
 
+  const handleSend = useCallback(async () => {
+    await sendChatMessage();
+  }, [sendChatMessage]);
+
+  const handleRetryRun = useCallback(async (runId?: string) => {
+    const retryPayload =
+      (runId ? retryPayloadsRef.current.get(runId) : undefined) ??
+      Array.from(retryPayloadsRef.current.values()).at(-1);
+    const retryRunId =
+      runId ??
+      Array.from(retryPayloadsRef.current.keys()).at(-1);
+    if (!retryPayload || !retryRunId || !clientRef.current || !connected || subscriptionExpired || sending) {
+      return;
+    }
+    const outgoingArtifacts: ChatInputArtifact[] = [
+      ...retryPayload.attachments.map((attachment) => ({
+        kind: "image" as const,
+        name: attachment.name,
+      })),
+      ...retryPayload.contextPaths.map((entry) => ({
+        kind: entry.kind,
+        name: entry.name,
+        path: entry.path,
+      })),
+    ];
+    const outgoingMessage = buildInputArtifactsMessage(retryPayload.draft, outgoingArtifacts);
+    const apiAttachments = retryPayload.attachments
+      .map((att) => {
+        const parsed = parseDataUrl(att.dataUrl);
+        if (!parsed) {
+          return null;
+        }
+        return {
+          type: "image",
+          mimeType: parsed.mimeType,
+          content: parsed.content,
+        };
+      })
+      .filter((att): att is { type: "image"; mimeType: string; content: string } => Boolean(att));
+
+    clearReconnectStatus(retryRunId);
+    removeRunError(retryRunId);
+    discardedRunIdsRef.current.delete(retryRunId);
+    settledRunIdsRef.current.delete(retryRunId);
+    setActiveRunId(retryRunId);
+    setCompactingRunId(null);
+    setSending(true);
+    setError(null);
+    try {
+      await clientRef.current.request("chat.retry", {
+        sessionKey: currentSessionKey,
+        runId: retryRunId,
+        message: outgoingMessage,
+        deliver: false,
+        attachments: apiAttachments.length > 0 ? apiAttachments : undefined,
+      });
+      notifySidebarTasksRefresh();
+      void loadSessionUsage(clientRef.current, currentSessionKey).catch(() => {});
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setActiveRunId(null);
+      setCompactingRunId(null);
+    } finally {
+      setSending(false);
+    }
+  }, [clearReconnectStatus, connected, currentSessionKey, removeRunError, sending, subscriptionExpired]);
+
   const handleAbort = useCallback(async () => {
     if (!connected || !clientRef.current) {
       return;
@@ -1669,44 +1853,16 @@ export default function ChatPage() {
           : [];
       if (res.aborted && abortedRunIds.length > 0) {
         for (const runId of abortedRunIds) {
+          discardedRunIdsRef.current.add(runId);
           finalizeRunState(runId, "error");
         }
-        setTimeline((prev) => {
-          const existing = new Set(
-            prev
-              .filter((item): item is TextItem => item.kind === "text")
-              .map((item) => `${item.runId ?? ""}:${item.text}`),
-          );
-          const next = [...prev];
-          for (const runId of abortedRunIds) {
-            const text = "Request aborted.";
-            const dedupeKey = `${runId}:${text}`;
-            if (existing.has(dedupeKey)) {
-              continue;
-            }
-            next.push({
-              kind: "text",
-              id: nextId("aborted-local"),
-              sortSeq: seqCounterRef.current++,
-              timestamp: Date.now(),
-              role: "system",
-              text,
-              runId,
-              streaming: false,
-            });
-          }
-          return next.toSorted(compareTimeline);
-        });
-        void loadHistory(client, currentSessionKey).catch((err) => {
-          setError(err instanceof Error ? err.message : String(err));
-        });
         refreshSessionUsage(client, currentSessionKey);
         notifySidebarTasksRefresh();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [activeRunId, connected, currentSessionKey, finalizeRunState, loadHistory, refreshSessionUsage]);
+  }, [activeRunId, connected, currentSessionKey, finalizeRunState, refreshSessionUsage]);
 
   const handleOpenPricing = useCallback(async () => {
     if (!activeWorkspaceId) {
@@ -1748,12 +1904,15 @@ export default function ChatPage() {
     if (subscriptionExpired || !input || input.length === 0) {
       return;
     }
-    const hasFileLikeEntry = Array.from(input).some((entry) => {
+    const inputEntries = Array.from({ length: input.length }, (_, index) => input[index]).filter(
+      (entry): entry is File | DataTransferItem => Boolean(entry),
+    );
+    const hasFileLikeEntry = inputEntries.some((entry) => {
       if (!entry || typeof entry !== "object") {
         return false;
       }
       if ("kind" in entry) {
-        return (entry as DataTransferItem).kind === "file";
+        return typeof entry.kind === "string" && entry.kind === "file";
       }
       return "name" in entry && "type" in entry;
     });
@@ -1763,7 +1922,7 @@ export default function ChatPage() {
 
     const contextSelections: ChatContextPathSelection[] = [];
     const files: File[] = [];
-    for (const entry of Array.from(input)) {
+    for (const entry of inputEntries) {
       const directFile =
         entry &&
         typeof entry === "object" &&
@@ -1825,14 +1984,14 @@ export default function ChatPage() {
         typeof entry === "object" &&
         "kind" in entry &&
         "getAsFile" in entry &&
-        typeof (entry as DataTransferItem).getAsFile === "function"
-          ? (entry as DataTransferItem)
+        typeof entry.getAsFile === "function"
+          ? (entry as unknown as DataTransferItem)
           : null;
       const entryHandle =
         clipboardItem &&
         "webkitGetAsEntry" in clipboardItem &&
-        typeof (clipboardItem as DataTransferItem & { webkitGetAsEntry?: () => { isDirectory?: boolean; fullPath?: string; name?: string } | null }).webkitGetAsEntry === "function"
-          ? (clipboardItem as DataTransferItem & { webkitGetAsEntry: () => { isDirectory?: boolean; fullPath?: string; name?: string } | null }).webkitGetAsEntry()
+        typeof (clipboardItem as unknown as { webkitGetAsEntry?: () => { isDirectory?: boolean; fullPath?: string; name?: string } | null }).webkitGetAsEntry === "function"
+          ? (clipboardItem as unknown as { webkitGetAsEntry: () => { isDirectory?: boolean; fullPath?: string; name?: string } | null }).webkitGetAsEntry()
           : null;
       if (entryHandle?.isDirectory && entryHandle.fullPath) {
         const resolvedSelection = await resolvePastedSelection({
@@ -2016,6 +2175,16 @@ export default function ChatPage() {
                   : "assistant",
           streaming: item.streaming,
           final: item.final === true,
+        };
+      }
+      if (item.kind === "error") {
+        return {
+          kind: "errorState",
+          key: item.id,
+          timestamp: item.timestamp,
+          reason: item.reason,
+          description: item.description,
+          runId: item.runId,
         };
       }
       const display = resolveToolDisplay({ name: item.name, args: item.args });
@@ -2239,16 +2408,22 @@ export default function ChatPage() {
             <ChatTimeline
               timeline={processedTimeline}
               activeRunningToolKey={activeRunningToolKey}
+              onRetryRun={handleRetryRun}
               onPreviewImage={setPreviewImage}
             />
             {compactingRunId ? (
               <div className="py-2">
-                <ChatTimelineThinkingIndicator label="Compacting conversation" />
+                <ChatTimelineWaitingIndicator label="Compacting conversation" />
               </div>
-            ) : null}
-            {(sending || activeRunId) && !compactingRunId && runningTools === 0 ? (
+            ) : reconnectStatus ? (
               <div className="py-2">
-                <ChatTimelineThinkingIndicator label="Thinking" />
+                <ChatTimelineWaitingIndicator
+                  label="Reconnect"
+                />
+              </div>
+            ) : (sending || activeRunId) && runningTools === 0 ? (
+              <div className="py-2">
+                <ChatTimelineWaitingIndicator label="Thinking" />
               </div>
             ) : null}
           </div>

@@ -44,6 +44,19 @@ export const ChatSendParamsSchema = Type.Object(
   { additionalProperties: false },
 );
 
+export const ChatRetryParamsSchema = Type.Object(
+  {
+    sessionKey: NonEmptyString,
+    runId: NonEmptyString,
+    message: Type.String(),
+    thinking: Type.Optional(Type.String()),
+    deliver: Type.Optional(Type.Boolean()),
+    attachments: Type.Optional(Type.Array(Type.Unknown())),
+    timeoutMs: Type.Optional(Type.Integer({ minimum: 0 })),
+  },
+  { additionalProperties: false },
+);
+
 export const ChatAbortParamsSchema = Type.Object(
   {
     sessionKey: NonEmptyString,

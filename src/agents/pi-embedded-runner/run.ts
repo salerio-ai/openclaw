@@ -593,6 +593,7 @@ export async function runEmbeddedPiAgent(
             config: params.config,
             skillsSnapshot: params.skillsSnapshot,
             prompt,
+            retryWithoutNewUser: params.retryWithoutNewUser,
             images: params.images,
             disableTools: params.disableTools,
             provider,

@@ -16,6 +16,8 @@ export type ModelSelectedContext = {
 export type GetReplyOptions = {
   /** Override run id for agent events (defaults to random UUID). */
   runId?: string;
+  /** Retry the last failed turn without appending a new user message. */
+  retryWithoutNewUser?: boolean;
   /** Abort signal for the underlying agent run. */
   abortSignal?: AbortSignal;
   /** Optional inbound images (used for webchat attachments). */

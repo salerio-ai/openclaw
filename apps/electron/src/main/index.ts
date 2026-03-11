@@ -2494,71 +2494,11 @@ function setupIpcHandlers(): void {
         if (provider !== BUSTLY_PROVIDER_ID) {
           return { success: false, error: "Only bustly provider is supported." };
         }
-
-        // Initialize gateway and state directories.
-        const result = await initializeOpenClaw({
-          force: true,
+        const result = await bootstrapDesktopSession({
+          model: options?.model?.trim() || authResult.defaultModel,
+          openControlUi: options?.openControlUi === true,
         });
-
-        if (!result.success) {
-          return { success: false, error: result.error };
-        }
-
-        // Update config with the credential
-        const configPath = resolveElectronConfigPath();
-        const config = JSON.parse(readFileSync(configPath, "utf-8")) as OpenClawConfig;
-
-        const nextConfig = applyBustlyOnlyConfig(
-          config,
-          options?.model?.trim() || authResult.defaultModel,
-        );
-
-        // Write updated config
-        writeFileSync(configPath, JSON.stringify(nextConfig, null, 2));
-
-        // Update gateway settings
-        gatewayPort = nextConfig.gateway?.port || 17999;
-        gatewayBind = nextConfig.gateway?.bind || "loopback";
-        if (nextConfig.gateway?.auth?.token) {
-          gatewayToken = nextConfig.gateway.auth.token;
-        }
-
-        initResult = result;
-
-        try {
-          await startGateway();
-          if (options?.openControlUi !== false) {
-            openControlUiInMainWindow();
-          }
-        } catch (error) {
-          console.warn("[Gateway] Failed to auto-start or open Control UI:", error);
-        }
-
-      // Update model config
-      const selectedModel = options?.model?.trim();
-      const resolvedModel = selectedModel || authResult.defaultModel;
-      if (resolvedModel) {
-        nextConfig = applyPrimaryModel(nextConfig, resolvedModel);
-      }
-
-      // Write updated config
-      writeFileSync(configPath, JSON.stringify(nextConfig, null, 2));
-
-      // Update gateway settings
-      gatewayPort = nextConfig.gateway?.port || 17999;
-      gatewayBind = nextConfig.gateway?.bind || "loopback";
-      if (nextConfig.gateway?.auth?.token) {
-        gatewayToken = nextConfig.gateway.auth.token;
-      }
-
-      initResult = result;
-
-      try {
-        await startGateway();
-        if (options?.openControlUi === true) {
-          openControlUiInMainWindow();
-        }
-        return { success: true };
+        return result;
       } catch (error) {
         return {
           success: false,

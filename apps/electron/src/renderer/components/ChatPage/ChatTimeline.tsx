@@ -1,6 +1,7 @@
 import React, { memo, useEffect, useState } from "react";
 import Lottie from "lottie-react";
 import {
+  ArrowsCounterClockwise,
   Brain,
   Browser,
   CaretRight,
@@ -32,6 +33,7 @@ import {
   SpeakerHigh,
   Square,
   TerminalWindow,
+  WarningCircle,
   Wrench,
 } from "@phosphor-icons/react";
 import loadingAnimation from "../../assets/lottie/thinking.json";
@@ -46,6 +48,7 @@ type ChatTimelineProps = {
   timeline: TimelineNode[];
   activeRunningToolKey: string | null;
   onCopyText?: (text: string) => void;
+  onRetryRun?: (runId?: string) => void;
   onPreviewImage?: (url: string) => void;
 };
 
@@ -262,11 +265,13 @@ const StreamFoldNode = memo(function StreamFoldNode({
   node,
   activeRunningToolKey,
   onCopyText,
+  onRetryRun,
   onPreviewImage,
 }: {
   node: Extract<TimelineNode, { kind: "streamFold" }>;
   activeRunningToolKey: string | null;
   onCopyText?: (text: string) => void;
+  onRetryRun?: (runId?: string) => void;
   onPreviewImage?: (url: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -278,6 +283,7 @@ const StreamFoldNode = memo(function StreamFoldNode({
         items={node.items}
         activeRunningToolKey={activeRunningToolKey}
         onCopyText={onCopyText}
+        onRetryRun={onRetryRun}
         onPreviewImage={onPreviewImage}
       />
     );
@@ -304,6 +310,45 @@ const StreamFoldNode = memo(function StreamFoldNode({
         </button>
       ) : null}
 
+    </div>
+  );
+});
+
+const ErrorStateNode = memo(function ErrorStateNode({
+  node,
+  onRetryRun,
+}: {
+  node: Extract<TimelineNode, { kind: "errorState" }>;
+  onRetryRun?: (runId?: string) => void;
+}) {
+  return (
+    <div className="mt-4 mb-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
+      <div className="flex flex-col gap-4 rounded-2xl border border-red-100 bg-red-50/50 p-5">
+        <div className="flex items-center gap-2 text-red-600">
+          <WarningCircle size={20} weight="bold" />
+          <span className="text-sm font-semibold tracking-tight">Execution Failed</span>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <div className="text-[13px] font-medium text-text-main">
+            Reason: <span className="ml-1 font-mono text-red-600/80">{node.reason}</span>
+          </div>
+          <div className="text-[13px] leading-relaxed text-text-sub">{node.description}</div>
+        </div>
+
+        <div className="mt-1 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              onRetryRun?.(node.runId);
+            }}
+            className="flex items-center gap-2 rounded-xl bg-text-main px-4 py-2 text-xs font-medium text-white transition-all hover:bg-text-main/90 active:scale-95"
+          >
+            <ArrowsCounterClockwise size={14} weight="bold" />
+            Retry Now
+          </button>
+        </div>
+      </div>
     </div>
   );
 });
@@ -510,9 +555,11 @@ const ToolNode = memo(function ToolNode({
 const ProcessedNode = memo(function ProcessedNode({
   node,
   activeRunningToolKey,
+  onRetryRun,
 }: {
   node: Extract<TimelineNode, { kind: "processed" }>;
   activeRunningToolKey: string | null;
+  onRetryRun?: (runId?: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const duration = formatProcessedDuration(node.durationMs);
@@ -546,7 +593,7 @@ const ProcessedNode = memo(function ProcessedNode({
         )}
       >
         <div>
-          <TimelineStack items={node.items} activeRunningToolKey={activeRunningToolKey} />
+          <TimelineStack items={node.items} activeRunningToolKey={activeRunningToolKey} onRetryRun={onRetryRun} />
         </div>
       </div>
     </div>
@@ -567,12 +614,14 @@ function TimelineStack({
   items,
   activeRunningToolKey,
   onCopyText,
+  onRetryRun,
   onPreviewImage,
   spaced = false,
 }: {
   items: TimelineNode[];
   activeRunningToolKey: string | null;
   onCopyText?: (text: string) => void;
+  onRetryRun?: (runId?: string) => void;
   onPreviewImage?: (url: string) => void;
   spaced?: boolean;
 }) {
@@ -587,6 +636,7 @@ function TimelineStack({
               node={node}
               activeRunningToolKey={activeRunningToolKey}
               onCopyText={onCopyText}
+              onRetryRun={onRetryRun}
               onPreviewImage={onPreviewImage}
             />
           </div>
@@ -600,11 +650,13 @@ const TimelineItem = memo(function TimelineItem({
   node,
   activeRunningToolKey,
   onCopyText,
+  onRetryRun,
   onPreviewImage,
 }: {
   node: TimelineNode;
   activeRunningToolKey: string | null;
   onCopyText?: (text: string) => void;
+  onRetryRun?: (runId?: string) => void;
   onPreviewImage?: (url: string) => void;
 }) {
   switch (node.kind) {
@@ -613,13 +665,16 @@ const TimelineItem = memo(function TimelineItem({
     case "tool":
       return <ToolNode node={node} activeRunningToolKey={activeRunningToolKey} />;
     case "processed":
-      return <ProcessedNode node={node} activeRunningToolKey={activeRunningToolKey} />;
+      return <ProcessedNode node={node} activeRunningToolKey={activeRunningToolKey} onRetryRun={onRetryRun} />;
+    case "errorState":
+      return <ErrorStateNode node={node} onRetryRun={onRetryRun} />;
     case "streamFold":
       return (
         <StreamFoldNode
           node={node}
           activeRunningToolKey={activeRunningToolKey}
           onCopyText={onCopyText}
+          onRetryRun={onRetryRun}
           onPreviewImage={onPreviewImage}
         />
       );
@@ -630,7 +685,7 @@ const TimelineItem = memo(function TimelineItem({
   }
 });
 
-function ThinkingLiveIndicator({ label }: { label: string }) {
+function WaitingLiveIndicator({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-1.5 animate-in fade-in duration-500">
       <div className="flex h-4 w-4 items-center justify-center overflow-hidden">
@@ -645,6 +700,7 @@ export const ChatTimeline = memo(function ChatTimeline({
   timeline,
   activeRunningToolKey,
   onCopyText,
+  onRetryRun,
   onPreviewImage,
 }: ChatTimelineProps) {
   return (
@@ -652,16 +708,17 @@ export const ChatTimeline = memo(function ChatTimeline({
       items={timeline}
       activeRunningToolKey={activeRunningToolKey}
       onCopyText={onCopyText}
+      onRetryRun={onRetryRun}
       onPreviewImage={onPreviewImage}
       spaced
     />
   );
 });
 
-export const ChatTimelineThinkingIndicator = memo(function ChatTimelineThinkingIndicator({
+export const ChatTimelineWaitingIndicator = memo(function ChatTimelineWaitingIndicator({
   label,
 }: {
   label: string;
 }) {
-  return <ThinkingLiveIndicator label={label} />;
+  return <WaitingLiveIndicator label={label} />;
 });

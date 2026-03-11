@@ -51,6 +51,14 @@ export type TimelineNode =
       items: TimelineNode[];
     }
   | {
+      kind: "errorState";
+      key: string;
+      timestamp: number;
+      reason: string;
+      description: string;
+      runId?: string;
+    }
+  | {
       kind: "streamFold";
       key: string;
       timestamp: number;

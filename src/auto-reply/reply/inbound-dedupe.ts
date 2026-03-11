@@ -38,6 +38,9 @@ export function shouldSkipDuplicateInbound(
   ctx: MsgContext,
   opts?: { cache?: DedupeCache; now?: number },
 ): boolean {
+  if (ctx.SkipInboundDedupe === true) {
+    return false;
+  }
   const key = buildInboundDedupeKey(ctx);
   if (!key) {
     return false;
