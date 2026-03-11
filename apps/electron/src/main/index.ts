@@ -62,6 +62,7 @@ import {
   normalizeProviderId,
 } from "../../../../src/agents/model-selection";
 import { loadConfig } from "../../../../src/config/config";
+import { resolveGatewayLaunchAgentLabel } from "../../../../src/daemon/constants";
 import { GatewayClient } from "../../../../src/gateway/client";
 import type { SessionsPatchResult } from "../../../../src/gateway/protocol";
 import { mergeWhatsAppConfig } from "../../../../src/config/merge-config";
@@ -695,6 +696,69 @@ function writeMainLog(message: string) {
   }
 }
 
+function stopGatewayLaunchAgentForElectron(): void {
+  const cliPath = resolveOpenClawCliPath({
+    info: () => {},
+    error: () => {},
+  });
+
+  if (cliPath) {
+    const invocation = resolveCliInvocation(cliPath, ["gateway", "stop"], {
+      includeBundledNode: true,
+    });
+    if (invocation) {
+      try {
+        const cliEnv = buildElectronCliEnv({ cliPath });
+        const result = spawnSync(invocation.command, invocation.args, {
+          encoding: "utf-8",
+          env: cliEnv,
+        });
+        const detail = (result.stderr || result.stdout || "").trim();
+        if (result.status === 0) {
+          writeMainLog("[Gateway Service] Stopped supervised gateway via `openclaw gateway stop`");
+          return;
+        }
+        writeMainLog(
+          `[Gateway Service] \`openclaw gateway stop\` failed: ${detail || `exit ${result.status ?? "unknown"}`}`,
+        );
+      } catch (error) {
+        writeMainLog(
+          `[Gateway Service] \`openclaw gateway stop\` error: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+  }
+
+  if (process.platform !== "darwin" || typeof process.getuid !== "function") {
+    return;
+  }
+  const label = resolveGatewayLaunchAgentLabel(ELECTRON_OPENCLAW_PROFILE);
+  const domain = `gui/${process.getuid()}`;
+  const target = `${domain}/${label}`;
+  try {
+    const result = spawnSync("launchctl", ["bootout", target], { encoding: "utf-8" });
+    const detail = (result.stderr || result.stdout || "").trim();
+    if (result.status === 0) {
+      writeMainLog(`[LaunchAgent] Stopped ${target} before Electron gateway startup`);
+      return;
+    }
+    const lowered = detail.toLowerCase();
+    if (
+      lowered.includes("no such process") ||
+      lowered.includes("service is not loaded") ||
+      lowered.includes("could not find service")
+    ) {
+      writeMainLog(`[LaunchAgent] ${target} not loaded`);
+      return;
+    }
+    writeMainLog(`[LaunchAgent] bootout ${target} failed: ${detail || `exit ${result.status ?? "unknown"}`}`);
+  } catch (error) {
+    writeMainLog(
+      `[LaunchAgent] bootout ${target} error: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
 function loadLoginShellEnvironment(shellPath: string, homeDir: string): Record<string, string> {
   try {
     const result = spawnSync(shellPath, ["-lc", "env -0"], {
@@ -730,6 +794,111 @@ function loadLoginShellEnvironment(shellPath: string, homeDir: string): Record<s
   } catch {
     return {};
   }
+}
+
+function loadElectronEnvVars(): Record<string, string> {
+  const envVars: Record<string, string> = {};
+  const envPaths = [
+    process.env.NODE_ENV === "development"
+      ? resolve(__dirname, "../.env")
+      : resolve(__dirname, "../../.env"),
+    resolve(app.getAppPath(), ".env"),
+  ];
+
+  for (const envPath of envPaths) {
+    try {
+      if (!existsSync(envPath)) {
+        continue;
+      }
+      const envContent = readFileSync(envPath, "utf-8");
+      for (const line of envContent.split("\n")) {
+        const trimmedLine = line.trim();
+        if (!trimmedLine || trimmedLine.startsWith("#")) {
+          continue;
+        }
+        const [key, ...valueParts] = trimmedLine.split("=");
+        const value = valueParts.join("=").trim();
+        if (key && value) {
+          envVars[key] = value;
+        }
+      }
+      console.log(`[Env] Loaded environment variables from ${envPath}:`, Object.keys(envVars));
+      break;
+    } catch (error) {
+      console.error(`[Env] Failed to load ${envPath}:`, error);
+    }
+  }
+
+  return envVars;
+}
+
+function buildElectronCliEnv(params?: {
+  cliPath?: string;
+  oauthCallbackPort?: number;
+}): NodeJS.ProcessEnv {
+  const homeDir = app.getPath("home");
+  const stateDir = resolveElectronStateDir();
+  const shellPath = process.env.SHELL?.trim() || "/bin/zsh";
+  const loginShellEnv = loadLoginShellEnvironment(shellPath, homeDir);
+  const fixedPath =
+    loginShellEnv.PATH?.trim() ||
+    process.env.PATH?.trim() ||
+    "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+  const bundledCliShim = params?.cliPath
+    ? ensureBundledOpenClawShim(params.cliPath, stateDir, { includeBundledNode: true })
+    : null;
+  const effectivePath = bundledCliShim ? prependPathEntry(fixedPath, bundledCliShim.shimDir) : fixedPath;
+  const bunInstall = process.env.BUN_INSTALL?.trim() || resolve(homeDir, ".bun");
+  const homebrewPrefix = process.env.HOMEBREW_PREFIX?.trim() || "/opt/homebrew";
+  const appPath = app.getAppPath();
+  const resourcesPath = process.resourcesPath || appPath;
+  const bundledSkillsDir = resolve(resourcesPath, "skills");
+  const bundledPluginsDir = ensureBundledExtensionsDir({
+    resourcesPath,
+    appPath,
+  });
+  const appNodeModules = resolve(appPath, "node_modules");
+  const resourcesNodeModules = resolve(resourcesPath, "node_modules");
+  const openclawNodeModules = resolve(resourcesPath, "openclaw", "node_modules");
+  const inheritedNodePath = process.env.NODE_PATH?.trim();
+  const effectiveNodePath =
+    [
+      openclawNodeModules,
+      appNodeModules,
+      resourcesNodeModules,
+      inheritedNodePath,
+    ]
+      .filter((value) => Boolean(value && value.length > 0))
+      .join(":") || openclawNodeModules;
+  const bundledVersion = resolveBundledOpenClawVersion();
+
+  return {
+    ...process.env,
+    ...loadElectronEnvVars(),
+    ...loginShellEnv,
+    NODE_ENV: "production",
+    OPENCLAW_PROFILE: ELECTRON_OPENCLAW_PROFILE,
+    OPENCLAW_BUNDLED_PLUGINS_DIR: bundledPluginsDir,
+    ...(existsSync(bundledSkillsDir) ? { OPENCLAW_BUNDLED_SKILLS_DIR: bundledSkillsDir } : {}),
+    OPENCLAW_STATE_DIR: stateDir,
+    OPENCLAW_CONFIG_PATH: resolveElectronConfigPath(),
+    HOME: homeDir,
+    USERPROFILE: homeDir,
+    OPENCLAW_LOAD_SHELL_ENV: "1",
+    SHELL: shellPath,
+    PATH: effectivePath,
+    BUN_INSTALL: bunInstall,
+    HOMEBREW_PREFIX: homebrewPrefix,
+    TERM: process.env.TERM?.trim() || "xterm-256color",
+    COLORTERM: process.env.COLORTERM?.trim() || "truecolor",
+    TERM_PROGRAM: process.env.TERM_PROGRAM?.trim() || "OpenClaw",
+    NODE_PATH: effectiveNodePath,
+    ...(bundledCliShim ? { OPENCLAW_EXEC_PATH_PREPEND: bundledCliShim.shimDir } : {}),
+    ...(typeof params?.oauthCallbackPort === "number"
+      ? { OPENCLAW_OAUTH_CALLBACK_PORT: String(params.oauthCallbackPort) }
+      : {}),
+    ...(bundledVersion ? { OPENCLAW_BUNDLED_VERSION: bundledVersion } : {}),
+  };
 }
 
 function sendUpdateStatus(event: string, payload?: Record<string, unknown>) {
@@ -1192,71 +1361,7 @@ async function startGateway(): Promise<boolean> {
       .map((value) => `${value}(${existsSync(value!) ? "exists" : "missing"})`)
       .join(" | ");
 
-    // Load .env file for Bustly OAuth configuration
-    const loadEnvVars = () => {
-      const envVars: Record<string, string> = {};
-      const envPaths = [
-        // Try apps/electron/.env first (Bustly config location)
-        // In dev: dist/main-dev.js -> ../.env = apps/electron/.env
-        // In prod: dist/main/index.js -> ../../.env = apps/electron/.env
-        process.env.NODE_ENV === "development"
-          ? resolve(__dirname, "../.env")
-          : resolve(__dirname, "../../.env"),
-        // Fallback to root .env
-        resolve(app.getAppPath(), ".env"),
-      ];
-
-      for (const envPath of envPaths) {
-        try {
-          if (existsSync(envPath)) {
-            const envContent = readFileSync(envPath, "utf-8");
-            for (const line of envContent.split("\n")) {
-              const trimmedLine = line.trim();
-              if (trimmedLine && !trimmedLine.startsWith("#")) {
-                const [key, ...valueParts] = trimmedLine.split("=");
-                const value = valueParts.join("=").trim();
-                if (key && value) {
-                  envVars[key] = value;
-                }
-              }
-            }
-            console.log(`[Env] Loaded environment variables from ${envPath}:`, Object.keys(envVars));
-            break; // Stop after loading first found .env file
-          }
-        } catch (error) {
-          console.error(`[Env] Failed to load ${envPath}:`, error);
-        }
-      }
-      return envVars;
-    };
-
-    const envVars = loadEnvVars();
-
-    const spawnEnv = {
-      ...process.env,
-      ...envVars,
-      ...loginShellEnv,
-      NODE_ENV: "production",
-      OPENCLAW_PROFILE: ELECTRON_OPENCLAW_PROFILE,
-      OPENCLAW_BUNDLED_PLUGINS_DIR: bundledPluginsDir,
-      ...(existsSync(bundledSkillsDir) ? { OPENCLAW_BUNDLED_SKILLS_DIR: bundledSkillsDir } : {}),
-      OPENCLAW_STATE_DIR: stateDir,
-      OPENCLAW_CONFIG_PATH: resolveElectronConfigPath(),
-      HOME: homeDir,
-      USERPROFILE: homeDir,
-      OPENCLAW_LOAD_SHELL_ENV: "1",
-      SHELL: shellPath,
-      PATH: effectivePath,
-      BUN_INSTALL: bunInstall,
-      HOMEBREW_PREFIX: homebrewPrefix,
-      TERM: process.env.TERM?.trim() || "xterm-256color",
-      COLORTERM: process.env.COLORTERM?.trim() || "truecolor",
-      TERM_PROGRAM: process.env.TERM_PROGRAM?.trim() || "OpenClaw",
-      NODE_PATH: effectiveNodePath,
-      ...(bundledCliShim ? { OPENCLAW_EXEC_PATH_PREPEND: bundledCliShim.shimDir } : {}),
-      OPENCLAW_OAUTH_CALLBACK_PORT: String(oauthCallbackPort),
-      ...(bundledVersion ? { OPENCLAW_BUNDLED_VERSION: bundledVersion } : {}),
-    };
+    const spawnEnv = buildElectronCliEnv({ cliPath, oauthCallbackPort });
     if (existsSync(bundledPluginsDir)) {
       spawnEnv.OPENCLAW_BUNDLED_PLUGINS_DIR = bundledPluginsDir;
     }
@@ -2807,6 +2912,7 @@ void app.whenReady().then(async () => {
   if (initialDeepLinkArg) {
     dispatchDeepLink(initialDeepLinkArg);
   }
+  stopGatewayLaunchAgentForElectron();
   powerSaveBlocker.start("prevent-app-suspension");
   // Load .env file at startup (must be after app is ready to get correct paths)
   const loadDotEnv = () => {

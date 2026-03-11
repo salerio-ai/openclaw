@@ -49,6 +49,13 @@ export class GatewayRequestError extends Error {
   }
 }
 
+export class GatewayClientStoppedError extends Error {
+  constructor() {
+    super("gateway client stopped");
+    this.name = "GatewayClientStoppedError";
+  }
+}
+
 export class GatewayBrowserClient {
   private ws: WebSocket | null = null;
   private pending = new Map<string, PendingRequest>();
@@ -75,7 +82,7 @@ export class GatewayBrowserClient {
     }
     this.ws?.close();
     this.ws = null;
-    this.flushPending(new Error("gateway client stopped"));
+    this.flushPending(new GatewayClientStoppedError());
   }
 
   async request<T = unknown>(method: string, params?: unknown): Promise<T> {
@@ -244,6 +251,9 @@ export class GatewayBrowserClient {
       this.reconnectBackoffMs = 800;
       this.options.onHello?.(hello);
     } catch (error) {
+      if (error instanceof GatewayClientStoppedError || this.closed) {
+        return;
+      }
       if (error instanceof GatewayRequestError) {
         this.pendingConnectError = {
           code: error.gatewayCode,
