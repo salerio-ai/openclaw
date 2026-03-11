@@ -213,19 +213,19 @@ function markdownClassName(isErrorText: boolean) {
     "text-sm leading-7 text-gray-900",
     isErrorText && "text-red-600",
     "[&_a]:text-[#1A162F] [&_a]:underline [&_a]:underline-offset-2",
-    "[&_blockquote]:my-4 [&_blockquote]:border-l-2 [&_blockquote]:border-gray-200 [&_blockquote]:pl-4 [&_blockquote]:text-gray-500",
+    "[&_blockquote]:my-3 [&_blockquote]:border-l-2 [&_blockquote]:border-gray-200 [&_blockquote]:pl-4 [&_blockquote]:text-gray-500",
     "[&_code]:rounded [&_code]:bg-gray-100 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.92em]",
-    "[&_pre]:my-4 [&_pre]:overflow-x-auto [&_pre]:rounded-2xl [&_pre]:border [&_pre]:border-gray-200 [&_pre]:bg-gray-50 [&_pre]:p-4 [&_pre]:text-xs [&_pre]:leading-6",
+    "[&_pre]:my-3 [&_pre]:overflow-x-auto [&_pre]:rounded-2xl [&_pre]:border [&_pre]:border-gray-200 [&_pre]:bg-gray-50 [&_pre]:p-4 [&_pre]:text-xs [&_pre]:leading-6",
     "[&_pre_code]:bg-transparent [&_pre_code]:p-0",
-    "[&_h1]:mb-3 [&_h1]:mt-6 [&_h1]:text-xl [&_h1]:font-semibold",
-    "[&_h2]:mb-3 [&_h2]:mt-6 [&_h2]:text-lg [&_h2]:font-semibold",
-    "[&_h3]:mb-2 [&_h3]:mt-5 [&_h3]:text-base [&_h3]:font-semibold",
-    "[&_hr]:my-6 [&_hr]:border-gray-200",
-    "[&_img]:my-4 [&_img]:max-h-[28rem] [&_img]:rounded-2xl [&_img]:border [&_img]:border-gray-200",
+    "[&_h1]:mb-2 [&_h1]:mt-5 [&_h1]:text-xl [&_h1]:font-semibold",
+    "[&_h2]:mb-2 [&_h2]:mt-5 [&_h2]:text-lg [&_h2]:font-semibold",
+    "[&_h3]:mb-2 [&_h3]:mt-4 [&_h3]:text-base [&_h3]:font-semibold",
+    "[&_hr]:my-4 [&_hr]:border-gray-200",
+    "[&_img]:my-3 [&_img]:max-h-[28rem] [&_img]:rounded-2xl [&_img]:border [&_img]:border-gray-200",
     "[&_li]:my-1",
-    "[&_ol]:my-3 [&_ol]:list-decimal [&_ol]:pl-6",
-    "[&_p]:my-3 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0",
-    "[&_table]:my-4 [&_table]:w-full [&_table]:border-separate [&_table]:border-spacing-0 [&_table]:rounded-xl [&_table]:border [&_table]:border-gray-200",
+    "[&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-6",
+    "[&_p]:my-1",
+    "[&_table]:my-3 [&_table]:w-full [&_table]:border-separate [&_table]:border-spacing-0 [&_table]:rounded-xl [&_table]:border [&_table]:border-gray-200",
     "[&_td]:border-r [&_td]:border-b [&_td]:border-gray-200 [&_td]:px-3 [&_td]:py-2 [&_td]:align-top",
     "[&_th]:border-r [&_th]:border-b [&_th]:border-gray-200 [&_th]:bg-gray-50 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-semibold",
     "[&_tr>*:last-child]:border-r-0",
@@ -234,7 +234,7 @@ function markdownClassName(isErrorText: boolean) {
     "[&_thead_tr:first-child_th:last-child]:rounded-tr-xl",
     "[&_tbody_tr:last-child_td:first-child]:rounded-bl-xl",
     "[&_tbody_tr:last-child_td:last-child]:rounded-br-xl",
-    "[&_ul]:my-3 [&_ul]:list-disc [&_ul]:pl-6",
+    "[&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-6",
   );
 }
 
@@ -481,10 +481,10 @@ const ProcessedNode = memo(function ProcessedNode({
       <div
         className={cx(
           "overflow-hidden transition-all duration-300 ease-in-out",
-          expanded ? "mt-4 max-h-[2400px] opacity-100" : "max-h-0 opacity-0",
+          expanded ? "mt-4 opacity-100" : "max-h-0 opacity-0",
         )}
       >
-        <div className="ml-4 border-l-2 border-gray-100 pl-4">
+        <div>
           <TimelineStack items={node.items} activeRunningToolKey={activeRunningToolKey} />
         </div>
       </div>
