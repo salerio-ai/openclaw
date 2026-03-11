@@ -1168,7 +1168,6 @@ export default function ChatPage() {
           message: "Gateway unavailable. Reconnecting...",
           tone: "warning",
         });
-        void ensureGatewayReady();
         return;
       }
       setConnectionNotice(null);
@@ -1214,7 +1213,6 @@ export default function ChatPage() {
               message: "Gateway disconnected. Reconnecting...",
               tone: "warning",
             });
-            void ensureGatewayReady();
           }
           console.warn("[electron-chat] gateway disconnected", {
             code,
@@ -1563,7 +1561,6 @@ export default function ChatPage() {
               message: "Gateway unavailable. Reconnecting...",
               tone: "warning",
             });
-            void ensureGatewayReady();
           }
         })
         .catch(() => {});

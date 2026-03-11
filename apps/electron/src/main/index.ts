@@ -880,12 +880,159 @@ async function isGatewayPortAvailable(port: number, bind: string): Promise<boole
   });
 }
 
+type ListeningProcessInfo = {
+  pid: number;
+  command: string;
+  descriptors: string[];
+};
+
+function inspectListeningProcess(port: number): ListeningProcessInfo | null {
+  const lsof = spawnSync("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-Fpct"], {
+    encoding: "utf-8",
+  });
+  if (lsof.status !== 0 || !lsof.stdout) {
+    return null;
+  }
+
+  let pid = 0;
+  let command = "";
+  for (const line of lsof.stdout.split("\n")) {
+    if (line.startsWith("p")) {
+      pid = Number.parseInt(line.slice(1), 10) || 0;
+    } else if (line.startsWith("c")) {
+      command = line.slice(1).trim();
+    }
+  }
+  if (!pid) {
+    return null;
+  }
+
+  const details = spawnSync("lsof", ["-nP", "-p", String(pid), "-Fn"], {
+    encoding: "utf-8",
+  });
+  const descriptors =
+    details.status === 0 && details.stdout
+      ? details.stdout
+        .split("\n")
+        .filter((line) => line.startsWith("n"))
+        .map((line) => line.slice(1).trim())
+        .filter(Boolean)
+      : [];
+
+  return { pid, command, descriptors };
+}
+
+function inspectListeningProcessesInRange(startPort: number, endPort: number): Map<number, ListeningProcessInfo> {
+  const listeners = new Map<number, ListeningProcessInfo>();
+  for (let port = startPort; port <= endPort; port += 1) {
+    const info = inspectListeningProcess(port);
+    if (info) {
+      listeners.set(info.pid, info);
+    }
+  }
+  return listeners;
+}
+
+function isManagedBustlyGatewayProcess(info: ListeningProcessInfo | null): boolean {
+  if (!info) {
+    return false;
+  }
+  const haystack = [info.command, ...info.descriptors].join("\n").toLowerCase();
+  return (
+    haystack.includes("openclaw") &&
+    (haystack.includes("/.bustly/") || haystack.includes("gateway.") || haystack.includes("gateway.log"))
+  );
+}
+
+async function terminateManagedProcess(pid: number): Promise<boolean> {
+  try {
+    process.kill(pid, "SIGTERM");
+  } catch {
+    return false;
+  }
+
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    try {
+      process.kill(pid, 0);
+      await delay(150);
+    } catch {
+      return true;
+    }
+  }
+
+  try {
+    process.kill(pid, "SIGKILL");
+  } catch {
+    return false;
+  }
+
+  const killDeadline = Date.now() + 2_000;
+  while (Date.now() < killDeadline) {
+    try {
+      process.kill(pid, 0);
+      await delay(100);
+    } catch {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function reclaimManagedGatewayPorts(params: {
+  preferredPort: number;
+  bind: string;
+  maxAttempts: number;
+}): Promise<boolean> {
+  const rangeEnd = params.preferredPort + params.maxAttempts;
+  const listeners = [...inspectListeningProcessesInRange(params.preferredPort, rangeEnd).values()];
+  const managedListeners = listeners.filter((listener) => isManagedBustlyGatewayProcess(listener));
+
+  if (managedListeners.length === 0) {
+    return false;
+  }
+
+  writeMainLog(
+    `[Gateway] Reclaiming managed listeners in port range ${params.preferredPort}-${rangeEnd}: ${managedListeners.map((listener) => `${listener.pid}:${listener.command || "unknown"}`).join(", ")}`,
+  );
+
+  let reclaimedAny = false;
+  for (const listener of managedListeners) {
+    const terminated = await terminateManagedProcess(listener.pid);
+    if (terminated) {
+      reclaimedAny = true;
+      writeMainLog(`[Gateway] Reclaimed managed listener pid=${listener.pid} command=${listener.command || "(unknown)"}`);
+    } else {
+      writeMainLog(`[Gateway] Failed to terminate managed listener pid=${listener.pid} command=${listener.command || "(unknown)"}`);
+    }
+  }
+
+  if (!reclaimedAny) {
+    return false;
+  }
+
+  for (let port = params.preferredPort; port <= rangeEnd; port += 1) {
+    if (!(await isGatewayPortAvailable(port, params.bind)) && isManagedBustlyGatewayProcess(inspectListeningProcess(port))) {
+      writeMainLog(`[Gateway] Managed listener still detected on port ${port} after reclaim attempt`);
+      return false;
+    }
+  }
+
+  writeMainLog(
+    `[Gateway] Reclaim completed for port range ${params.preferredPort}-${rangeEnd}`,
+  );
+  return true;
+}
+
 async function resolveGatewayStartupPort(
   preferredPort: number,
   bind: string,
   maxAttempts = 20,
 ): Promise<{ port: number; switched: boolean }> {
   if (await isGatewayPortAvailable(preferredPort, bind)) {
+    return { port: preferredPort, switched: false };
+  }
+  if (await reclaimManagedGatewayPorts({ preferredPort, bind, maxAttempts })) {
     return { port: preferredPort, switched: false };
   }
   for (let offset = 1; offset <= maxAttempts; offset += 1) {
@@ -1332,7 +1479,7 @@ function openProviderSetupInMainWindow(): void {
 }
 
 function resolveOpenClawConfigPath(): string {
-  return getConfigPath() ?? resolveElectronConfigPath();
+  return resolveElectronConfigPath();
 }
 
 function readGatewayTokenFromConfig(): string | null {
@@ -1863,8 +2010,10 @@ function setupIpcHandlers(): void {
 
   // Get gateway status
   ipcMain.handle("gateway-status", () => {
-    const wsUrl = gatewayToken
-      ? `ws://${GATEWAY_HOST}:${gatewayPort}?token=${gatewayToken}`
+    const configToken = readGatewayTokenFromConfig();
+    const token = configToken ?? gatewayToken;
+    const wsUrl = token
+      ? `ws://${GATEWAY_HOST}:${gatewayPort}?token=${token}`
       : `ws://${GATEWAY_HOST}:${gatewayPort}`;
 
     return {
@@ -1884,6 +2033,9 @@ function setupIpcHandlers(): void {
     const wsUrl = token
       ? `ws://${GATEWAY_HOST}:${gatewayPort}?token=${token}`
       : `ws://${GATEWAY_HOST}:${gatewayPort}`;
+    console.log(
+      `[Gateway Token] connect-config configPath=${resolveOpenClawConfigPath()} configToken=${configToken ? `${configToken.slice(0, 8)}...` : "(missing)"} cachedToken=${gatewayToken ? `${gatewayToken.slice(0, 8)}...` : "(missing)"} chosen=${token ? `${token.slice(0, 8)}...` : "(missing)"}`,
+    );
     return {
       wsUrl,
       token,

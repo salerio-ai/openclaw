@@ -182,7 +182,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     if (checking || !loggedIn || !initialized) {
       return;
     }
-    if (gatewayPhase === "ready") {
+    if (gatewayPhase !== "idle") {
       return;
     }
     void ensureGatewayReady();
