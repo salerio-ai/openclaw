@@ -38,7 +38,7 @@ Use the standalone Node entrypoint directly (no `npm install`, no `tsx`):
 node skills/bustly-search-data/scripts/run.js platforms
 ```
 
-Shows which e-commerce and advertising platforms have data.
+Shows the current workspace's integration status across commerce, advertising, communication, and sourcing platforms.
 
 ### 2. Discover Available Tables
 

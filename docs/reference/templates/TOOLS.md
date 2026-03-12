@@ -5,43 +5,49 @@ read_when:
   - Bootstrapping a workspace manually
 ---
 
-# TOOLS.md - Local Notes
+# TOOLS.md - Workspace System Notes
 
-Skills define _how_ tools work. This file is for _your_ specifics — the stuff that's unique to your setup.
+Skills define how tools work. This file is for workspace-specific operating notes.
 
-## What Goes Here
+## What Belongs Here
 
-Things like:
+Document the systems and references the agent needs to operate the store well, for example:
 
-- Camera names and locations
-- SSH hosts and aliases
-- Preferred voices for TTS
-- Speaker/room names
-- Device nicknames
-- Anything environment-specific
+- store platform names and URLs
+- analytics sources
+- ad accounts and naming conventions
+- support tools
+- fulfillment or warehouse systems
+- spreadsheet or dashboard links
+- channel ownership notes
 
-## Examples
+## Suggested Sections
 
 ```markdown
-### Cameras
+### Commerce Stack
 
-- living-room → Main area, 180° wide angle
-- front-door → Entrance, motion-triggered
+- Storefront: Shopify
+- Analytics: GA4, internal BI
+- Paid media: Meta Ads, Google Ads
+- Support: Zendesk
 
-### SSH
+### Naming Conventions
 
-- home-server → 192.168.1.100, user: admin
+- "NC" = new customer
+- "Ret" = retargeting
+- "AOV" = average order value
 
-### TTS
+### Alert Thresholds
 
-- Preferred voice: "Nova" (warm, slightly British)
-- Default speaker: Kitchen HomePod
+- Refund rate spike: > 2x 7-day baseline
+- ROAS drop: > 20% WoW
+- Stockout risk: < 10 days cover on top SKUs
+
+### Owners
+
+- Paid media: growth@brand.com
+- Inventory: ops@brand.com
+- Support: cx@brand.com
 ```
 
-## Why Separate?
-
-Skills are shared. Your setup is yours. Keeping them apart means you can update skills without losing your notes, and share skills without leaking your infrastructure.
-
----
-
-Add whatever helps you do your job. This is your cheat sheet.
+Keep this file practical. It should help the agent move faster without guessing.
