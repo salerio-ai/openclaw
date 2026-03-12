@@ -7,6 +7,13 @@ read_when:
 
 # HEARTBEAT.md
 
-# Keep this file empty (or with only comments) to skip heartbeat API calls.
+# Keep this file empty to skip heartbeat API calls.
 
-# Add tasks below when you want the agent to check something periodically.
+# When enabled, keep it short and operational.
+# Good examples for a Bustly workspace:
+#
+# - Check for unusual revenue / order / refund changes
+# - Check for campaign efficiency drops
+# - Check for inventory risks on top SKUs
+# - Check for support backlog spikes
+# - Send a brief alert only when something needs attention

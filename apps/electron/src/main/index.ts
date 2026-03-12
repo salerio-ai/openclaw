@@ -10,7 +10,7 @@ import {
   type OpenDialogOptions,
 } from "electron";
 import { randomUUID } from "node:crypto";
-import { resolve, dirname, basename } from "node:path";
+import { resolve, dirname, basename, join } from "node:path";
 import { spawn, spawnSync, ChildProcess } from "node:child_process";
 import {
   existsSync,
@@ -53,6 +53,7 @@ import {
 } from "./oauth-handler.js";
 import * as BustlyOAuth from "./bustly-oauth.js";
 import { resolveOpenClawAgentDir } from "../../../../src/agents/agent-paths";
+import { ensureAgentWorkspace } from "../../../../src/agents/workspace";
 import { loadModelCatalog } from "../../../../src/agents/model-catalog";
 import { upsertAuthProfile } from "../../../../src/agents/auth-profiles";
 import { DEFAULT_PROVIDER } from "../../../../src/agents/defaults";
@@ -62,9 +63,13 @@ import {
   normalizeProviderId,
 } from "../../../../src/agents/model-selection";
 import { loadConfig } from "../../../../src/config/config";
+import { updateSessionStore } from "../../../../src/config/sessions";
+import { resolveDefaultSessionStorePath } from "../../../../src/config/sessions/paths";
+import { applyAgentConfig, listAgentEntries } from "../../../../src/commands/agents.config";
 import { resolveGatewayLaunchAgentLabel } from "../../../../src/daemon/constants";
 import { GatewayClient } from "../../../../src/gateway/client";
 import type { SessionsPatchResult } from "../../../../src/gateway/protocol";
+import { applySessionsPatchToStore } from "../../../../src/gateway/sessions-patch";
 import { mergeWhatsAppConfig } from "../../../../src/config/merge-config";
 import type { DmPolicy, OpenClawConfig } from "../../../../src/config/types";
 import { GATEWAY_CLIENT_MODES, GATEWAY_CLIENT_NAMES } from "../../../../src/utils/message-channel";
@@ -83,11 +88,17 @@ import {
 } from "../../../../src/web/accounts";
 import { startWebLoginWithQr, waitForWebLogin } from "../../../../src/web/login-qr";
 import { webAuthExists } from "../../../../src/web/session";
+import { buildAgentMainSessionKey } from "../../../../src/routing/session-key";
 import {
   ELECTRON_DEFAULT_MODEL,
   ELECTRON_OPENCLAW_PROFILE,
   getElectronOpenrouterApiKey,
 } from "./defaults.js";
+import {
+  buildBustlyAgentPresetChannelSessionKey,
+  buildBustlyWorkspaceAgentId,
+} from "../shared/bustly-agent.js";
+import { BUSTLY_PRESET_CHANNELS } from "../shared/bustly-preset-channels.js";
 
 const __dirname = resolve(fileURLToPath(import.meta.url), "..");
 
@@ -155,6 +166,16 @@ let needsOnboardAtLaunch = false;
 let gatewayPort: number = 17999;
 let gatewayBind: string = "loopback";
 let gatewayToken: string | null = null;
+
+function emitGatewayLifecycle(phase: "starting" | "stopping" | "ready" | "error", message?: string): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  mainWindow.webContents.send("gateway-lifecycle", {
+    phase,
+    message: message ?? null,
+  });
+}
 
 const IMAGE_PREVIEW_EXT_RE = /\.(avif|bmp|gif|heic|jpeg|jpg|png|svg|tiff|webp)$/i;
 
@@ -646,6 +667,170 @@ function resolveElectronConfigPath(): string {
     return resolveUserPath(override, homeDir);
   }
   return resolve(resolveElectronStateDir(), "openclaw.json");
+}
+
+function resolveBustlyWorkspaceAgentWorkspaceDir(workspaceId: string): string {
+  const agentId = buildBustlyWorkspaceAgentId(workspaceId);
+  const stateDir = resolveElectronStateDir();
+  return join(stateDir, "workspaces", agentId);
+}
+
+function resolveBustlyWorkspaceAgentSessionKey(workspaceId: string): string {
+  return buildAgentMainSessionKey({ agentId: buildBustlyWorkspaceAgentId(workspaceId) });
+}
+
+async function ensureBustlyPresetChannels(params: { agentId: string }): Promise<void> {
+  const legacyPresetIcons = new Set(["ChartBar", "TrendUp", "ChatCircleText"]);
+  const presets = BUSTLY_PRESET_CHANNELS
+    .filter((entry) => entry.enabled !== false)
+    .slice()
+    .sort((a, b) => a.order - b.order);
+  if (presets.length === 0) {
+    return;
+  }
+
+  const cfg = loadConfig();
+  const storePath = resolveDefaultSessionStorePath(params.agentId);
+
+  await updateSessionStore(storePath, async (store) => {
+    for (const preset of presets) {
+      const storeKey = buildBustlyAgentPresetChannelSessionKey(params.agentId, preset.slug);
+      const existing = store[storeKey];
+      const nextPatch: {
+        key: string;
+        label?: string;
+        icon?: string;
+        model?: string;
+      } = { key: storeKey };
+
+      if (!existing?.label?.trim()) {
+        nextPatch.label = preset.label;
+      }
+      if (!existing?.icon?.trim() || legacyPresetIcons.has(existing.icon.trim())) {
+        nextPatch.icon = preset.icon;
+      }
+      if (!existing?.modelOverride?.trim() && preset.model?.trim()) {
+        nextPatch.model = preset.model.trim();
+      }
+      if (!("label" in nextPatch) && !("icon" in nextPatch) && !("model" in nextPatch)) {
+        continue;
+      }
+
+      const applied = await applySessionsPatchToStore({
+        cfg,
+        store,
+        storeKey,
+        patch: nextPatch,
+      });
+      if (!applied.ok) {
+        throw new Error(applied.error.message);
+      }
+    }
+    return store;
+  });
+}
+
+async function ensureBustlyWorkspaceAgentConfig(params: {
+  workspaceId: string;
+  workspaceName?: string;
+}): Promise<{ agentId: string; sessionKey: string; workspaceDir: string }> {
+  const workspaceId = params.workspaceId.trim();
+  if (!workspaceId) {
+    throw new Error("Bustly workspaceId is required.");
+  }
+  const configPath = resolveElectronConfigPath();
+  if (!existsSync(configPath)) {
+    throw new Error(`OpenClaw config not found at ${configPath}`);
+  }
+
+  const workspaceDir = resolveBustlyWorkspaceAgentWorkspaceDir(workspaceId);
+  const agentId = buildBustlyWorkspaceAgentId(workspaceId);
+  const sessionKey = resolveBustlyWorkspaceAgentSessionKey(workspaceId);
+  const config = JSON.parse(readFileSync(configPath, "utf-8")) as OpenClawConfig;
+  const nextName = params.workspaceName?.trim() || workspaceId;
+  const updated = applyAgentConfig(config, {
+    agentId,
+    name: nextName,
+    workspace: workspaceDir,
+  });
+  const currentList = listAgentEntries(updated);
+  const nextList = currentList.map((entry) => ({
+    ...entry,
+    default: entry.id === agentId,
+  }));
+  const normalizedNextList = nextList.some((entry) => entry.id === agentId)
+    ? nextList
+    : [...nextList, { id: agentId, name: nextName, workspace: workspaceDir, default: true }];
+  const nextConfig: OpenClawConfig = {
+    ...updated,
+    agents: {
+      ...updated.agents,
+      defaults: {
+        ...updated.agents?.defaults,
+        workspace: workspaceDir,
+      },
+      list: normalizedNextList,
+    },
+  };
+
+  if (JSON.stringify(nextConfig) !== JSON.stringify(config)) {
+    writeFileSync(configPath, JSON.stringify(nextConfig, null, 2));
+  }
+
+  await ensureAgentWorkspace({
+    dir: workspaceDir,
+    ensureBootstrapFiles: true,
+  });
+
+  await ensureBustlyPresetChannels({ agentId });
+
+  return { agentId, sessionKey, workspaceDir };
+}
+
+async function syncBustlyWorkspaceAgent(params: {
+  workspaceId?: string;
+  workspaceName?: string;
+  forceInit?: boolean;
+}): Promise<{ agentId: string; sessionKey: string; workspaceDir: string } | null> {
+  const workspaceId = params.workspaceId?.trim() || resolveBustlyWorkspaceIdFromOAuthState();
+  if (!workspaceId) {
+    return null;
+  }
+  const configPath = resolveElectronConfigPath();
+  const workspaceDir = resolveBustlyWorkspaceAgentWorkspaceDir(workspaceId);
+  if (params.forceInit === true || !existsSync(configPath)) {
+    const result = await initializeOpenClaw({
+      force: params.forceInit === true,
+      workspace: workspaceDir,
+    });
+    if (!result.success) {
+      throw new Error(result.error ?? "Failed to initialize OpenClaw");
+    }
+    initResult = result;
+    gatewayPort = result.gatewayPort;
+    gatewayBind = result.gatewayBind;
+    gatewayToken = result.gatewayToken ?? null;
+    needsOnboardAtLaunch = false;
+  }
+  return await ensureBustlyWorkspaceAgentConfig({
+    workspaceId,
+    workspaceName: params.workspaceName,
+  });
+}
+
+async function synchronizeBustlyWorkspaceContext(params?: {
+  workspaceId?: string;
+  workspaceName?: string;
+  selectedModelInput?: string;
+  forceInit?: boolean;
+}): Promise<{ agentId: string; sessionKey: string; workspaceDir: string } | null> {
+  const agentBinding = await syncBustlyWorkspaceAgent({
+    workspaceId: params?.workspaceId,
+    workspaceName: params?.workspaceName,
+    forceInit: params?.forceInit,
+  });
+  syncBustlyConfigFile(resolveElectronConfigPath(), params?.selectedModelInput?.trim());
+  return agentBinding;
 }
 
 function prependPathEntry(pathValue: string, entry: string): string {
@@ -1224,6 +1409,7 @@ async function resolveGatewayStartupPort(
  * Start the OpenClaw Gateway process
  */
 async function startGateway(): Promise<boolean> {
+  emitGatewayLifecycle("starting", "Starting gateway...");
   const oauthCallbackPort = await startOAuthCallbackServer();
   console.log("[Bustly] OAuth callback server started on port", oauthCallbackPort);
 
@@ -1444,6 +1630,7 @@ async function startGateway(): Promise<boolean> {
         const elapsedMs = Date.now() - startAt;
         writeMainLog(`Gateway startup ready in ${elapsedMs}ms`);
         console.log("Gateway started successfully");
+        emitGatewayLifecycle("ready", null);
         resolvePromise(true);
       })
       .catch((error) => {
@@ -1459,6 +1646,10 @@ async function startGateway(): Promise<boolean> {
         if (gatewayProcess && !gatewayProcess.killed) {
           gatewayProcess.kill("SIGTERM");
         }
+        emitGatewayLifecycle(
+          "error",
+          error instanceof Error ? error.message : String(error),
+        );
         reject(error);
       });
   });
@@ -1476,6 +1667,7 @@ function stopGateway(): Promise<boolean> {
     }
 
     console.log("Stopping gateway...");
+    emitGatewayLifecycle("stopping", "Restarting gateway...");
 
     gatewayProcess.kill("SIGTERM");
 
@@ -1992,31 +2184,17 @@ async function bootstrapDesktopSession(options?: {
   model?: string;
   openControlUi?: boolean;
 }): Promise<void> {
-  const shouldInitialize = options?.forceInit === true || !isFullyInitialized();
-
-  if (shouldInitialize) {
-    const result = await initializeOpenClaw({
-      force: options?.forceInit === true,
-    });
-    if (!result.success) {
-      throw new Error(result.error ?? "Failed to initialize OpenClaw");
-    }
-    initResult = result;
-    gatewayPort = result.gatewayPort;
-    gatewayBind = result.gatewayBind;
-    gatewayToken = result.gatewayToken ?? null;
-    needsOnboardAtLaunch = false;
-  } else {
-    const existingConfig = loadGatewayConfig();
-    if (existingConfig) {
-      gatewayPort = existingConfig.port;
-      gatewayBind = existingConfig.bind;
-      gatewayToken = existingConfig.token ?? null;
-    }
+  await synchronizeBustlyWorkspaceContext({
+    selectedModelInput: options?.model,
+    forceInit: options?.forceInit === true,
+  });
+  const existingConfig = loadGatewayConfig();
+  if (existingConfig) {
+    gatewayPort = existingConfig.port;
+    gatewayBind = existingConfig.bind;
+    gatewayToken = existingConfig.token ?? null;
   }
-
   await ensureElectronBootstrapModel();
-  syncBustlyConfigFile(resolveElectronConfigPath(), options?.model?.trim());
   await startGateway();
 
   if (options?.openControlUi === true) {
@@ -2087,9 +2265,11 @@ function setupIpcHandlers(): void {
       // If API key is provided, re-initialize config with the API key
       if (apiKey && apiKey.trim()) {
         console.log("[Gateway] Re-initializing with API key...");
+        const workspaceId = resolveBustlyWorkspaceIdFromOAuthState();
         const result = await initializeOpenClaw({
           force: true,
           openrouterApiKey: apiKey.trim(),
+          workspace: workspaceId ? resolveBustlyWorkspaceAgentWorkspaceDir(workspaceId) : undefined,
         });
         if (result.success) {
           initResult = result;
@@ -2156,6 +2336,58 @@ function setupIpcHandlers(): void {
     };
   });
 
+  ipcMain.handle(
+    "gateway-patch-session",
+    async (_event, key: string, patch: { label?: string | null; icon?: string | null }) => {
+      try {
+        const normalizedKey = typeof key === "string" ? key.trim() : "";
+        if (!normalizedKey) {
+          return { success: false, error: "Session key is required." };
+        }
+
+        const nextPatch: { key: string; label?: string | null; icon?: string | null } = { key: normalizedKey };
+        if (patch && "label" in patch) {
+          if (patch.label === null) {
+            nextPatch.label = null;
+          } else {
+            const normalizedLabel = typeof patch.label === "string" ? patch.label.trim() : "";
+            if (!normalizedLabel) {
+              return { success: false, error: "Scenario name is required." };
+            }
+            nextPatch.label = normalizedLabel;
+          }
+        }
+        if (patch && "icon" in patch) {
+          if (patch.icon === null) {
+            nextPatch.icon = null;
+          } else {
+            const normalizedIcon = typeof patch.icon === "string" ? patch.icon.trim() : "";
+            if (!normalizedIcon) {
+              return { success: false, error: "Scenario icon is required." };
+            }
+            nextPatch.icon = normalizedIcon;
+          }
+        }
+        if (!("label" in nextPatch) && !("icon" in nextPatch)) {
+          return { success: false, error: "At least one session field is required." };
+        }
+
+        const result = await withPrivilegedGatewayClient((client) =>
+          client.request<SessionsPatchResult>("sessions.patch", nextPatch),
+        );
+        if (!result?.ok) {
+          return { success: false, error: "Failed to update scenario." };
+        }
+        return { success: true };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    },
+  );
+
   ipcMain.handle("gateway-patch-session-label", async (_event, key: string, label: string) => {
     try {
       const normalizedKey = typeof key === "string" ? key.trim() : "";
@@ -2171,7 +2403,7 @@ function setupIpcHandlers(): void {
         client.request<SessionsPatchResult>("sessions.patch", {
           key: normalizedKey,
           label: normalizedLabel,
-        })
+        }),
       );
       if (!result?.ok) {
         return { success: false, error: "Failed to rename scenario." };
@@ -2298,6 +2530,23 @@ function setupIpcHandlers(): void {
     });
   });
 
+  ipcMain.handle("resolve-chat-image-preview", async (_event, rawPath: string) => {
+    const targetPath = typeof rawPath === "string" ? rawPath.trim() : "";
+    if (!targetPath || !IMAGE_PREVIEW_EXT_RE.test(targetPath)) {
+      return null;
+    }
+    try {
+      const mimeType = resolveImagePreviewMimeType(targetPath);
+      if (!mimeType) {
+        return null;
+      }
+      const base64 = readFileSync(targetPath).toString("base64");
+      return `data:${mimeType};base64,${base64}`;
+    } catch {
+      return null;
+    }
+  });
+
   // Get app info
   ipcMain.handle("get-app-info", () => {
     return {
@@ -2374,20 +2623,35 @@ function setupIpcHandlers(): void {
     };
   });
 
-  ipcMain.handle("bustly-set-active-workspace", async (_event, workspaceId: string) => {
+  ipcMain.handle(
+    "bustly-set-active-workspace",
+    async (_event, workspaceId: string, workspaceName?: string) => {
     try {
       BustlyOAuth.setActiveWorkspaceId(workspaceId);
+      const agentBinding = await synchronizeBustlyWorkspaceContext({
+        workspaceId,
+        workspaceName,
+      });
+      if (gatewayProcess) {
+        await stopGateway();
+        await startGateway();
+      }
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send("bustly-login-refresh");
       }
-      return { success: true };
+      return {
+        success: true,
+        agentId: agentBinding?.agentId,
+        sessionKey: agentBinding?.sessionKey,
+      };
     } catch (error) {
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error),
       };
     }
-  });
+    },
+  );
 
   // Open Bustly login page (standalone)
   ipcMain.handle("bustly-open-login", () => {

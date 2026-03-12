@@ -136,6 +136,63 @@ async function rpc(config, functionName, params = {}) {
   throw lastError || new Error("Unknown RPC error");
 }
 
+async function invokeEdgeFunction(config, functionName, payload = {}) {
+  const url = `${config.supabaseUrl}/functions/v1/${functionName}`;
+  let lastError = null;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: config.supabaseAnonKey,
+          Authorization: `Bearer ${config.supabaseToken}`,
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      const text = await response.text();
+      let data = null;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        data = text;
+      }
+
+      if (!response.ok) {
+        const retryable = response.status >= 500 || response.status === 429;
+        const err = new Error(
+          `Supabase Edge Function error (${response.status}): ${typeof data === "string" ? data : JSON.stringify(data)}`,
+        );
+        err.retryable = retryable;
+        if (retryable && attempt < MAX_RETRIES) {
+          await sleep(getRetryDelay(attempt));
+          continue;
+        }
+        throw err;
+      }
+
+      return data;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      lastError = error;
+      const retryable = error?.name === "AbortError" || error?.retryable === true;
+      if (retryable && attempt < MAX_RETRIES) {
+        await sleep(getRetryDelay(attempt));
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw lastError || new Error("Unknown edge function error");
+}
+
 function formatTableInfo(tables) {
   if (!Array.isArray(tables) || tables.length === 0) return "No tables available.";
   const grouped = {};
@@ -243,19 +300,10 @@ async function main() {
   }
 
   if (command === "platforms") {
-    const tables = await rpc(config, "get_agent_available_tables");
-    const names = tables
-      .map((t) => t.table_name || "")
-      .join("\n")
-      .toLowerCase();
-    const has = (s) => names.includes(s);
-    const platforms = [];
-    if (has("_shopify")) platforms.push({ name: "Shopify", type: "ecommerce" });
-    if (has("_bigcommerce")) platforms.push({ name: "BigCommerce", type: "ecommerce" });
-    if (has("_woocommerce")) platforms.push({ name: "WooCommerce", type: "ecommerce" });
-    if (has("_magento")) platforms.push({ name: "Magento", type: "ecommerce" });
-    if (has("_google") || has("ads_")) platforms.push({ name: "Google Ads", type: "advertising" });
-    console.log(JSON.stringify({ totalPlatforms: platforms.length, platforms }, null, 2));
+    const data = await invokeEdgeFunction(config, "workspace-platform-status", {
+      workspace_id: config.workspaceId,
+    });
+    console.log(JSON.stringify(data, null, 2));
     return;
   }
 

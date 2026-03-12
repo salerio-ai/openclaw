@@ -110,17 +110,45 @@ function UserArtifactCard({
   artifact: ChatInputArtifact | TimelineArtifact;
   onPreviewImage?: (url: string) => void;
 }) {
+  const [previewUrl, setPreviewUrl] = useState<string | undefined>(() =>
+    "imageUrl" in artifact ? artifact.imageUrl : undefined,
+  );
+
+  useEffect(() => {
+    const immediatePreview = "imageUrl" in artifact ? artifact.imageUrl : undefined;
+    if (immediatePreview) {
+      setPreviewUrl(immediatePreview);
+      return;
+    }
+    if (artifact.kind !== "image" || !artifact.path || typeof window.electronAPI?.resolveChatImagePreview !== "function") {
+      setPreviewUrl(undefined);
+      return;
+    }
+    let cancelled = false;
+    void window.electronAPI.resolveChatImagePreview(artifact.path).then((resolved) => {
+      if (!cancelled) {
+        setPreviewUrl(resolved ?? undefined);
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setPreviewUrl(undefined);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [artifact]);
+
   const Icon =
     artifact.kind === "directory"
       ? UserFolderIcon
-      : artifact.kind === "image"
+      : artifact.kind === "image" || ("imageUrl" in artifact && typeof artifact.imageUrl === "string" && artifact.imageUrl.length > 0)
         ? UserImageIcon
         : UserFileIcon;
-  const previewUrl = "imageUrl" in artifact ? artifact.imageUrl : undefined;
 
   return (
     <div className="flex max-w-full items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-100 py-1 pr-1 pl-2 text-xs font-medium text-text-main">
-      {artifact.kind === "image" && previewUrl ? (
+      {previewUrl ? (
         <button
           type="button"
           className="h-5 w-5 shrink-0 overflow-hidden rounded-md border border-gray-200 bg-white"

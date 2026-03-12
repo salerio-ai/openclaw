@@ -179,6 +179,41 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, [refreshAppState]);
 
   useEffect(() => {
+    if (!window.electronAPI?.onGatewayLifecycle) {
+      return;
+    }
+    const unsubscribe = window.electronAPI.onGatewayLifecycle((data) => {
+      if (data.phase === "starting") {
+        setGatewayPhase("starting");
+        setGatewayMessage(data.message ?? "Starting gateway...");
+        setError(null);
+        return;
+      }
+      if (data.phase === "stopping") {
+        setGatewayPhase("starting");
+        setGatewayMessage(data.message ?? "Restarting gateway...");
+        setError(null);
+        return;
+      }
+      if (data.phase === "ready") {
+        setGatewayPhase("ready");
+        setGatewayMessage(null);
+        setError(null);
+        void refreshAppState();
+        return;
+      }
+      setGatewayPhase("error");
+      setGatewayMessage(null);
+      if (data.message) {
+        setError(data.message);
+      }
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, [refreshAppState]);
+
+  useEffect(() => {
     if (checking || !loggedIn || !initialized) {
       return;
     }

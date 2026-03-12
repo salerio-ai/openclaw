@@ -31,6 +31,10 @@ type GatewayLogPayload = { stream: "stdout" | "stderr"; message: string };
 type GatewayExitPayload = { code: number | null; signal: string | null };
 type MainLogPayload = { message: string };
 type UpdateStatusPayload = { event: string };
+type GatewayLifecyclePayload = {
+  phase: "starting" | "stopping" | "ready" | "error";
+  message: string | null;
+};
 
 type WhatsAppConfigRequest =
   | {
@@ -60,6 +64,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   gatewayStop: () => ipcRenderer.invoke("gateway-stop"),
   gatewayStatus: () => ipcRenderer.invoke("gateway-status"),
   gatewayConnectConfig: () => ipcRenderer.invoke("gateway-connect-config"),
+  gatewayPatchSession: (key: string, patch: { label?: string | null; icon?: string | null }) =>
+    ipcRenderer.invoke("gateway-patch-session", key, patch),
   gatewayPatchSessionLabel: (key: string, label: string) =>
     ipcRenderer.invoke("gateway-patch-session-label", key, label),
   gatewayPatchSessionModel: (key: string, model: string) =>
@@ -78,6 +84,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
       fallbackKind: params.fallbackKind,
     }),
   selectChatContextPaths: () => ipcRenderer.invoke("dialog-select-chat-context-paths"),
+  resolveChatImagePreview: (path: string) => ipcRenderer.invoke("resolve-chat-image-preview", path),
 
   // App info
   getAppInfo: () => ipcRenderer.invoke("get-app-info"),
@@ -91,8 +98,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   bustlyIsLoggedIn: () => ipcRenderer.invoke("bustly-is-logged-in"),
   bustlyGetUserInfo: () => ipcRenderer.invoke("bustly-get-user-info"),
   bustlyGetSupabaseConfig: () => ipcRenderer.invoke("bustly-get-supabase-config"),
-  bustlySetActiveWorkspace: (workspaceId: string) =>
-    ipcRenderer.invoke("bustly-set-active-workspace", workspaceId),
+  bustlySetActiveWorkspace: (workspaceId: string, workspaceName?: string) =>
+    ipcRenderer.invoke("bustly-set-active-workspace", workspaceId, workspaceName),
   bustlyLogout: () => ipcRenderer.invoke("bustly-logout"),
   bustlyOpenLogin: () => ipcRenderer.invoke("bustly-open-login"),
   bustlyOpenSettings: () => ipcRenderer.invoke("bustly-open-settings"),
@@ -144,6 +151,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     const listener = (_event: IpcRendererEvent, data: GatewayExitPayload) => callback(data);
     ipcRenderer.on("gateway-exit", listener);
     return () => ipcRenderer.removeListener("gateway-exit", listener);
+  },
+  onGatewayLifecycle: (callback: (data: GatewayLifecyclePayload) => void) => {
+    const listener = (_event: IpcRendererEvent, data: GatewayLifecyclePayload) => callback(data);
+    ipcRenderer.on("gateway-lifecycle", listener);
+    return () => ipcRenderer.removeListener("gateway-lifecycle", listener);
   },
   onMainLog: (callback: (data: MainLogPayload) => void) => {
     const listener = (_event: IpcRendererEvent, data: MainLogPayload) => callback(data);
