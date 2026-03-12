@@ -117,9 +117,9 @@ const SIDEBAR_TASKS_REFRESH_EVENT = "openclaw:sidebar-refresh-tasks";
 const CHAT_MODEL_LEVEL_STORAGE_KEY = "bustly.chat.model-level.v1";
 
 const CHAT_MODEL_LEVELS = [
-  { id: "lite", label: "Bustly Lite", description: "Fast & efficient for daily tasks." },
-  { id: "pro", label: "Bustly Pro", description: "Balanced performance for complex reasoning." },
-  { id: "max", label: "Bustly Max", description: "Frontier intelligence for critical challenges." },
+  { id: "lite", modelRef: "bustly/chat.lite", label: "Bustly Lite", description: "Fast & efficient for daily tasks." },
+  { id: "pro", modelRef: "bustly/chat.pro", label: "Bustly Pro", description: "Balanced performance for complex reasoning." },
+  { id: "max", modelRef: "bustly/chat.max", label: "Bustly Max", description: "Frontier intelligence for critical challenges." },
 ] as const;
 
 type ChatModelLevelId = (typeof CHAT_MODEL_LEVELS)[number]["id"];
@@ -609,7 +609,7 @@ export default function ChatPage() {
     if (stored === "lite" || stored === "pro" || stored === "max") {
       return stored;
     }
-    return "pro";
+    return "lite";
   });
 
   const clientRef = useRef<GatewayBrowserClient | null>(null);
@@ -1680,6 +1680,13 @@ export default function ChatPage() {
     ) {
       return;
     }
+    const selectedModelRef =
+      (CHAT_MODEL_LEVELS.find((entry) => entry.id === modelLevel) ?? CHAT_MODEL_LEVELS[0]).modelRef;
+    const patchModelResult = await window.electronAPI.gatewayPatchSessionModel(currentSessionKey, selectedModelRef);
+    if (!patchModelResult.success) {
+      setError(patchModelResult.error ?? "Failed to apply model selection.");
+      return;
+    }
     const outgoingArtifacts: ChatInputArtifact[] = [
       ...attachments.map((attachment) => ({
         kind: "image" as const,
@@ -1764,7 +1771,7 @@ export default function ChatPage() {
     } finally {
       setSending(false);
     }
-  }, [attachments, connected, contextPaths, currentSessionKey, draft, sending, subscriptionExpired]);
+  }, [attachments, connected, contextPaths, currentSessionKey, draft, modelLevel, sending, subscriptionExpired]);
 
   const handleSend = useCallback(async () => {
     await sendChatMessage();
@@ -1778,6 +1785,13 @@ export default function ChatPage() {
       runId ??
       Array.from(retryPayloadsRef.current.keys()).at(-1);
     if (!retryPayload || !retryRunId || !clientRef.current || !connected || subscriptionExpired || sending) {
+      return;
+    }
+    const selectedModelRef =
+      (CHAT_MODEL_LEVELS.find((entry) => entry.id === modelLevel) ?? CHAT_MODEL_LEVELS[0]).modelRef;
+    const patchModelResult = await window.electronAPI.gatewayPatchSessionModel(currentSessionKey, selectedModelRef);
+    if (!patchModelResult.success) {
+      setError(patchModelResult.error ?? "Failed to apply model selection.");
       return;
     }
     const outgoingArtifacts: ChatInputArtifact[] = [
@@ -1831,7 +1845,7 @@ export default function ChatPage() {
     } finally {
       setSending(false);
     }
-  }, [clearReconnectStatus, connected, currentSessionKey, removeRunError, sending, subscriptionExpired]);
+  }, [clearReconnectStatus, connected, currentSessionKey, modelLevel, removeRunError, sending, subscriptionExpired]);
 
   const handleAbort = useCallback(async () => {
     if (!connected || !clientRef.current) {
@@ -2222,7 +2236,7 @@ export default function ChatPage() {
     return `Context left: ${formatTokenCount(sessionUsage.remainingTokens)} / ${formatTokenCount(sessionUsage.contextTokens)}`;
   }, [sessionUsage.contextTokens, sessionUsage.remainingTokens]);
   const selectedModelLevel = useMemo(
-    () => CHAT_MODEL_LEVELS.find((entry) => entry.id === modelLevel) ?? CHAT_MODEL_LEVELS[1],
+    () => CHAT_MODEL_LEVELS.find((entry) => entry.id === modelLevel) ?? CHAT_MODEL_LEVELS[0],
     [modelLevel],
   );
 

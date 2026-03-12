@@ -62,6 +62,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   gatewayConnectConfig: () => ipcRenderer.invoke("gateway-connect-config"),
   gatewayPatchSessionLabel: (key: string, label: string) =>
     ipcRenderer.invoke("gateway-patch-session-label", key, label),
+  gatewayPatchSessionModel: (key: string, model: string) =>
+    ipcRenderer.invoke("gateway-patch-session-model", key, model),
   gatewayDeleteSession: (key: string) => ipcRenderer.invoke("gateway-delete-session", key),
   resolvePastedPath: (params: {
     file?: File;
