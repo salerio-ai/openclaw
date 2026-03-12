@@ -1,0 +1,23 @@
+{
+  "skill_name": "commerce_core_ops",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "列出我当前工作区连接的平台，并拉最近 30 天 WooCommerce 订单。",
+      "expected_output": "先用 platforms/connect:sources 识别连接，再通过 read:entity 或 read:query 返回 WooCommerce 订单数据。",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "把 Shopify 商品 gid://shopify/Product/123 标题更新为 OpenClaw Pro Tee。",
+      "expected_output": "先执行 auth:check，然后调用 write:product --platform shopify --op update（或 write:shopify）并返回 mutation 结果。",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "给 BigCommerce 批量写入商品（upsert），每条记录包含 external_id、name、price。",
+      "expected_output": "通过 write:product --platform bigcommerce --op upsert 调用 commerce-core-ops 直接写入协议，并返回结果。",
+      "files": []
+    }
+  ]
+}
