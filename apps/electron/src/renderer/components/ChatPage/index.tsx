@@ -1939,9 +1939,9 @@ export default function ChatPage() {
         typeof entry === "object" &&
         "type" in entry &&
         "name" in entry &&
-        typeof (entry as File).type === "string" &&
-        typeof (entry as File).name === "string"
-          ? (entry as File)
+        typeof (entry).type === "string" &&
+        typeof (entry).name === "string"
+          ? (entry)
           : null;
       if (directFile) {
         const resolvedSelection = await resolvePastedSelection({

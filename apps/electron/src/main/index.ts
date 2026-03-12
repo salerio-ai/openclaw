@@ -261,15 +261,15 @@ function resolvePastedPath(params: {
 
 function resolveImagePreviewMimeType(filePath: string): string | null {
   const lower = filePath.toLowerCase();
-  if (lower.endsWith(".png")) return "image/png";
-  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
-  if (lower.endsWith(".gif")) return "image/gif";
-  if (lower.endsWith(".webp")) return "image/webp";
-  if (lower.endsWith(".bmp")) return "image/bmp";
-  if (lower.endsWith(".svg")) return "image/svg+xml";
-  if (lower.endsWith(".avif")) return "image/avif";
-  if (lower.endsWith(".heic")) return "image/heic";
-  if (lower.endsWith(".tif") || lower.endsWith(".tiff")) return "image/tiff";
+  if (lower.endsWith(".png")) {return "image/png";}
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) {return "image/jpeg";}
+  if (lower.endsWith(".gif")) {return "image/gif";}
+  if (lower.endsWith(".webp")) {return "image/webp";}
+  if (lower.endsWith(".bmp")) {return "image/bmp";}
+  if (lower.endsWith(".svg")) {return "image/svg+xml";}
+  if (lower.endsWith(".avif")) {return "image/avif";}
+  if (lower.endsWith(".heic")) {return "image/heic";}
+  if (lower.endsWith(".tif") || lower.endsWith(".tiff")) {return "image/tiff";}
   return null;
 }
 let updateReady = false;

@@ -2,36 +2,326 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#     "google-genai>=1.0.0",
-#     "pillow>=10.0.0",
+#   "pillow>=10.0.0",
 # ]
 # ///
 """
-Generate images using Google's Nano Banana Pro (Gemini 3 Pro Image) API.
+Generate/edit images through Bustly Model Gateway (image.pro route by default).
 
 Usage:
-    uv run generate_image.py --prompt "your image description" --filename "output.png" [--resolution 1K|2K|4K] [--api-key KEY]
+    uv run generate_image.py --prompt "your image description" --filename "output.png" [--resolution 1K|2K|4K]
 
-Multi-image editing (up to 14 images):
+Multi-image edit/composition (up to 14 images):
     uv run generate_image.py --prompt "combine these images" --filename "output.png" -i img1.png -i img2.png -i img3.png
 """
 
 import argparse
+import base64
+import json
+import mimetypes
 import os
 import sys
+from io import BytesIO
 from pathlib import Path
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
+
+DEFAULT_GATEWAY_BASE_URL = os.environ.get("BUSTLY_MODEL_GATEWAY_BASE_URL", "https://gw.bustly.ai").strip()
+DEFAULT_ROUTE_MODEL = os.environ.get("BUSTLY_MODEL_GATEWAY_IMAGE_ROUTE", "image.pro").strip() or "image.pro"
+DEFAULT_USER_AGENT = os.environ.get("BUSTLY_MODEL_GATEWAY_USER_AGENT", "OpenClaw/CLI").strip() or "OpenClaw/CLI"
+DEFAULT_STATE_DIR = ".bustly"
+MAX_INPUT_IMAGES = 14
+MAX_IMAGE_BYTES = int(os.environ.get("NANO_BANANA_MAX_IMAGE_BYTES", str(700 * 1024)))
+MAX_TOTAL_IMAGE_BYTES = int(os.environ.get("NANO_BANANA_MAX_TOTAL_IMAGE_BYTES", str(1400 * 1024)))
+MAX_IMAGE_DIM = int(os.environ.get("NANO_BANANA_MAX_IMAGE_DIM", "1536"))
+MIN_IMAGE_DIM = int(os.environ.get("NANO_BANANA_MIN_IMAGE_DIM", "640"))
+JPEG_QUALITIES = (88, 80, 72, 64, 56, 48, 40)
 
 
-def get_api_key(provided_key: str | None) -> str | None:
-    """Get API key from argument first, then environment."""
-    if provided_key:
-        return provided_key
-    return os.environ.get("GEMINI_API_KEY")
+def resolve_state_dir() -> Path:
+    override = os.environ.get("OPENCLAW_STATE_DIR", "").strip()
+    if override:
+        return Path(os.path.expanduser(override)).resolve()
+    return (Path.home() / DEFAULT_STATE_DIR).resolve()
+
+
+def load_bustly_oauth_config() -> dict:
+    config_path = resolve_state_dir() / "bustlyOauth.json"
+    if not config_path.exists():
+        raise RuntimeError(
+            f"Missing auth config: {config_path}. Please log in from Bustly desktop first."
+        )
+    try:
+        payload = json.loads(config_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise RuntimeError(f"Failed to parse {config_path}: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise RuntimeError(f"Invalid auth config format in {config_path}.")
+    return payload
+
+
+def resolve_auth(args: argparse.Namespace) -> tuple[str, str]:
+    if args.jwt and args.workspace_id:
+        return args.jwt.strip(), args.workspace_id.strip()
+
+    oauth = load_bustly_oauth_config()
+    user = oauth.get("user")
+    if not isinstance(user, dict):
+        raise RuntimeError("Invalid bustlyOauth.json: missing user object.")
+
+    jwt = (args.jwt or user.get("userAccessToken") or "").strip()
+    workspace_id = (args.workspace_id or user.get("workspaceId") or "").strip()
+
+    if not jwt:
+        raise RuntimeError("Missing user.userAccessToken in bustlyOauth.json.")
+    if not workspace_id:
+        raise RuntimeError("Missing user.workspaceId in bustlyOauth.json.")
+    return jwt, workspace_id
+
+
+def chat_url(base_url: str) -> str:
+    base = (base_url or "").strip().rstrip("/")
+    if not base:
+        raise RuntimeError("Gateway base URL is empty.")
+    if base.endswith("/api/v1"):
+        return f"{base}/chat/completions"
+    return f"{base}/api/v1/chat/completions"
+
+
+def prompt_with_resolution(prompt: str, resolution: str) -> str:
+    return f"{prompt}\n\nOutput preference: {resolution}."
+
+
+def _jpeg_data_url(raw: bytes) -> str:
+    return f"data:image/jpeg;base64,{base64.b64encode(raw).decode('ascii')}"
+
+
+def _encode_jpeg_bytes(image) -> tuple[bytes, int]:
+    best_data: bytes | None = None
+    best_quality = JPEG_QUALITIES[-1]
+    for quality in JPEG_QUALITIES:
+        out = BytesIO()
+        image.save(out, format="JPEG", quality=quality, optimize=True, progressive=True)
+        data = out.getvalue()
+        if best_data is None or len(data) < len(best_data):
+            best_data = data
+            best_quality = quality
+        if len(data) <= MAX_IMAGE_BYTES:
+            return data, quality
+    if best_data is None:
+        raise RuntimeError("Failed to encode input image as JPEG.")
+    return best_data, best_quality
+
+
+def _load_and_prepare_image(path: Path):
+    try:
+        from PIL import Image
+    except Exception as exc:
+        raise RuntimeError(f"Pillow import failed: {exc}") from exc
+
+    with Image.open(path) as src:
+        img = src.convert("RGBA")
+    if img.mode == "RGBA":
+        bg = Image.new("RGBA", img.size, (255, 255, 255, 255))
+        bg.paste(img, (0, 0), img)
+        img = bg.convert("RGB")
+    else:
+        img = img.convert("RGB")
+
+    width, height = img.size
+    max_dim = max(width, height)
+    if max_dim > MAX_IMAGE_DIM:
+        scale = MAX_IMAGE_DIM / float(max_dim)
+        img = img.resize((max(1, int(width * scale)), max(1, int(height * scale))), Image.Resampling.LANCZOS)
+    return img
+
+
+def image_file_to_data_url(image_path: str) -> tuple[str, str]:
+    from PIL import Image as PILImage
+
+    path = Path(image_path).expanduser().resolve()
+    if not path.exists():
+        raise RuntimeError(f"Input image not found: {path}")
+
+    original_size = path.stat().st_size
+    image = _load_and_prepare_image(path)
+    used_quality = JPEG_QUALITIES[-1]
+    attempt = 0
+    while True:
+        data, used_quality = _encode_jpeg_bytes(image)
+        if len(data) <= MAX_IMAGE_BYTES:
+            ratio = 100.0 * len(data) / max(1, original_size)
+            note = (
+                f"{path.name}: {original_size/1024:.0f}KB -> {len(data)/1024:.0f}KB "
+                f"(q={used_quality}, {image.size[0]}x{image.size[1]}, {ratio:.1f}% of original)"
+            )
+            return _jpeg_data_url(data), note
+
+        width, height = image.size
+        if max(width, height) <= MIN_IMAGE_DIM:
+            raise RuntimeError(
+                f"Input image '{path.name}' is still too large after compression "
+                f"({len(data)/1024:.0f}KB). Please provide a smaller image."
+            )
+
+        attempt += 1
+        shrink = 0.82
+        image = image.resize(
+            (max(1, int(width * shrink)), max(1, int(height * shrink))),
+            PILImage.Resampling.LANCZOS,
+        )
+        if attempt > 8:
+            raise RuntimeError(
+                f"Failed to reduce '{path.name}' under upload limit after multiple compression attempts."
+            )
+
+
+def build_payload(args: argparse.Namespace) -> dict:
+    prompt_text = prompt_with_resolution(args.prompt, args.resolution)
+    if args.input_images:
+        if len(args.input_images) > MAX_INPUT_IMAGES:
+            raise RuntimeError(
+                f"Too many input images ({len(args.input_images)}). Maximum is {MAX_INPUT_IMAGES}."
+            )
+        content = [{"type": "text", "text": prompt_text}]
+        total_bytes = 0
+        for image_path in args.input_images:
+            data_url, note = image_file_to_data_url(image_path)
+            payload_bytes = len(data_url)
+            total_bytes += payload_bytes
+            if total_bytes > MAX_TOTAL_IMAGE_BYTES:
+                raise RuntimeError(
+                    "Combined input images are too large after compression "
+                    f"({total_bytes/1024:.0f}KB > {MAX_TOTAL_IMAGE_BYTES/1024:.0f}KB). "
+                    "Please reduce image count or source resolution."
+                )
+            print(f"Prepared input image: {note}")
+            content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": data_url},
+                }
+            )
+        messages = [{"role": "user", "content": content}]
+    else:
+        messages = [{"role": "user", "content": prompt_text}]
+
+    return {
+        "model": (args.model or DEFAULT_ROUTE_MODEL).strip() or DEFAULT_ROUTE_MODEL,
+        "stream": False,
+        "messages": messages,
+    }
+
+
+def call_gateway(gateway_base_url: str, jwt: str, workspace_id: str, payload: dict) -> dict:
+    target = chat_url(gateway_base_url)
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    req = Request(
+        target,
+        data=body,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {jwt}",
+            "X-Workspace-Id": workspace_id,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": DEFAULT_USER_AGENT,
+        },
+    )
+    try:
+        with urlopen(req, timeout=180) as resp:
+            text = resp.read().decode("utf-8", errors="replace")
+            return json.loads(text)
+    except HTTPError as exc:
+        raw = exc.read().decode("utf-8", errors="replace")
+        message = raw
+        try:
+            err_payload = json.loads(raw)
+            if isinstance(err_payload, dict):
+                err_obj = err_payload.get("error")
+                if isinstance(err_obj, dict):
+                    message = str(err_obj.get("message") or message)
+                else:
+                    message = str(err_payload.get("message") or message)
+        except Exception:
+            pass
+        raise RuntimeError(f"Gateway request failed ({exc.code}): {message}") from exc
+    except Exception as exc:
+        raise RuntimeError(f"Gateway request failed: {exc}") from exc
+
+
+def extract_data_urls(response_payload: dict) -> list[str]:
+    urls: list[str] = []
+    choices = response_payload.get("choices")
+    if not isinstance(choices, list):
+        return urls
+
+    for choice in choices:
+        if not isinstance(choice, dict):
+            continue
+        message = choice.get("message")
+        if not isinstance(message, dict):
+            continue
+
+        # OpenRouter image generation format (preferred)
+        images = message.get("images")
+        if isinstance(images, list):
+            for item in images:
+                if not isinstance(item, dict):
+                    continue
+                image_url = item.get("image_url")
+                if isinstance(image_url, dict):
+                    url = image_url.get("url")
+                else:
+                    url = image_url
+                if isinstance(url, str) and url.startswith("data:"):
+                    urls.append(url)
+
+        # Fallback: content array may include image_url
+        content = message.get("content")
+        if isinstance(content, list):
+            for item in content:
+                if not isinstance(item, dict):
+                    continue
+                image_url = item.get("image_url")
+                if isinstance(image_url, dict):
+                    url = image_url.get("url")
+                else:
+                    url = image_url
+                if isinstance(url, str) and url.startswith("data:"):
+                    urls.append(url)
+
+    return urls
+
+
+def decode_data_url(data_url: str) -> tuple[str, bytes]:
+    if not data_url.startswith("data:") or "," not in data_url:
+        raise RuntimeError("Unsupported image payload format.")
+    header, encoded = data_url.split(",", 1)
+    if ";base64" not in header:
+        raise RuntimeError("Unsupported image payload format (non-base64).")
+    mime = header[5:].split(";")[0] or "image/png"
+    try:
+        raw = base64.b64decode(encoded)
+    except Exception as exc:
+        raise RuntimeError(f"Failed to decode image payload: {exc}") from exc
+    return mime, raw
+
+
+def save_first_image(data_url: str, output_path: Path) -> Path:
+    mime, raw = decode_data_url(data_url)
+    output = output_path
+    if not output.suffix:
+        guessed = mimetypes.guess_extension(mime) or ".png"
+        output = output.with_suffix(guessed)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_bytes(raw)
+    return output
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate images using Nano Banana Pro (Gemini 3 Pro Image)"
+        description="Generate/edit images using Bustly Model Gateway image routes"
     )
     parser.add_argument(
         "--prompt", "-p",
@@ -54,130 +344,59 @@ def main():
         "--resolution", "-r",
         choices=["1K", "2K", "4K"],
         default="1K",
-        help="Output resolution: 1K (default), 2K, or 4K"
+        help="Output preference hint: 1K (default), 2K, or 4K"
     )
     parser.add_argument(
-        "--api-key", "-k",
-        help="Gemini API key (overrides GEMINI_API_KEY env var)"
+        "--model", "-m",
+        default=DEFAULT_ROUTE_MODEL,
+        help=f"Gateway model route key (default: {DEFAULT_ROUTE_MODEL})"
+    )
+    parser.add_argument(
+        "--gateway-base-url",
+        default=DEFAULT_GATEWAY_BASE_URL,
+        help=f"Gateway base URL (default: {DEFAULT_GATEWAY_BASE_URL})"
+    )
+    parser.add_argument(
+        "--jwt",
+        help="Bustly user JWT (optional; defaults to bustlyOauth.json user.userAccessToken)"
+    )
+    parser.add_argument(
+        "--workspace-id",
+        help="Workspace UUID (optional; defaults to bustlyOauth.json user.workspaceId)"
     )
 
     args = parser.parse_args()
 
-    # Get API key
-    api_key = get_api_key(args.api_key)
-    if not api_key:
-        print("Error: No API key provided.", file=sys.stderr)
-        print("Please either:", file=sys.stderr)
-        print("  1. Provide --api-key argument", file=sys.stderr)
-        print("  2. Set GEMINI_API_KEY environment variable", file=sys.stderr)
-        sys.exit(1)
-
-    # Import here after checking API key to avoid slow import on error
-    from google import genai
-    from google.genai import types
-    from PIL import Image as PILImage
-
-    # Initialise client
-    client = genai.Client(api_key=api_key)
-
-    # Set up output path
-    output_path = Path(args.filename)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Load input images if provided (up to 14 supported by Nano Banana Pro)
-    input_images = []
-    output_resolution = args.resolution
-    if args.input_images:
-        if len(args.input_images) > 14:
-            print(f"Error: Too many input images ({len(args.input_images)}). Maximum is 14.", file=sys.stderr)
-            sys.exit(1)
-
-        max_input_dim = 0
-        for img_path in args.input_images:
-            try:
-                with PILImage.open(img_path) as img:
-                    copied = img.copy()
-                    width, height = copied.size
-                input_images.append(copied)
-                print(f"Loaded input image: {img_path}")
-
-                # Track largest dimension for auto-resolution
-                max_input_dim = max(max_input_dim, width, height)
-            except Exception as e:
-                print(f"Error loading input image '{img_path}': {e}", file=sys.stderr)
-                sys.exit(1)
-
-        # Auto-detect resolution from largest input if not explicitly set
-        if args.resolution == "1K" and max_input_dim > 0:  # Default value
-            if max_input_dim >= 3000:
-                output_resolution = "4K"
-            elif max_input_dim >= 1500:
-                output_resolution = "2K"
-            else:
-                output_resolution = "1K"
-            print(f"Auto-detected resolution: {output_resolution} (from max input dimension {max_input_dim})")
-
-    # Build contents (images first if editing, prompt only if generating)
-    if input_images:
-        contents = [*input_images, args.prompt]
-        img_count = len(input_images)
-        print(f"Processing {img_count} image{'s' if img_count > 1 else ''} with resolution {output_resolution}...")
-    else:
-        contents = args.prompt
-        print(f"Generating image with resolution {output_resolution}...")
-
     try:
-        response = client.models.generate_content(
-            model="gemini-3-pro-image-preview",
-            contents=contents,
-            config=types.GenerateContentConfig(
-                response_modalities=["TEXT", "IMAGE"],
-                image_config=types.ImageConfig(
-                    image_size=output_resolution
-                )
+        jwt, workspace_id = resolve_auth(args)
+        payload = build_payload(args)
+        response_payload = call_gateway(args.gateway_base_url, jwt, workspace_id, payload)
+        data_urls = extract_data_urls(response_payload)
+        if not data_urls:
+            model_text = ""
+            choices = response_payload.get("choices")
+            if isinstance(choices, list) and choices and isinstance(choices[0], dict):
+                message = choices[0].get("message")
+                if isinstance(message, dict):
+                    content = message.get("content")
+                    if isinstance(content, str):
+                        model_text = content
+            warning = response_payload.get("bustly_warning")
+            warning_text = ""
+            if isinstance(warning, dict):
+                warning_text = f" warning={warning.get('code') or warning.get('type')}"
+            raise RuntimeError(
+                "No image returned by gateway."
+                + (f" Model message: {model_text}" if model_text else "")
+                + warning_text
             )
-        )
 
-        # Process response and convert to PNG
-        image_saved = False
-        for part in response.parts:
-            if part.text is not None:
-                print(f"Model response: {part.text}")
-            elif part.inline_data is not None:
-                # Convert inline data to PIL Image and save as PNG
-                from io import BytesIO
-
-                # inline_data.data is already bytes, not base64
-                image_data = part.inline_data.data
-                if isinstance(image_data, str):
-                    # If it's a string, it might be base64
-                    import base64
-                    image_data = base64.b64decode(image_data)
-
-                image = PILImage.open(BytesIO(image_data))
-
-                # Ensure RGB mode for PNG (convert RGBA to RGB with white background if needed)
-                if image.mode == 'RGBA':
-                    rgb_image = PILImage.new('RGB', image.size, (255, 255, 255))
-                    rgb_image.paste(image, mask=image.split()[3])
-                    rgb_image.save(str(output_path), 'PNG')
-                elif image.mode == 'RGB':
-                    image.save(str(output_path), 'PNG')
-                else:
-                    image.convert('RGB').save(str(output_path), 'PNG')
-                image_saved = True
-
-        if image_saved:
-            full_path = output_path.resolve()
-            print(f"\nImage saved: {full_path}")
-            # OpenClaw parses MEDIA tokens and will attach the file on supported providers.
-            print(f"MEDIA: {full_path}")
-        else:
-            print("Error: No image was generated in the response.", file=sys.stderr)
-            sys.exit(1)
-
-    except Exception as e:
-        print(f"Error generating image: {e}", file=sys.stderr)
+        output_path = Path(args.filename).expanduser().resolve()
+        saved = save_first_image(data_urls[0], output_path)
+        print(f"Image saved: {saved}")
+        print(f"MEDIA: {saved}")
+    except Exception as exc:
+        print(f"Error generating image: {exc}", file=sys.stderr)
         sys.exit(1)
 
 
