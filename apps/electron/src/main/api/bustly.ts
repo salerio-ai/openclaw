@@ -61,9 +61,9 @@ function readBustlyOAuthState(): BustlyOAuthState | null {
 
 function getSupabaseAuthConfig() {
   const state = readBustlyOAuthState();
-  const supabaseUrl = state?.bustlySearchData?.SEARCH_DATA_SUPABASE_URL?.trim() ?? "";
-  const supabaseAnonKey = state?.bustlySearchData?.SEARCH_DATA_SUPABASE_ANON_KEY?.trim() ?? "";
-  const accessToken = state?.bustlySearchData?.SEARCH_DATA_SUPABASE_ACCESS_TOKEN?.trim() ?? "";
+  const supabaseUrl = state?.supabase?.url?.trim() ?? "";
+  const supabaseAnonKey = state?.supabase?.anonKey?.trim() ?? "";
+  const accessToken = state?.user?.userAccessToken?.trim() ?? "";
   return { supabaseUrl, supabaseAnonKey, accessToken };
 }
 

@@ -227,6 +227,15 @@ async function handleBustlyOAuthCallbackHttpRequest(
     }
 
     const searchDataConfig = apiResponse.data.extras?.["bustly-search-data"];
+    const filteredSkills = (apiResponse.data.skills ?? []).filter((skill) =>
+      ![
+        "search-data",
+        "bustly-search-data",
+        "bustly_search_data",
+        "shopify-api",
+        "shopify_api",
+      ].includes(skill),
+    );
     BustlyOAuth.completeBustlyLogin({
       user: {
         userId: apiResponse.data.userId,
@@ -234,16 +243,12 @@ async function handleBustlyOAuthCallbackHttpRequest(
         userEmail: apiResponse.data.userEmail,
         userAccessToken: supabaseAccessToken,
         workspaceId: apiResponse.data.workspaceId,
-        skills: searchDataConfig ? ["search-data"] : (apiResponse.data.skills ?? []),
+        skills: filteredSkills,
       },
-      bustlySearchData: searchDataConfig
+      supabase: searchDataConfig
         ? {
-            SEARCH_DATA_SUPABASE_URL: searchDataConfig.search_DATA_SUPABASE_URL ?? "",
-            SEARCH_DATA_SUPABASE_ANON_KEY: searchDataConfig.search_DATA_SUPABASE_ANON_KEY ?? "",
-            SEARCH_DATA_SUPABASE_ACCESS_TOKEN: supabaseAccessToken,
-            SEARCH_DATA_TOKEN: searchDataConfig.search_DATA_TOKEN ?? apiResponse.data.accessToken,
-            SEARCH_DATA_WORKSPACE_ID:
-              searchDataConfig.search_DATA_WORKSPACE_ID ?? apiResponse.data.workspaceId,
+            url: searchDataConfig.search_DATA_SUPABASE_URL ?? "",
+            anonKey: searchDataConfig.search_DATA_SUPABASE_ANON_KEY ?? "",
           }
         : undefined,
     });

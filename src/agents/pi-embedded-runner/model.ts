@@ -1,6 +1,7 @@
 import type { Api, Model } from "@mariozechner/pi-ai";
 import type { OpenClawConfig } from "../../config/config.js";
 import type { ModelDefinitionConfig } from "../../config/types.js";
+import { readBustlyOAuthState } from "../../bustly-oauth.js";
 import { resolveOpenClawAgentDir } from "../agent-paths.js";
 import { DEFAULT_CONTEXT_TOKENS } from "../defaults.js";
 import { buildModelAliasLines } from "../model-alias-lines.js";
@@ -27,6 +28,41 @@ type InlineProviderConfig = {
 
 export { buildModelAliasLines };
 
+const BUSTLY_PROVIDER_ID = "bustly";
+const BUSTLY_WORKSPACE_HEADER = "X-Workspace-Id";
+
+function applyBustlyWorkspaceHeader(
+  providerId: string,
+  headers?: Record<string, string>,
+): Record<string, string> | undefined {
+  if (normalizeProviderId(providerId) !== BUSTLY_PROVIDER_ID) {
+    if (!headers || Object.keys(headers).length === 0) {
+      return undefined;
+    }
+    return headers;
+  }
+  const workspaceId = readBustlyOAuthState()?.user?.workspaceId?.trim() ?? "";
+  const nextHeaders = { ...(headers ?? {}) };
+  if (workspaceId) {
+    nextHeaders[BUSTLY_WORKSPACE_HEADER] = workspaceId;
+  } else {
+    delete nextHeaders[BUSTLY_WORKSPACE_HEADER];
+  }
+  return Object.keys(nextHeaders).length > 0 ? nextHeaders : undefined;
+}
+
+function withRuntimeProviderHeaders(providerId: string, model: Model<Api>): Model<Api> {
+  const headers = applyBustlyWorkspaceHeader(providerId, model.headers as Record<string, string> | undefined);
+  if (!headers) {
+    const { headers: _headers, ...rest } = model as Model<Api> & { headers?: unknown };
+    return rest as Model<Api>;
+  }
+  return {
+    ...model,
+    headers,
+  };
+}
+
 export function buildInlineProviderModels(
   providers: Record<string, InlineProviderConfig>,
 ): InlineModelEntry[] {
@@ -40,9 +76,10 @@ export function buildInlineProviderModels(
         ...entry?.headers,
         ...model.headers,
       };
+      const runtimeHeaders = applyBustlyWorkspaceHeader(trimmed, mergedHeaders);
       return {
         ...model,
-        ...(Object.keys(mergedHeaders).length > 0 ? { headers: mergedHeaders } : {}),
+        ...(runtimeHeaders ? { headers: runtimeHeaders } : {}),
         provider: trimmed,
         baseUrl: entry?.baseUrl,
         api: model.api ?? entry?.api,
@@ -77,7 +114,7 @@ export function resolveModel(
     if (inlineMatch) {
       const normalized = normalizeModelCompat(inlineMatch as Model<Api>);
       return {
-        model: normalized,
+        model: withRuntimeProviderHeaders(provider, normalized),
         authStorage,
         modelRegistry,
       };
@@ -114,14 +151,18 @@ export function resolveModel(
         api: providerCfg?.api ?? "openai-responses",
         provider,
         baseUrl: providerCfg?.baseUrl,
-        headers: providerCfg?.headers,
+        headers: applyBustlyWorkspaceHeader(provider, providerCfg?.headers),
         reasoning: false,
         input: ["text"],
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
         contextWindow: providerCfg?.models?.[0]?.contextWindow ?? DEFAULT_CONTEXT_TOKENS,
         maxTokens: providerCfg?.models?.[0]?.maxTokens ?? DEFAULT_CONTEXT_TOKENS,
       } as Model<Api>);
-      return { model: fallbackModel, authStorage, modelRegistry };
+      return {
+        model: withRuntimeProviderHeaders(provider, fallbackModel),
+        authStorage,
+        modelRegistry,
+      };
     }
     return {
       error: buildUnknownModelError(provider, modelId),
@@ -129,7 +170,11 @@ export function resolveModel(
       modelRegistry,
     };
   }
-  return { model: normalizeModelCompat(model), authStorage, modelRegistry };
+  return {
+    model: withRuntimeProviderHeaders(provider, normalizeModelCompat(model)),
+    authStorage,
+    modelRegistry,
+  };
 }
 
 /**

@@ -1859,7 +1859,28 @@ export default function ChatPage() {
       notifySidebarTasksRefresh();
       void loadSessionUsage(clientRef.current, currentSessionKey).catch(() => {});
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.toLowerCase().includes("unknown method: chat.retry")) {
+        const fallbackRunId = nextId("run");
+        retryPayloadsRef.current.set(fallbackRunId, {
+          draft: retryPayload.draft,
+          attachments: retryPayload.attachments.map((attachment) => ({ ...attachment })),
+          contextPaths: retryPayload.contextPaths.map((entry) => ({ ...entry })),
+        });
+        settledRunIdsRef.current.delete(fallbackRunId);
+        setActiveRunId(fallbackRunId);
+        await clientRef.current.request("chat.send", {
+          sessionKey: currentSessionKey,
+          message: outgoingMessage,
+          deliver: false,
+          idempotencyKey: fallbackRunId,
+          attachments: apiAttachments.length > 0 ? apiAttachments : undefined,
+        });
+        notifySidebarTasksRefresh();
+        void loadSessionUsage(clientRef.current, currentSessionKey).catch(() => {});
+        return;
+      }
+      setError(message);
       setActiveRunId(null);
       setCompactingRunId(null);
     } finally {

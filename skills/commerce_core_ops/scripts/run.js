@@ -21,43 +21,33 @@ const PLATFORM_ALIASES = {
   "adobe-commerce": "magento",
 };
 
-const ENTITY_TABLES = {
-  shopify: {
-    shop_info: "semantic.dm_shop_info_shopify",
-    products: "semantic.dm_products_shopify",
-    variants: "semantic.dm_variants_shopify",
-    inventory: "semantic.dm_variants_shopify",
-    customers: "semantic.dm_customers_shopify",
-    orders: "semantic.dm_orders_shopify",
-    order_items: "semantic.dm_order_items_shopify",
-  },
-  bigcommerce: {
-    shop_info: "semantic.dm_shop_info_bigcommerce",
-    products: "semantic.dm_products_bigcommerce",
-    variants: "semantic.dm_variants_bigcommerce",
-    inventory: "semantic.dm_variants_bigcommerce",
-    customers: "semantic.dm_customers_bigcommerce",
-    orders: "semantic.dm_orders_bigcommerce",
-    order_items: "semantic.dm_order_items_bigcommerce",
-  },
-  woocommerce: {
-    shop_info: "semantic.dm_shop_info_woocommerce",
-    products: "semantic.dm_products_woocommerce",
-    variants: "semantic.dm_variants_woocommerce",
-    inventory: "semantic.dm_variants_woocommerce",
-    customers: "semantic.dm_customers_woocommerce",
-    orders: "semantic.dm_orders_woocommerce",
-    order_items: "semantic.dm_order_items_woocommerce",
-  },
-  magento: {
-    shop_info: "semantic.dm_shop_info_magento",
-    products: "semantic.dm_products_magento",
-    variants: "semantic.dm_variants_magento",
-    inventory: "semantic.dm_variants_magento",
-    customers: "semantic.dm_customers_magento",
-    orders: "semantic.dm_orders_magento",
-    order_items: "semantic.dm_order_items_magento",
-  },
+const READ_ENTITIES = [
+  "products",
+  "orders",
+  "customers",
+  "inventory",
+  "variants",
+  "shop_info",
+  "order_items",
+];
+
+const SUPPORTED_PLATFORMS = ["shopify", "bigcommerce", "woocommerce", "magento"];
+
+const PLATFORM_MAPPING_TABLES = {
+  shopify: "workspace_shopify_mappings",
+  bigcommerce: "workspace_bigcommerce_mappings",
+  woocommerce: "workspace_woocommerce_mappings",
+  magento: "workspace_magento_mappings",
+};
+
+const COMMAND_ALIASES = {
+  read: "read:entity",
+  get: "read:entity",
+  write: "write:product",
+  put: "write:product",
+  auth: "auth:check",
+  providers: "platforms",
+  connections: "connect:sources",
 };
 
 function sleep(ms) {
@@ -75,7 +65,7 @@ function resolveUserPath(input, homeDir) {
 
 function resolveStateDir() {
   const homeDir = homedir();
-  const override = process.env.OPENCLAW_STATE_DIR?.trim();
+  const override = process.env.BUSTLY_STATE_DIR?.trim() || process.env.OPENCLAW_STATE_DIR?.trim();
   if (override) return resolveUserPath(override, homeDir);
   return resolve(homeDir, ".bustly");
 }
@@ -85,19 +75,23 @@ function loadBustlyOauthConfig() {
     const configPath = resolve(resolveStateDir(), "bustlyOauth.json");
     if (!existsSync(configPath)) return null;
     const raw = JSON.parse(readFileSync(configPath, "utf-8"));
-    const search = raw?.bustlySearchData || {};
     const user = raw?.user || {};
+    const supabase = raw?.supabase || {};
+    const legacy = raw?.bustlySearchData || {};
+
     return {
-      SEARCH_DATA_SUPABASE_URL: search.SEARCH_DATA_SUPABASE_URL || "",
-      SEARCH_DATA_SUPABASE_ANON_KEY: search.SEARCH_DATA_SUPABASE_ANON_KEY || "",
-      SEARCH_DATA_SUPABASE_ACCESS_TOKEN:
+      // Primary: new bustlyOauth.json shape.
+      // Fallback: legacy bustlySearchData for backward compatibility.
+      BUSTLY_SUPABASE_URL: supabase.url || legacy.SEARCH_DATA_SUPABASE_URL || "",
+      BUSTLY_SUPABASE_ANON_KEY: supabase.anonKey || legacy.SEARCH_DATA_SUPABASE_ANON_KEY || "",
+      BUSTLY_SUPABASE_ACCESS_TOKEN:
         user.userAccessToken ||
-        search.SEARCH_DATA_SUPABASE_ACCESS_TOKEN ||
-        search.SEARCH_DATA_TOKEN ||
+        legacy.SEARCH_DATA_SUPABASE_ACCESS_TOKEN ||
+        legacy.SEARCH_DATA_TOKEN ||
         "",
-      SEARCH_DATA_WORKSPACE_ID: user.workspaceId || search.SEARCH_DATA_WORKSPACE_ID || "",
-      SEARCH_DATA_USER_ID: user.userId || "",
-      SEARCH_DATA_USER_EMAIL: user.userEmail || "",
+      BUSTLY_WORKSPACE_ID: user.workspaceId || legacy.SEARCH_DATA_WORKSPACE_ID || "",
+      BUSTLY_USER_ID: user.userId || "",
+      BUSTLY_USER_EMAIL: user.userEmail || "",
     };
   } catch {
     return null;
@@ -108,43 +102,53 @@ function loadConfig() {
   const oauth = loadBustlyOauthConfig();
   const config = {
     supabaseUrl:
-      oauth?.SEARCH_DATA_SUPABASE_URL ||
+      oauth?.BUSTLY_SUPABASE_URL ||
+      process.env.BUSTLY_SUPABASE_URL ||
       process.env.SEARCH_DATA_SUPABASE_URL ||
       process.env.SUPABASE_URL ||
       "",
     supabaseAnonKey:
-      oauth?.SEARCH_DATA_SUPABASE_ANON_KEY ||
+      oauth?.BUSTLY_SUPABASE_ANON_KEY ||
+      process.env.BUSTLY_SUPABASE_ANON_KEY ||
       process.env.SEARCH_DATA_SUPABASE_ANON_KEY ||
       process.env.SUPABASE_ANON_KEY ||
       "",
     supabaseToken:
-      oauth?.SEARCH_DATA_SUPABASE_ACCESS_TOKEN ||
+      oauth?.BUSTLY_SUPABASE_ACCESS_TOKEN ||
+      process.env.BUSTLY_SUPABASE_ACCESS_TOKEN ||
+      process.env.BUSTLY_TOKEN ||
       process.env.SEARCH_DATA_SUPABASE_ACCESS_TOKEN ||
       process.env.SEARCH_DATA_TOKEN ||
       process.env.SUPABASE_TOKEN ||
       "",
     workspaceId:
-      oauth?.SEARCH_DATA_WORKSPACE_ID ||
+      oauth?.BUSTLY_WORKSPACE_ID ||
+      process.env.BUSTLY_WORKSPACE_ID ||
       process.env.SEARCH_DATA_WORKSPACE_ID ||
       process.env.WORKSPACE_ID ||
       "",
     userId:
-      oauth?.SEARCH_DATA_USER_ID || process.env.SEARCH_DATA_USER_ID || process.env.USER_ID || "",
+      oauth?.BUSTLY_USER_ID ||
+      process.env.BUSTLY_USER_ID ||
+      process.env.SEARCH_DATA_USER_ID ||
+      process.env.USER_ID ||
+      "",
     userEmail:
-      oauth?.SEARCH_DATA_USER_EMAIL ||
+      oauth?.BUSTLY_USER_EMAIL ||
+      process.env.BUSTLY_USER_EMAIL ||
       process.env.SEARCH_DATA_USER_EMAIL ||
       process.env.USER_EMAIL ||
       "",
   };
 
   const missing = [];
-  if (!config.supabaseUrl) missing.push("SEARCH_DATA_SUPABASE_URL");
-  if (!config.supabaseAnonKey) missing.push("SEARCH_DATA_SUPABASE_ANON_KEY");
-  if (!config.supabaseToken) missing.push("SEARCH_DATA_SUPABASE_ACCESS_TOKEN");
+  if (!config.supabaseUrl) missing.push("BUSTLY_SUPABASE_URL");
+  if (!config.supabaseAnonKey) missing.push("BUSTLY_SUPABASE_ANON_KEY");
+  if (!config.supabaseToken) missing.push("BUSTLY_SUPABASE_ACCESS_TOKEN");
   if (missing.length) {
     throw new Error(
       `Missing required Supabase configuration: ${missing.join(", ")}. ` +
-        "Please login via Bustly OAuth, or set env vars manually.",
+        "Use Bustly OAuth state (~/.bustly/bustlyOauth.json) or set env vars manually.",
     );
   }
 
@@ -249,18 +253,6 @@ function parseInteger(value, fallback) {
   return parsed;
 }
 
-function escapeSqlLiteral(value) {
-  return String(value).replace(/'/g, "''");
-}
-
-function ensureIdentifier(value, label) {
-  const normalized = String(value || "").trim();
-  if (!/^[A-Za-z_][A-Za-z0-9_\.]*$/.test(normalized)) {
-    throw new Error(`${label} contains unsupported characters: ${value}`);
-  }
-  return normalized;
-}
-
 function decodeJwtPayload(token) {
   if (!token || token.split(".").length < 2) return null;
   const payload = token.split(".")[1];
@@ -332,27 +324,6 @@ async function requestWithRetry(url, init = {}, options = {}) {
   }
 
   throw lastError || new Error("Request failed");
-}
-
-async function rpc(config, functionName, params = {}) {
-  const url = buildUrl(config.supabaseUrl, `/rest/v1/rpc/${functionName}`);
-  const response = await requestWithRetry(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: config.supabaseAnonKey,
-      Authorization: `Bearer ${config.supabaseToken}`,
-      Prefer: "return=representation",
-    },
-    body: JSON.stringify(params),
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Supabase RPC error (${response.status}): ${text}`);
-  }
-
-  return response.json();
 }
 
 async function restSelect(config, table, options = {}) {
@@ -501,7 +472,7 @@ async function ensureAuthContext(config, flags = {}, options = {}) {
     String(flags["workspace-id"] || flags.workspace_id || config.workspaceId || "").trim() || "";
   if (!workspaceId) {
     throw new Error(
-      "workspace_id is required. Set SEARCH_DATA_WORKSPACE_ID or pass --workspace-id.",
+      "workspace_id is required. Set BUSTLY_WORKSPACE_ID/SEARCH_DATA_WORKSPACE_ID or pass --workspace-id.",
     );
   }
 
@@ -673,21 +644,21 @@ function printHelp() {
   console.log(`Usage:
   node skills/commerce_core_ops/scripts/run.js <command> [args] [flags]
 
-Read Commands:
-  platforms
-  connect:sources
-  read:tables [--platform shopify|bigcommerce|woocommerce|magento|google_ads]
-  read:schema <table_name>
-  read:query "<sql>" [--format json|table|csv]
-  read:entity --platform <platform> --entity <products|orders|customers|inventory|variants|shop_info|order_items> [--limit 50] [--since 2025-01-01]
+Core Commands (agent-friendly aliases):
+  providers                                      # alias: platforms
+  connections                                    # alias: connect:sources
+  auth                                           # alias: auth:check
+  read --platform <platform> --entity <entity>  # alias: read:entity
+  write --platform <platform> --op <op> --payload '{...}'  # alias: write:product
 
-Auth & Security:
-  auth:check [--workspace-id <uuid>] [--skip-membership-check] [--skip-workspace-status-check] [--skip-subscription-check]
+Read Commands:
+  read:entity --platform <platform> --entity <${READ_ENTITIES.join("|")}> [--limit 50] [--since 2025-01-01] [--cursor <cursor>] [--filter '{"k":"v"}']
+  read:entity <platform> <entity> [--limit 50] [--since 2025-01-01]
+  all platforms route to /functions/v1/commerce-core-ops (DIRECT_READ)
 
 Write Commands:
-  write:shopify "<graphql>" [--vars '{"k":"v"}'] [--vars-file ./vars.json] [--version YYYY-MM]
-  write:shopify --file ./query.graphql [--vars-file ./vars.json]
   write:product --platform <platform> --op <operation> --payload '{...}' [--resource product] [--function commerce-core-ops]
+  all platforms route to /functions/v1/commerce-core-ops (DIRECT_WRITE)
 
 Generic Edge Invocation:
   edge:invoke --function <function-name-or-url> --payload '{...}'
@@ -699,224 +670,216 @@ Common Flags:
   --skip-membership-check
   --skip-workspace-status-check
   --skip-subscription-check
+
+Preferred Env:
+  BUSTLY_SUPABASE_URL
+  BUSTLY_SUPABASE_ANON_KEY
+  BUSTLY_SUPABASE_ACCESS_TOKEN
+  BUSTLY_WORKSPACE_ID
+  BUSTLY_USER_ID
 `);
 }
 
-function validateReadSql(sql) {
-  const normalized = String(sql || "")
+function normalizeCommand(input) {
+  const normalized = String(input || "")
     .trim()
-    .toUpperCase();
-  if (!normalized.startsWith("SELECT") && !normalized.startsWith("WITH")) {
-    throw new Error("Only SELECT queries (including WITH CTE) are allowed");
-  }
-}
-
-async function detectPlatformsFromTables(config) {
-  const tables = await rpc(config, "get_agent_available_tables");
-  const names = asArray(tables)
-    .map((table) => String(table.table_name || ""))
-    .join("\n")
     .toLowerCase();
-  const has = (value) => names.includes(value);
-
-  const detected = [];
-  if (has("_shopify")) detected.push("shopify");
-  if (has("_bigcommerce")) detected.push("bigcommerce");
-  if (has("_woocommerce")) detected.push("woocommerce");
-  if (has("_magento")) detected.push("magento");
-  if (has("_google") || has("ads_")) detected.push("google_ads");
-
-  return { detected, tables };
+  return COMMAND_ALIASES[normalized] || normalized;
 }
 
-async function tryGetConnectedSources(config) {
+function parseFilterObject(flags) {
+  const inline = flags.filter;
+  if (typeof inline === "string" && inline.trim()) {
+    const raw = inline.trim();
+    if (raw.startsWith("{")) {
+      const parsed = parseJsonSafely(raw, "--filter");
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("--filter JSON must be an object");
+      }
+      return { ...parsed };
+    }
+    return { search: raw };
+  }
+
+  const file = flags["filter-file"];
+  if (typeof file === "string" && file.trim()) {
+    if (!existsSync(file)) {
+      throw new Error(`Filter file not found: ${file}`);
+    }
+    const parsed = parseJsonSafely(readFileSync(file, "utf-8"), "--filter-file");
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("--filter-file JSON must be an object");
+    }
+    return { ...parsed };
+  }
+
+  return {};
+}
+
+function parseReadTarget(positional, flags) {
+  const platform = normalizePlatform(flags.platform || flags.provider || positional[1]);
+  if (!platform) {
+    throw new Error("--platform is required: shopify | bigcommerce | woocommerce | magento");
+  }
+
+  const entity = normalizeEntity(flags.entity || flags.resource || positional[2]);
+  if (!entity) {
+    throw new Error(
+      `--entity is required: ${READ_ENTITIES.join(" | ")}`,
+    );
+  }
+
+  const limit = Math.max(1, Math.min(250, parseInteger(flags.limit, 50)));
+  const since = String(flags.since || "").trim() || null;
+  const cursor = String(flags.cursor || "").trim() || null;
+  const fields = String(flags.fields || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const filters = parseFilterObject(flags);
+
+  if (flags["order-id"]) filters.order_id = String(flags["order-id"]);
+  if (flags["product-id"]) filters.product_id = String(flags["product-id"]);
+  if (flags["variant-id"]) filters.variant_id = String(flags["variant-id"]);
+  if (flags.id) filters.id = String(flags.id);
+  if (flags.sku) filters.sku = String(flags.sku);
+
+  return { platform, entity, limit, since, cursor, fields, filters };
+}
+
+async function safeWorkspaceRows(config, table, workspaceId) {
   try {
-    const rows = await rpc(config, "get_connect_source");
-    return asArray(rows)
-      .map((row) => String(row.connect_source || "").toLowerCase())
-      .filter(Boolean);
+    return await restSelect(config, table, {
+      select: "*",
+      filters: {
+        workspace_id: `eq.${workspaceId}`,
+      },
+      order: "updated_at.desc",
+      limit: 20,
+    });
   } catch {
     return [];
   }
 }
 
-async function handlePlatforms(config) {
-  const { detected } = await detectPlatformsFromTables(config);
-  const connected = await tryGetConnectedSources(config);
-  const all = ["shopify", "bigcommerce", "woocommerce", "magento", "google_ads"];
+async function getPlatformConnectionStatus(config, workspaceId, platform) {
+  const table = PLATFORM_MAPPING_TABLES[platform];
+  const rows = asArray(await safeWorkspaceRows(config, table, workspaceId));
+  const active = rows.find((row) => isActiveStatus(row.status)) || null;
+  const latest = rows[0] || null;
 
-  const platforms = all
-    .filter((platform) => detected.includes(platform) || connected.includes(platform))
-    .map((platform) => ({
+  if (platform === "shopify") {
+    const hasToken = Boolean(active?.access_token || active?.shopify_shop_id || active?.shop_id);
+    return {
       platform,
-      detected_from_tables: detected.includes(platform),
-      connected_source: connected.includes(platform),
-    }));
-
-  printData({
-    workspace_id: config.workspaceId || null,
-    total_platforms: platforms.length,
-    platforms,
-  });
-}
-
-async function handleConnectSources(config) {
-  const connected = await tryGetConnectedSources(config);
-  printData({
-    workspace_id: config.workspaceId || null,
-    connected_sources: connected,
-  });
-}
-
-async function handleReadTables(config, flags) {
-  const platform = String(flags.platform || "")
-    .trim()
-    .toLowerCase();
-  const tables = await rpc(config, "get_agent_available_tables");
-  let rows = asArray(tables);
-
-  if (platform) {
-    const normalized = normalizePlatform(platform) || platform;
-    rows = rows.filter((row) =>
-      String(row.table_name || "")
-        .toLowerCase()
-        .includes(`_${normalized}`),
-    );
-  }
-
-  printData(
-    {
-      total: rows.length,
-      tables: rows,
-    },
-    flags.format || "json",
-  );
-}
-
-async function handleReadSchema(config, positional, flags) {
-  const tableName = positional[1];
-  if (!tableName) {
-    throw new Error("Usage: read:schema <table_name>");
-  }
-  const schema = await rpc(config, "get_agent_table_schema", { p_table_name: tableName });
-  printData(
-    { table_name: tableName, total_columns: asArray(schema).length, schema },
-    flags.format || "json",
-  );
-}
-
-async function handleReadQuery(config, positional, flags) {
-  const query = positional[1];
-  if (!query) {
-    throw new Error('Usage: read:query "<sql>" [--format json|table|csv]');
-  }
-  if (!config.workspaceId) {
-    throw new Error("SEARCH_DATA_WORKSPACE_ID is required for read:query");
-  }
-
-  validateReadSql(query);
-  const data = await rpc(config, "run_select_ws", {
-    p_query: query,
-    p_workspace_id: config.workspaceId,
-  });
-  printData(data, flags.format || "json");
-}
-
-async function resolveEntityTable(platform, entity) {
-  const platformMap = ENTITY_TABLES[platform];
-  if (!platformMap) return "";
-  return platformMap[entity] || "";
-}
-
-function chooseDateColumn(columns) {
-  const candidates = [
-    "created_at",
-    "updated_at",
-    "order_date",
-    "date_created",
-    "occurred_at",
-    "date",
-  ];
-  const set = new Set(columns.map((column) => String(column).toLowerCase()));
-  return candidates.find((candidate) => set.has(candidate)) || "";
-}
-
-async function handleReadEntity(config, flags) {
-  const platform = normalizePlatform(flags.platform);
-  if (!platform) {
-    throw new Error("--platform is required: shopify | bigcommerce | woocommerce | magento");
-  }
-
-  const entity = normalizeEntity(flags.entity);
-  if (!entity) {
-    throw new Error(
-      "--entity is required: products | orders | customers | inventory | variants | shop_info | order_items",
-    );
-  }
-
-  if (!config.workspaceId) {
-    throw new Error("SEARCH_DATA_WORKSPACE_ID is required for read:entity");
-  }
-
-  const table = await resolveEntityTable(platform, entity);
-  if (!table) {
-    throw new Error(`Unsupported entity '${entity}' for platform '${platform}'`);
-  }
-
-  const schema = asArray(await rpc(config, "get_agent_table_schema", { p_table_name: table }));
-  const columns = schema.map((column) => String(column.column_name || "")).filter(Boolean);
-  if (columns.length === 0) {
-    throw new Error(`Table schema not found: ${table}`);
-  }
-
-  const requestedColumns = String(flags.columns || "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
-
-  const selectedColumns =
-    requestedColumns.length > 0
-      ? requestedColumns.map((column) => {
-          if (!columns.includes(column)) {
-            throw new Error(`Unknown column '${column}' for table '${table}'`);
-          }
-          return ensureIdentifier(column, "column");
-        })
-      : ["*"];
-
-  const limit = Math.max(1, Math.min(500, parseInteger(flags.limit, 50)));
-  const since = String(flags.since || "").trim();
-  const dateColumn = chooseDateColumn(columns);
-
-  const where = [];
-  if (since && dateColumn) {
-    where.push(`${dateColumn} >= '${escapeSqlLiteral(since)}'`);
-  }
-
-  let sql = `SELECT ${selectedColumns.join(", ")} FROM ${table}`;
-  if (where.length > 0) {
-    sql += ` WHERE ${where.join(" AND ")}`;
-  }
-  if (dateColumn) {
-    sql += ` ORDER BY ${dateColumn} DESC`;
-  }
-  sql += ` LIMIT ${limit}`;
-
-  const rows = await rpc(config, "run_select_ws", {
-    p_query: sql,
-    p_workspace_id: config.workspaceId,
-  });
-
-  printData(
-    {
-      platform,
-      entity,
       table,
-      sql,
-      count: asArray(rows).length,
-      rows,
+      connected: Boolean(active) && hasToken,
+      mapping_status: active?.status ?? latest?.status ?? null,
+      mapping_id: active?.id ?? latest?.id ?? null,
+      details: {
+        shop_domain: active?.shop_domain || active?.myshopify_domain || null,
+      },
+    };
+  }
+
+  const integrationRows = asArray(await safeWorkspaceRows(config, "workspace_integrations", workspaceId));
+  const activeIntegration = integrationRows.find((row) => {
+    if (!isActiveStatus(row.status)) return false;
+    const value = String(row.platform || "")
+      .trim()
+      .toLowerCase();
+    if (platform === "magento") return value === "magento" || value === "adobe-commerce";
+    return value === platform;
+  }) || null;
+
+  const connectionFromMapping = String(active?.nango_connection_id || "").trim();
+  const connectionFromIntegration = String(activeIntegration?.nango_connection_id || "").trim();
+  const nangoConnectionId = connectionFromMapping || connectionFromIntegration || null;
+
+  return {
+    platform,
+    table,
+    connected: (Boolean(active) || Boolean(activeIntegration)) && Boolean(nangoConnectionId),
+    mapping_status: active?.status ?? latest?.status ?? null,
+    mapping_id: active?.id ?? latest?.id ?? null,
+    integration_id: active?.integration_id ?? activeIntegration?.id ?? null,
+    nango_connection_id: nangoConnectionId,
+  };
+}
+
+async function listConnectionStatuses(config, auth) {
+  return Promise.all(
+    SUPPORTED_PLATFORMS.map((platform) =>
+      getPlatformConnectionStatus(config, auth.workspaceId, platform)),
+  );
+}
+
+async function handlePlatforms(config, flags) {
+  const auth = await ensureAuthContext(config, flags, { requireMembership: true });
+  const statuses = await listConnectionStatuses(config, auth);
+
+  printData({
+    workspace_id: auth.workspaceId,
+    total_platforms: SUPPORTED_PLATFORMS.length,
+    connected_platforms: statuses.filter((row) => row.connected).map((row) => row.platform),
+    platforms: statuses,
+  });
+}
+
+async function handleConnectSources(config, flags) {
+  const auth = await ensureAuthContext(config, flags, { requireMembership: true });
+  const statuses = await listConnectionStatuses(config, auth);
+
+  printData({
+    workspace_id: auth.workspaceId,
+    connected_sources: statuses.filter((row) => row.connected).map((row) => row.platform),
+    statuses,
+  });
+}
+
+function buildCoreReadPayload(auth, platform, entity, options, flags) {
+  return {
+    action: "DIRECT_READ",
+    platform,
+    entity,
+    workspace_id: auth.workspaceId,
+    workspaceId: auth.workspaceId,
+    user_id: auth.userId,
+    userId: auth.userId,
+    limit: options.limit,
+    ...(options.since ? { since: options.since } : {}),
+    ...(options.cursor ? { cursor: options.cursor } : {}),
+    ...(options.fields.length > 0 ? { fields: options.fields } : {}),
+    ...(Object.keys(options.filters).length > 0 ? { filters: options.filters } : {}),
+    ...(flags["request-id"] ? { request_id: String(flags["request-id"]) } : {}),
+  };
+}
+
+async function handleReadEntity(config, positional, flags) {
+  const auth = await ensureAuthContext(config, flags, { requireMembership: true });
+  const options = parseReadTarget(positional, flags);
+
+  const functionName = String(flags.function || DEFAULT_CORE_OPS_FUNCTION);
+  const body = buildCoreReadPayload(auth, options.platform, options.entity, options, flags);
+  const result = await callEdgeFunction(config, functionName, body, {
+    dryRun: flags["dry-run"] === true,
+  });
+
+  printData(
+    {
+      platform: options.platform,
+      entity: options.entity,
+      via: functionName,
+      result,
     },
     flags.format || "json",
+  );
+}
+
+async function handleDeprecatedReadCommand(command) {
+  throw new Error(
+    `${command} has been removed from commerce_core_ops. ` +
+      "Use direct platform reads with: read --platform <platform> --entity <entity>.",
   );
 }
 
@@ -937,163 +900,12 @@ async function handleAuthCheck(config, flags) {
   });
 }
 
-function parseGraphqlInput(positional, flags) {
-  if (flags.file) {
-    const filePath = String(flags.file);
-    if (!existsSync(filePath)) {
-      throw new Error(`GraphQL file not found: ${filePath}`);
-    }
-    return readFileSync(filePath, "utf-8");
-  }
-
-  const inline = positional[1];
-  if (!inline || !String(inline).trim()) {
-    throw new Error("Missing GraphQL query. Provide inline query or use --file <path>.");
-  }
-  return String(inline);
-}
-
-function parseGraphqlVariables(flags) {
-  if (typeof flags.vars === "string" && flags.vars.trim()) {
-    return parseJsonSafely(flags.vars, "--vars");
-  }
-  if (typeof flags["vars-file"] === "string" && flags["vars-file"].trim()) {
-    const filePath = String(flags["vars-file"]);
-    if (!existsSync(filePath)) {
-      throw new Error(`Variables file not found: ${filePath}`);
-    }
-    return parseJsonSafely(readFileSync(filePath, "utf-8"), "--vars-file");
-  }
-  return undefined;
-}
-
 async function handleWriteShopify(config, positional, flags) {
-  const auth = await ensureAuthContext(config, flags, { requireMembership: true });
-  const query = parseGraphqlInput(positional, flags);
-  const variables = parseGraphqlVariables(flags);
-  const body = {
-    workspace_id: auth.workspaceId,
-    query,
-    ...(variables ? { variables } : {}),
-    ...(flags.version ? { shopify_api_version: String(flags.version) } : {}),
-  };
-
-  const functionName = String(flags.function || "shopify-api");
-  const result = await callEdgeFunction(config, functionName, body, {
-    dryRun: flags["dry-run"] === true,
-  });
-
-  printData({
-    platform: "shopify",
-    function: functionName,
-    result,
-  });
-}
-
-function requireField(obj, key, message) {
-  if (obj[key] === undefined || obj[key] === null || obj[key] === "") {
-    throw new Error(message || `Missing required field: ${key}`);
-  }
-}
-
-function buildShopifyProductMutation(op, payload) {
-  const normalizedOp = String(op || "").toLowerCase();
-
-  if (normalizedOp === "create") {
-    const input = payload.input || payload;
-    requireField(
-      input,
-      "title",
-      "Shopify product create requires payload.title or payload.input.title",
-    );
-    return {
-      query:
-        "mutation ProductCreate($input: ProductInput!, $media: [CreateMediaInput!]) { productCreate(input: $input, media: $media) { product { id title handle status } userErrors { field message } } }",
-      variables: {
-        input,
-        ...(payload.media ? { media: payload.media } : {}),
-      },
-    };
-  }
-
-  if (normalizedOp === "update") {
-    const input = payload.input || payload;
-    requireField(input, "id", "Shopify product update requires payload.id or payload.input.id");
-    return {
-      query:
-        "mutation ProductUpdate($input: ProductInput!) { productUpdate(input: $input) { product { id title handle status } userErrors { field message } } }",
-      variables: { input },
-    };
-  }
-
-  if (normalizedOp === "delete") {
-    const input = payload.input || { id: payload.id };
-    requireField(input, "id", "Shopify product delete requires payload.id or payload.input.id");
-    return {
-      query:
-        "mutation ProductDelete($input: ProductDeleteInput!) { productDelete(input: $input) { deletedProductId userErrors { field message } } }",
-      variables: { input },
-    };
-  }
-
-  if (normalizedOp === "publish") {
-    requireField(payload, "publicationId", "Shopify publish requires payload.publicationId");
-    requireField(payload, "productIds", "Shopify publish requires payload.productIds[]");
-    return {
-      query:
-        "mutation BulkPublishProducts($publicationId: ID!, $productIds: [ID!]!) { publishablePublish(id: $publicationId, input: { publishableIds: $productIds }) { publishable { id } userErrors { field message } } }",
-      variables: {
-        publicationId: payload.publicationId,
-        productIds: payload.productIds,
-      },
-    };
-  }
-
-  if (normalizedOp === "unpublish") {
-    requireField(payload, "publicationId", "Shopify unpublish requires payload.publicationId");
-    requireField(payload, "productIds", "Shopify unpublish requires payload.productIds[]");
-    return {
-      query:
-        "mutation BulkUnpublishProducts($publicationId: ID!, $productIds: [ID!]!) { publishableUnpublish(id: $publicationId, input: { publishableIds: $productIds }) { publishable { id } userErrors { field message } } }",
-      variables: {
-        publicationId: payload.publicationId,
-        productIds: payload.productIds,
-      },
-    };
-  }
-
-  if (normalizedOp === "variants_bulk_update") {
-    requireField(payload, "productId", "Shopify variants_bulk_update requires payload.productId");
-    requireField(payload, "variants", "Shopify variants_bulk_update requires payload.variants[]");
-    return {
-      query:
-        "mutation ProductVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) { productVariantsBulkUpdate(productId: $productId, variants: $variants) { product { id title } productVariants { id sku price } userErrors { field message } } }",
-      variables: {
-        productId: payload.productId,
-        variants: payload.variants,
-      },
-    };
-  }
-
-  if (normalizedOp === "inventory_adjust") {
-    requireField(payload, "locationId", "Shopify inventory_adjust requires payload.locationId");
-    requireField(payload, "changes", "Shopify inventory_adjust requires payload.changes[]");
-    return {
-      query:
-        "mutation InventoryAdjust($input: InventoryAdjustQuantitiesInput!) { inventoryAdjustQuantities(input: $input) { userErrors { field message } } }",
-      variables: {
-        input: {
-          reason: payload.reason || "correction",
-          name: payload.name || "available",
-          locationId: payload.locationId,
-          changes: payload.changes,
-        },
-      },
-    };
-  }
-
+  void config;
+  void positional;
+  void flags;
   throw new Error(
-    `Unsupported Shopify product operation '${op}'. Supported: create, update, delete, publish, unpublish, variants_bulk_update, inventory_adjust`,
+    "write:shopify is deprecated in commerce_core_ops. Use write --platform shopify --op <operation> --payload '{...}' so all platforms share the same DIRECT_WRITE path.",
   );
 }
 
@@ -1113,13 +925,13 @@ function buildCoreWritePayload(auth, platform, operation, resource, payload, fla
   };
 }
 
-async function handleWriteProduct(config, flags) {
-  const platform = normalizePlatform(flags.platform);
+async function handleWriteProduct(config, positional, flags) {
+  const platform = normalizePlatform(flags.platform || flags.provider || positional[1]);
   if (!platform) {
     throw new Error("--platform is required: shopify | bigcommerce | woocommerce | magento");
   }
 
-  const op = String(flags.op || "").trim();
+  const op = String(flags.op || positional[2] || "").trim();
   if (!op) {
     throw new Error("--op is required");
   }
@@ -1130,20 +942,6 @@ async function handleWriteProduct(config, flags) {
   }
 
   const auth = await ensureAuthContext(config, flags, { requireMembership: true });
-
-  if (platform === "shopify") {
-    const mutation = buildShopifyProductMutation(op, payload);
-    const body = {
-      workspace_id: auth.workspaceId,
-      query: mutation.query,
-      variables: mutation.variables,
-    };
-    const result = await callEdgeFunction(config, String(flags.function || "shopify-api"), body, {
-      dryRun: flags["dry-run"] === true,
-    });
-    printData({ platform, op, via: "shopify-api", result });
-    return;
-  }
 
   const functionName = String(flags.function || DEFAULT_CORE_OPS_FUNCTION);
   const resource = String(flags.resource || "product");
@@ -1188,42 +986,34 @@ async function handleEdgeInvoke(config, flags) {
 }
 
 async function main() {
-  const config = loadConfig();
   const { flags, positional } = extractArgs(process.argv.slice(2));
-  const command = positional[0];
+  const rawCommand = positional[0];
 
-  if (!command || command === "help" || command === "--help") {
+  if (!rawCommand || rawCommand === "help" || rawCommand === "--help") {
     printHelp();
     return;
   }
 
+  const command = normalizeCommand(rawCommand);
+  const config = loadConfig();
+
   if (command === "platforms") {
-    await handlePlatforms(config);
+    await handlePlatforms(config, flags);
     return;
   }
 
   if (command === "connect:sources") {
-    await handleConnectSources(config);
+    await handleConnectSources(config, flags);
     return;
   }
 
-  if (command === "read:tables") {
-    await handleReadTables(config, flags);
-    return;
-  }
-
-  if (command === "read:schema") {
-    await handleReadSchema(config, positional, flags);
-    return;
-  }
-
-  if (command === "read:query") {
-    await handleReadQuery(config, positional, flags);
+  if (command === "read:tables" || command === "read:schema" || command === "read:query") {
+    await handleDeprecatedReadCommand(command);
     return;
   }
 
   if (command === "read:entity") {
-    await handleReadEntity(config, flags);
+    await handleReadEntity(config, positional, flags);
     return;
   }
 
@@ -1238,7 +1028,7 @@ async function main() {
   }
 
   if (command === "write:product") {
-    await handleWriteProduct(config, flags);
+    await handleWriteProduct(config, positional, flags);
     return;
   }
 
@@ -1247,7 +1037,7 @@ async function main() {
     return;
   }
 
-  throw new Error(`Unknown command: ${command}`);
+  throw new Error(`Unknown command: ${rawCommand} (normalized: ${command})`);
 }
 
 main().catch((error) => {

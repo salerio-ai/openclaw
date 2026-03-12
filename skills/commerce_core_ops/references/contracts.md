@@ -1,12 +1,11 @@
-# commerce-core-ops Direct Write Contract
+# commerce-core-ops Direct Read/Write Contract
 
-This contract is for direct product write operations on BigCommerce/WooCommerce/Magento.
+This contract is for direct platform API operations on Shopify/BigCommerce/WooCommerce/Magento.
 
 ## Scope
 
-- Product create / upsert / update / delete
-- Product publish / unpublish (if platform supports)
-- Inventory adjustments
+- `DIRECT_READ`: products / orders / customers / inventory / variants / shop_info / order_items
+- `DIRECT_WRITE`: product create / upsert / update / delete / inventory_adjust / publish / unpublish / variants_bulk_update
 
 This contract intentionally does not define sync/job workflow commands.
 
@@ -22,14 +21,31 @@ This contract intentionally does not define sync/job workflow commands.
 - `apikey: <supabase_anon_key>`
 - `Content-Type: application/json`
 
-## Request Body
+## Request Body (DIRECT_READ)
+
+```json
+{
+  "action": "DIRECT_READ",
+  "platform": "shopify | bigcommerce | woocommerce | magento",
+  "entity": "products | orders | customers | inventory | variants | shop_info | order_items",
+  "workspace_id": "uuid",
+  "user_id": "uuid",
+  "limit": 50,
+  "since": "2026-01-01",
+  "cursor": "",
+  "filters": {},
+  "request_id": "optional-request-id"
+}
+```
+
+## Request Body (DIRECT_WRITE)
 
 ```json
 {
   "action": "DIRECT_WRITE",
-  "platform": "bigcommerce | woocommerce | magento",
+  "platform": "shopify | bigcommerce | woocommerce | magento",
   "resource": "product",
-  "operation": "upsert | create | update | delete | publish | unpublish | inventory_adjust",
+  "operation": "upsert | create | update | delete | inventory_adjust | publish | unpublish | variants_bulk_update",
   "workspace_id": "uuid",
   "user_id": "uuid",
   "payload": {},
@@ -38,17 +54,17 @@ This contract intentionally does not define sync/job workflow commands.
 }
 ```
 
-## Response Body
+## Response Body (shape)
 
 ```json
 {
   "success": true,
+  "action": "DIRECT_READ | DIRECT_WRITE",
   "platform": "woocommerce",
-  "resource": "product",
-  "operation": "upsert",
+  "entity": "orders",
   "result": {
-    "platform_product_id": "12345",
-    "external_id": "sku-001"
+    "count": 10,
+    "rows": []
   }
 }
 ```
@@ -61,11 +77,12 @@ This contract intentionally does not define sync/job workflow commands.
 4. Validate workspace exists and `workspaces.status` is active
 5. Validate `workspace_billing_windows` has an active non-expired subscription window
 6. Validate active workspace mapping table for target platform
-7. Resolve Nango connection/token server-side (not client-side)
-8. Execute platform API call and return workspace-scoped result
+7. Resolve provider credentials server-side (Shopify mapping/shop token or Nango connection/token)
+8. Execute provider API call and return workspace-scoped result
 
 ## Platform Mapping Tables
 
+- Shopify: `workspace_shopify_mappings` + `shopify_shops`
 - BigCommerce: `workspace_bigcommerce_mappings`
 - WooCommerce: `workspace_woocommerce_mappings`
 - Magento: `workspace_magento_mappings`

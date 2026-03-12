@@ -240,12 +240,13 @@ export async function reportSessionCompletionToSupabase(
   }
 
   const state = readBustlyOAuthState();
-  const search = state?.bustlySearchData;
+  const supabase = state?.supabase;
+  const user = state?.user;
   const userUid = trimOrNull(state?.user?.userId);
-  const workspaceId = trimOrNull(search?.SEARCH_DATA_WORKSPACE_ID);
-  const supabaseUrl = trimOrNull(search?.SEARCH_DATA_SUPABASE_URL);
-  const anonKey = trimOrNull(search?.SEARCH_DATA_SUPABASE_ANON_KEY);
-  const accessToken = trimOrNull(search?.SEARCH_DATA_SUPABASE_ACCESS_TOKEN);
+  const workspaceId = trimOrNull(user?.workspaceId);
+  const supabaseUrl = trimOrNull(supabase?.url);
+  const anonKey = trimOrNull(supabase?.anonKey);
+  const accessToken = trimOrNull(user?.userAccessToken);
   if (!userUid || !workspaceId || !supabaseUrl || !anonKey || !accessToken) {
     return;
   }

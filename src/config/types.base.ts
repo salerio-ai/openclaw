@@ -265,7 +265,9 @@ export type BustlyOAuthState = {
   };
   /** Login timestamp (milliseconds since epoch). */
   loggedInAt?: number;
-  /** Bustly search data configuration (populated after successful login). */
+  /** Supabase connection info used by internal product skills. */
+  supabase?: BustlySupabaseConfig;
+  /** @deprecated Legacy OAuth payload; auto-migrated to user/supabase and removed on read. */
   bustlySearchData?: BustlySearchDataConfig;
 };
 
@@ -281,4 +283,12 @@ export type BustlySearchDataConfig = {
   SEARCH_DATA_SUPABASE_ACCESS_TOKEN: string;
   /** Workspace ID. */
   SEARCH_DATA_WORKSPACE_ID: string;
+};
+
+/** Canonical Supabase config stored under bustlyOauth.json.supabase. */
+export type BustlySupabaseConfig = {
+  /** Supabase API URL. */
+  url: string;
+  /** Supabase anonymous key. */
+  anonKey: string;
 };

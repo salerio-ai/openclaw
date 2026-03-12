@@ -210,7 +210,7 @@ function readNativeClipboardFilePaths(): string[] {
 
   for (const format of candidates) {
     try {
-      const raw = clipboard.readBuffer(format, "clipboard");
+      const raw = clipboard.readBuffer(format);
       for (const path of parseClipboardFilePathsFromText(raw.toString("utf8"))) {
         paths.add(path);
       }
@@ -503,11 +503,6 @@ function sendNativeFullscreenState(isNativeFullscreen: boolean) {
   mainWindow.webContents.send(WINDOW_NATIVE_FULLSCREEN_CHANNEL, { isNativeFullscreen });
 }
 
-function resolveBustlyWorkspaceIdFromOAuthState(): string {
-  const oauthState = BustlyOAuth.readBustlyOAuthState();
-  return oauthState?.user?.workspaceId?.trim() || "";
-}
-
 function normalizeBustlyModelRef(value: unknown): string {
   const raw = typeof value === "string" ? value.trim().toLowerCase() : "";
   if (BUSTLY_MODEL_REF_SET.has(raw)) {
@@ -534,12 +529,23 @@ function normalizeBustlyModelRef(value: unknown): string {
   return "bustly/chat.lite";
 }
 
-function buildBustlyProviderHeaders(workspaceId?: string): Record<string, string> {
+function resolveCurrentBustlyModelRef(cfg: OpenClawConfig): string {
+  const modelConfig = cfg.agents?.defaults?.model;
+  const raw = typeof modelConfig === "string"
+    ? modelConfig
+    : modelConfig && typeof modelConfig === "object"
+      ? modelConfig.primary
+      : undefined;
+  return normalizeBustlyModelRef(raw);
+}
+
+function buildBustlyProviderHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     "User-Agent": BUSTLY_MODEL_GATEWAY_USER_AGENT,
   };
-  if (workspaceId?.trim()) {
-    headers["X-Workspace-Id"] = workspaceId.trim();
+  const workspaceId = BustlyOAuth.readBustlyOAuthState()?.user?.workspaceId?.trim() ?? "";
+  if (workspaceId) {
+    headers["X-Workspace-Id"] = workspaceId;
   }
   return headers;
 }
@@ -574,9 +580,10 @@ function resolveBustlyGatewayBaseUrl(cfg: OpenClawConfig): string {
 }
 
 function applyBustlyOnlyConfig(cfg: OpenClawConfig, selectedModelInput?: string): OpenClawConfig {
-  const selectedModel = normalizeBustlyModelRef(selectedModelInput);
-  const workspaceId = resolveBustlyWorkspaceIdFromOAuthState();
-  const bustlyHeaders = buildBustlyProviderHeaders(workspaceId);
+  const selectedModel = selectedModelInput?.trim()
+    ? normalizeBustlyModelRef(selectedModelInput)
+    : resolveCurrentBustlyModelRef(cfg);
+  const bustlyHeaders = buildBustlyProviderHeaders();
   const nextAgentModels: Record<string, { alias?: string }> = {};
   for (const entry of BUSTLY_ROUTE_MODELS) {
     nextAgentModels[entry.modelRef] = { alias: entry.alias };
@@ -2608,18 +2615,21 @@ function setupIpcHandlers(): void {
 
   ipcMain.handle("bustly-get-supabase-config", async () => {
     const state = BustlyOAuth.readBustlyOAuthState();
-    const searchData = state?.bustlySearchData;
-    if (!searchData?.SEARCH_DATA_SUPABASE_URL || !searchData.SEARCH_DATA_SUPABASE_ANON_KEY || !searchData.SEARCH_DATA_SUPABASE_ACCESS_TOKEN) {
+    const supabase = state?.supabase;
+    const user = state?.user;
+    const accessToken = user?.userAccessToken?.trim() || "";
+    const workspaceId = user?.workspaceId?.trim() || "";
+    if (!supabase?.url || !supabase.anonKey || !accessToken) {
       return null;
     }
     return {
-      url: searchData.SEARCH_DATA_SUPABASE_URL,
-      anonKey: searchData.SEARCH_DATA_SUPABASE_ANON_KEY,
-      accessToken: searchData.SEARCH_DATA_SUPABASE_ACCESS_TOKEN,
-      workspaceId: searchData.SEARCH_DATA_WORKSPACE_ID || state?.user?.workspaceId || "",
-      userId: state?.user?.userId || "",
-      userEmail: state?.user?.userEmail || "",
-      userName: state?.user?.userName || "",
+      url: supabase.url,
+      anonKey: supabase.anonKey,
+      accessToken,
+      workspaceId,
+      userId: user?.userId || "",
+      userEmail: user?.userEmail || "",
+      userName: user?.userName || "",
     };
   });
 
@@ -2628,6 +2638,7 @@ function setupIpcHandlers(): void {
     async (_event, workspaceId: string, workspaceName?: string) => {
     try {
       BustlyOAuth.setActiveWorkspaceId(workspaceId);
+      syncBustlyConfigFile(resolveElectronConfigPath());
       const agentBinding = await synchronizeBustlyWorkspaceContext({
         workspaceId,
         workspaceName,
@@ -2702,8 +2713,18 @@ function setupIpcHandlers(): void {
             throw new Error("Missing Supabase access token in API response");
           }
 
-          // Build search data config from API extras
+          // Read optional legacy supabase bootstrap config from API extras.
+          // This is only for filling oauth supabase fields; it must not control skill enabling.
           const searchDataConfig = apiResponse.data.extras?.["bustly-search-data"];
+          const filteredSkills = (apiResponse.data.skills ?? []).filter((skill) =>
+            ![
+              "search-data",
+              "bustly-search-data",
+              "bustly_search_data",
+              "shopify-api",
+              "shopify_api",
+            ].includes(skill),
+          );
 
           // Complete login - store user info and search data config in bustlyOauth.json
           // Supabase access token is mirrored to user.userAccessToken
@@ -2714,16 +2735,11 @@ function setupIpcHandlers(): void {
               userEmail: apiResponse.data.userEmail,
               userAccessToken: supabaseAccessToken,
               workspaceId: apiResponse.data.workspaceId,
-              skills: apiResponse.data.extras?.["bustly-search-data"]
-                ? ["search-data"]
-                : apiResponse.data.skills ?? [],
+              skills: filteredSkills,
             },
-            bustlySearchData: searchDataConfig ? {
-              SEARCH_DATA_SUPABASE_URL: searchDataConfig.search_DATA_SUPABASE_URL ?? "",
-              SEARCH_DATA_SUPABASE_ANON_KEY: searchDataConfig.search_DATA_SUPABASE_ANON_KEY ?? "",
-              SEARCH_DATA_SUPABASE_ACCESS_TOKEN: supabaseAccessToken,
-              SEARCH_DATA_TOKEN: searchDataConfig.search_DATA_TOKEN ?? apiResponse.data.accessToken,
-              SEARCH_DATA_WORKSPACE_ID: searchDataConfig.search_DATA_WORKSPACE_ID ?? apiResponse.data.workspaceId,
+            supabase: searchDataConfig ? {
+              url: searchDataConfig.search_DATA_SUPABASE_URL ?? "",
+              anonKey: searchDataConfig.search_DATA_SUPABASE_ANON_KEY ?? "",
             } : undefined,
           });
 

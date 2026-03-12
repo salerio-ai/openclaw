@@ -12,6 +12,7 @@ import {
 import { resolveHeartbeatPrompt } from "../../../auto-reply/heartbeat.js";
 import { resolveChannelCapabilities } from "../../../config/channel-capabilities.js";
 import type { OpenClawConfig } from "../../../config/config.js";
+import { readBustlyOAuthState } from "../../../bustly-oauth.js";
 import { getMachineDisplayName } from "../../../infra/machine-name.js";
 import { MAX_IMAGE_BYTES } from "../../../media/constants.js";
 import { getGlobalHookRunner } from "../../../plugins/hook-runner-global.js";
@@ -42,7 +43,7 @@ import { resolveOpenClawDocsPath } from "../../docs-path.js";
 import { isTimeoutError } from "../../failover-error.js";
 import { resolveImageSanitizationLimits } from "../../image-sanitization.js";
 import { resolveModelAuthMode } from "../../model-auth.js";
-import { resolveDefaultModelForAgent } from "../../model-selection.js";
+import { normalizeProviderId, resolveDefaultModelForAgent } from "../../model-selection.js";
 import { createOllamaStreamFn, OLLAMA_NATIVE_BASE_URL } from "../../ollama-stream.js";
 import { resolveOwnerDisplaySetting } from "../../owner-display.js";
 import {
@@ -115,6 +116,9 @@ import {
 } from "./compaction-timeout.js";
 import { detectAndLoadPromptImages } from "./images.js";
 import type { EmbeddedRunAttemptParams, EmbeddedRunAttemptResult } from "./types.js";
+
+const BUSTLY_PROVIDER_ID = "bustly";
+const BUSTLY_WORKSPACE_HEADER = "X-Workspace-Id";
 
 type PromptBuildHookRunner = {
   hasHooks: (hookName: "before_prompt_build" | "before_agent_start") => boolean;
@@ -787,6 +791,45 @@ export async function runEmbeddedAttempt(
         params.thinkLevel,
         sessionAgentId,
       );
+
+      if (normalizeProviderId(params.provider) === BUSTLY_PROVIDER_ID) {
+        const inner = activeSession.agent.streamFn;
+        let warnedMissingWorkspace = false;
+        activeSession.agent.streamFn = (model, context, options) => {
+          const workspaceId = readBustlyOAuthState()?.user?.workspaceId?.trim() ?? "";
+          const modelHeaders = {
+            ...((model as { headers?: Record<string, string> }).headers ?? {}),
+          };
+          const optionHeaders = {
+            ...((options?.headers as Record<string, string> | undefined) ?? {}),
+          };
+          const mergedHeaders = {
+            ...modelHeaders,
+            ...optionHeaders,
+          };
+          if (workspaceId) {
+            mergedHeaders[BUSTLY_WORKSPACE_HEADER] = workspaceId;
+            warnedMissingWorkspace = false;
+          } else {
+            delete mergedHeaders[BUSTLY_WORKSPACE_HEADER];
+            delete mergedHeaders[BUSTLY_WORKSPACE_HEADER.toLowerCase()];
+            if (!warnedMissingWorkspace) {
+              log.warn(
+                "[bustly] Missing workspaceId in ~/.bustly/bustlyOauth.json; gateway requests may fail",
+              );
+              warnedMissingWorkspace = true;
+            }
+          }
+          const nextModel =
+            Object.keys(mergedHeaders).length > 0
+              ? ({ ...model, headers: mergedHeaders } as typeof model)
+              : model;
+          return inner(nextModel, context, {
+            ...options,
+            headers: Object.keys(mergedHeaders).length > 0 ? mergedHeaders : undefined,
+          });
+        };
+      }
 
       if (cacheTrace) {
         cacheTrace.recordStage("session:loaded", {

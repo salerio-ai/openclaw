@@ -29,9 +29,10 @@ Bustly auth uses local OAuth state, not per-agent API-key storage.
 
 - Token source: `~/.bustly/bustlyOauth.json` -> `user.userAccessToken`
 - Workspace source: `~/.bustly/bustlyOauth.json` -> `user.workspaceId`
+- Supabase config source: `~/.bustly/bustlyOauth.json` -> `supabase.url` + `supabase.anonKey`
 - Request headers sent to gateway:
   - `Authorization: Bearer <user.userAccessToken>`
-  - `X-Workspace-Id: <user.workspaceId>`
+  - `X-Workspace-Id: <user.workspaceId>` (injected at runtime from `bustlyOauth.json`, not from `openclaw.json`)
   - `User-Agent: <BUSTLY_MODEL_GATEWAY_USER_AGENT>`
 
 If `user.userAccessToken` is missing, model auth resolution fails with:
@@ -70,8 +71,7 @@ After Bustly login / provider setup, OpenClaw writes a bustly-only provider bloc
         auth: "token",
         api: "openai-completions",
         headers: {
-          "User-Agent": "openclaw/2026.2.24",
-          "X-Workspace-Id": "<workspace-id>",
+          "User-Agent": "openclaw/2026.2.24"
         },
         models: [
           { id: "chat.lite", name: "Lite", input: ["text", "image"] },
@@ -106,7 +106,7 @@ After Bustly login / provider setup, OpenClaw writes a bustly-only provider bloc
 
 - `No Bustly token found...`  
   Sign in again from desktop login; verify `~/.bustly/bustlyOauth.json` contains
-  `user.userAccessToken` and `user.workspaceId`.
+  `user.userAccessToken`, `user.workspaceId`, and `supabase` settings.
 
 - Message fails but UI is logged in  
   Confirm `models.providers.bustly.baseUrl` points to the expected gateway environment

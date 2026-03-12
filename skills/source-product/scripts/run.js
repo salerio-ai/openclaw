@@ -23,13 +23,13 @@ function loadBustlyOauthConfig() {
     const configPath = resolve(resolveStateDir(), "bustlyOauth.json");
     if (!existsSync(configPath)) return null;
     const raw = JSON.parse(readFileSync(configPath, "utf-8"));
-    const cfg = raw?.bustlySearchData;
-    if (!cfg) return null;
+    const user = raw?.user || {};
+    const supabase = raw?.supabase || {};
     return {
-      SEARCH_DATA_SUPABASE_URL: cfg.SEARCH_DATA_SUPABASE_URL || "",
-      SEARCH_DATA_SUPABASE_ANON_KEY: cfg.SEARCH_DATA_SUPABASE_ANON_KEY || "",
-      SEARCH_DATA_SUPABASE_ACCESS_TOKEN: cfg.SEARCH_DATA_SUPABASE_ACCESS_TOKEN || "",
-      SEARCH_DATA_WORKSPACE_ID: cfg.SEARCH_DATA_WORKSPACE_ID || "",
+      supabaseUrl: supabase.url || "",
+      supabaseAnonKey: supabase.anonKey || "",
+      supabaseToken: user.userAccessToken || "",
+      workspaceId: user.workspaceId || "",
     };
   } catch {
     return null;
@@ -40,28 +40,28 @@ function loadConfig() {
   const oauth = loadBustlyOauthConfig();
   const cfg = {
     supabaseUrl:
-      oauth?.SEARCH_DATA_SUPABASE_URL ||
+      oauth?.supabaseUrl ||
       process.env.SEARCH_DATA_SUPABASE_URL ||
       process.env.SUPABASE_URL,
     supabaseAnonKey:
-      oauth?.SEARCH_DATA_SUPABASE_ANON_KEY ||
+      oauth?.supabaseAnonKey ||
       process.env.SEARCH_DATA_SUPABASE_ANON_KEY ||
       process.env.SUPABASE_ANON_KEY,
     supabaseToken:
-      oauth?.SEARCH_DATA_SUPABASE_ACCESS_TOKEN ||
+      oauth?.supabaseToken ||
       process.env.SEARCH_DATA_SUPABASE_ACCESS_TOKEN ||
       process.env.SEARCH_DATA_TOKEN ||
       process.env.SUPABASE_TOKEN,
     workspaceId:
-      oauth?.SEARCH_DATA_WORKSPACE_ID ||
+      oauth?.workspaceId ||
       process.env.SEARCH_DATA_WORKSPACE_ID ||
       process.env.WORKSPACE_ID,
   };
 
   const missing = [];
-  if (!cfg.supabaseUrl) missing.push("SEARCH_DATA_SUPABASE_URL");
-  if (!cfg.supabaseAnonKey) missing.push("SEARCH_DATA_SUPABASE_ANON_KEY");
-  if (!cfg.supabaseToken) missing.push("SEARCH_DATA_SUPABASE_ACCESS_TOKEN");
+  if (!cfg.supabaseUrl) missing.push("supabase.url");
+  if (!cfg.supabaseAnonKey) missing.push("supabase.anonKey");
+  if (!cfg.supabaseToken) missing.push("user.userAccessToken");
   if (missing.length) {
     throw new Error(
       `Missing required Supabase configuration: ${missing.join(", ")}. ` +
@@ -112,7 +112,7 @@ async function callEdgeFunction(config, functionName, body) {
 
 async function getAliExpressAccounts(config) {
   if (!config.workspaceId) {
-    throw new Error("SEARCH_DATA_WORKSPACE_ID is required for get:accounts");
+    throw new Error("user.workspaceId is required for get:accounts");
   }
   const supabaseUrl = config.supabaseUrl.replace(/\/$/, "");
   const response = await fetch(

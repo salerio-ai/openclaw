@@ -1,10 +1,14 @@
 ---
 name: commerce_core_ops
-description: Unified commerce operations for Shopify, BigCommerce, WooCommerce, and Magento. Use this skill for workspace-scoped data reads (products/orders/customers/inventory) and product write operations with strict JWT + workspace membership checks.
-metadata: { "openclaw": { "always": true } }
+category: ecommerce
+api_type: hybrid
+auth_type: jwt
+description: Unified commerce operations for Shopify, BigCommerce, WooCommerce, and Magento. Use this skill when an agent needs one workspace-scoped entrypoint for product, order, customer, or inventory reads plus product writes, especially when provider-specific skills are too fragmented.
 ---
 
-This skill focuses on two goals only:
+This skill is the unified commerce layer inside `bustly-skills`.
+
+It focuses on two goals only:
 
 1. Data reads (product/order/customer/inventory)
 2. Product writes (import/create/update/delete/inventory adjust)
@@ -14,21 +18,26 @@ Use the standalone Node entrypoint directly:
 
 ## Architecture
 
+`commerce_core_ops` is intentionally a hybrid skill.
+
+- Most provider skills in this repo follow the GraphQL or REST proxy pattern.
+- `commerce_core_ops` sits above them and gives agents one operator-facing entrypoint.
+- Reads and writes go to platform APIs (not semantic warehouse tables).
+- Internally it uses provider adapters so agent commands stay unified.
+
 ### Read Path (all platforms)
 
-- Supabase RPC: `get_agent_available_tables`, `get_agent_table_schema`, `run_select_ws`
-- Semantic tables: `semantic.dm_*_<platform>`
+- **Shopify / BigCommerce / WooCommerce / Magento**: `/functions/v1/commerce-core-ops` with `action=DIRECT_READ`
+- Auth check is unified first (JWT + workspace + member + subscription), then provider adapter executes platform API calls.
 
 ### Write Path
 
-- **Shopify**: keep existing `/functions/v1/shopify-api`
-- **BigCommerce / WooCommerce / Magento**: dedicated direct-write edge function protocol (default slug: `commerce-core-ops`)
-
-Existing full-backfill sync functions (`bigcommerce-async`, `woocommerce-sync`, `magento-sync`) are references for backend Nango integration patterns, not the primary write API for this skill.
+- **Shopify / BigCommerce / WooCommerce / Magento**: `/functions/v1/commerce-core-ops` with `action=DIRECT_WRITE`
+- Same unified auth gate, then provider-specific write adapter.
 
 ## Security Model (Required)
 
-Before every write command:
+Before every read/write command:
 
 1. Validate JWT (`auth/v1/user`)
 2. Verify active `workspace_members` membership
@@ -37,44 +46,37 @@ Before every write command:
 5. Ensure `user_id` matches JWT subject
 6. Enforce request-scoped `workspace_id` and `user_id`
 
-The CLI does this automatically for write commands (unless explicit debug bypass flags are used).
+The CLI does this automatically (unless explicit debug bypass flags are used).
 
 ## Command Map
 
 ### Read
 
 ```bash
-node skills/commerce_core_ops/scripts/run.js platforms
-node skills/commerce_core_ops/scripts/run.js connect:sources
-node skills/commerce_core_ops/scripts/run.js read:tables --platform shopify
-node skills/commerce_core_ops/scripts/run.js read:schema semantic.dm_orders_shopify
-node skills/commerce_core_ops/scripts/run.js read:query "SELECT * FROM semantic.dm_orders_shopify LIMIT 10"
-node skills/commerce_core_ops/scripts/run.js read:entity --platform woocommerce --entity orders --limit 50 --since 2025-01-01
+node skills/commerce_core_ops/scripts/run.js providers
+node skills/commerce_core_ops/scripts/run.js connections
+node skills/commerce_core_ops/scripts/run.js read shopify products --limit 20 --since 2026-01-01
+node skills/commerce_core_ops/scripts/run.js read:entity --platform woocommerce --entity orders --limit 50 --since 2026-01-01
+node skills/commerce_core_ops/scripts/run.js read:entity --platform magento --entity order_items --order-id 100001234
 ```
 
 ### Auth Check
 
 ```bash
-node skills/commerce_core_ops/scripts/run.js auth:check
+node skills/commerce_core_ops/scripts/run.js auth
 ```
 
-### Shopify Write
+### Product Write (all platforms)
 
 ```bash
-node skills/commerce_core_ops/scripts/run.js write:shopify --file ./mutation.graphql --vars-file ./vars.json
-node skills/commerce_core_ops/scripts/run.js write:product --platform shopify --op update --payload '{"id":"gid://shopify/Product/123","title":"OpenClaw Pro Tee"}'
-```
-
-### BigCommerce / WooCommerce / Magento Product Write
-
-```bash
-node skills/commerce_core_ops/scripts/run.js write:product --platform bigcommerce --op upsert --payload '{"external_id":"sku-1","name":"Sample","price":19.99}' --function commerce-core-ops
-node skills/commerce_core_ops/scripts/run.js write:product --platform woocommerce --op update --payload '{"external_id":"sku-1","name":"New Name"}' --function commerce-core-ops
-node skills/commerce_core_ops/scripts/run.js write:product --platform magento --op inventory_adjust --payload '{"external_id":"sku-1","delta":5}' --function commerce-core-ops
+node skills/commerce_core_ops/scripts/run.js write:product --platform shopify --op update --payload '{"id":"gid://shopify/Product/123","title":"Bustly Commerce Tee"}' --function commerce-core-ops
+node skills/commerce_core_ops/scripts/run.js write:product --platform bigcommerce --op create --payload '{"name":"Sample","sku":"sample-1","price":19.99}' --function commerce-core-ops
+node skills/commerce_core_ops/scripts/run.js write:product --platform woocommerce --op update --payload '{"id":"385","name":"New Name"}' --function commerce-core-ops
+node skills/commerce_core_ops/scripts/run.js write:product --platform magento --op inventory_adjust --payload '{"sku":"sample-1","delta":5}' --function commerce-core-ops
 ```
 
 ## References
 
 - `references/contracts.md` - direct product write API contract
-- `references/edge-function-commerce-core-ops.ts` - secure edge function template (JWT + workspace + Nango-backed token)
+- `references/edge-function-commerce-core-ops.ts` - secure direct read/write edge function (JWT + workspace + Nango-backed token)
 - `scripts/run.js` - unified CLI implementation

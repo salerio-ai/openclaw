@@ -63,9 +63,9 @@ This skill uses **Supabase Edge Functions** to securely call AliExpress APIs wit
 Client App (this skill)
     │
     ├─ Reads: ~/.bustly/bustlyOauth.json
-    │   - SEARCH_DATA_SUPABASE_URL
-    │   - SEARCH_DATA_SUPABASE_ACCESS_TOKEN (JWT)
-    │   - SEARCH_DATA_WORKSPACE_ID
+    │   - supabase.url
+    │   - user.userAccessToken (JWT)
+    │   - user.workspaceId
     │
     ▼
 Supabase Edge Function
@@ -159,10 +159,10 @@ This skill reads configuration from `~/.bustly/bustlyOauth.json` (automatically 
 
 No manual configuration is required. After logging in via Bustly OAuth in the desktop app, the skill will have access to:
 
-- `SEARCH_DATA_SUPABASE_URL` - Supabase API URL
-- `SEARCH_DATA_SUPABASE_ANON_KEY` - Supabase anonymous key
-- `SEARCH_DATA_SUPABASE_ACCESS_TOKEN` - Supabase session access token (JWT)
-- `SEARCH_DATA_WORKSPACE_ID` - Workspace identifier
+- `supabase.url` - Supabase API URL
+- `supabase.anonKey` - Supabase anonymous key
+- `user.userAccessToken` - Supabase session access token (JWT)
+- `user.workspaceId` - Workspace identifier
 
 The skill uses the `workspace_id` to:
 

@@ -6,7 +6,11 @@
 import { existsSync, readFileSync, writeFileSync, unlinkSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import * as os from "node:os";
-import type { BustlyOAuthState, BustlySearchDataConfig } from "./bustly-types.js";
+import type {
+  BustlyOAuthState,
+  BustlySearchDataConfig,
+  BustlySupabaseConfig,
+} from "./bustly-types.js";
 import { verifySupabaseAuth } from "./api/bustly.js";
 
 function resolveUserPath(input: string, homeDir: string): string {
@@ -45,14 +49,18 @@ function ensureConfigDir(): void {
   }
 }
 
-function migrateLegacyUserTokenFields(state: BustlyOAuthState): BustlyOAuthState {
+function migrateLegacyOAuthState(state: BustlyOAuthState): BustlyOAuthState {
   const nextState: BustlyOAuthState = {
     ...state,
     user: state.user ? { ...state.user } : undefined,
+    supabase: state.supabase ? { ...state.supabase } : undefined,
   };
 
-  const legacyAccessToken = state.bustlySearchData?.SEARCH_DATA_SUPABASE_ACCESS_TOKEN?.trim() ?? "";
-  const legacyWorkspaceId = state.bustlySearchData?.SEARCH_DATA_WORKSPACE_ID?.trim() ?? "";
+  const legacySearchData = state.bustlySearchData;
+  const legacyAccessToken = legacySearchData?.SEARCH_DATA_SUPABASE_ACCESS_TOKEN?.trim() ?? "";
+  const legacyWorkspaceId = legacySearchData?.SEARCH_DATA_WORKSPACE_ID?.trim() ?? "";
+  const legacySupabaseUrl = legacySearchData?.SEARCH_DATA_SUPABASE_URL?.trim() ?? "";
+  const legacySupabaseAnonKey = legacySearchData?.SEARCH_DATA_SUPABASE_ANON_KEY?.trim() ?? "";
   const currentAccessToken = nextState.user?.userAccessToken?.trim() ?? "";
   const currentWorkspaceId = nextState.user?.workspaceId?.trim() ?? "";
 
@@ -62,6 +70,20 @@ function migrateLegacyUserTokenFields(state: BustlyOAuthState): BustlyOAuthState
   if (nextState.user && !currentWorkspaceId && legacyWorkspaceId) {
     nextState.user.workspaceId = legacyWorkspaceId;
   }
+  if (!nextState.supabase && (legacySupabaseUrl || legacySupabaseAnonKey)) {
+    nextState.supabase = {
+      url: legacySupabaseUrl,
+      anonKey: legacySupabaseAnonKey,
+    };
+  } else if (nextState.supabase) {
+    if (!nextState.supabase.url && legacySupabaseUrl) {
+      nextState.supabase.url = legacySupabaseUrl;
+    }
+    if (!nextState.supabase.anonKey && legacySupabaseAnonKey) {
+      nextState.supabase.anonKey = legacySupabaseAnonKey;
+    }
+  }
+  delete nextState.bustlySearchData;
   return nextState;
 }
 
@@ -88,10 +110,10 @@ export function readBustlyOAuthState(): BustlyOAuthState | null {
     }
     const content = readFileSync(oauthFile, "utf-8");
     const parsed = JSON.parse(content) as BustlyOAuthState;
-    const migrated = migrateLegacyUserTokenFields(parsed);
+    const migrated = migrateLegacyOAuthState(parsed);
     if (JSON.stringify(migrated) !== JSON.stringify(parsed)) {
       writeBustlyOAuthState(migrated);
-      console.log("[BustlyOAuth] Migrated legacy token/workspace fields into user profile");
+      console.log("[BustlyOAuth] Migrated legacy bustlySearchData into user/supabase profile");
     }
     return migrated;
   } catch (error) {
@@ -252,9 +274,8 @@ export function getBustlyAuthCode(): string | null {
 }
 
 /**
- * Complete login - store user info and search data config
- * All configuration is stored in bustlyOauth.json
- * Supabase access token is mirrored to user.userAccessToken
+ * Complete login - store user info and canonical supabase config.
+ * All configuration is stored in bustlyOauth.json.
  */
 export function completeBustlyLogin(params: {
   user: {
@@ -265,21 +286,22 @@ export function completeBustlyLogin(params: {
     workspaceId: string;
     skills: string[];
   };
-  bustlySearchData?: BustlySearchDataConfig;
+  supabase?: BustlySupabaseConfig;
 }): void {
   const state = readBustlyOAuthState();
   if (!state) {
     throw new Error("[BustlyOAuth] No active OAuth flow found");
   }
 
-  // Update state with user info and search data config
+  // Update state with user info and supabase config.
   state.user = params.user;
-  state.bustlySearchData = params.bustlySearchData;
+  state.supabase = params.supabase;
   state.loggedInAt = Date.now();
 
   // Clear transient fields
   delete state.authCode;
   delete state.expiresAt;
+  delete state.bustlySearchData;
 
   writeBustlyOAuthState(state);
   console.log("[BustlyOAuth] Login completed for user:", params.user.userEmail);
@@ -296,9 +318,6 @@ export function setActiveWorkspaceId(workspaceId: string): void {
   }
   if (state.user) {
     state.user.workspaceId = nextWorkspaceId;
-  }
-  if (state.bustlySearchData) {
-    state.bustlySearchData.SEARCH_DATA_WORKSPACE_ID = nextWorkspaceId;
   }
   writeBustlyOAuthState(state);
   console.log("[BustlyOAuth] Active workspace updated:", nextWorkspaceId);
@@ -338,11 +357,6 @@ export function clearBustlyAuthData(): void {
 
   delete state.user;
   delete state.loggedInAt;
-
-  if (state.bustlySearchData) {
-    state.bustlySearchData.SEARCH_DATA_SUPABASE_ACCESS_TOKEN = "";
-    state.bustlySearchData.SEARCH_DATA_TOKEN = "";
-  }
 
   writeBustlyOAuthState(state);
   console.log("[BustlyOAuth] Cleared token and user data");
