@@ -48,6 +48,16 @@ Before every read/write command:
 
 The CLI does this automatically (unless explicit debug bypass flags are used).
 
+### Error Interpretation (Important)
+
+When bootstrap/read/write fails, classify the blocker correctly:
+
+- `BILLING_WINDOW_MISSING` / `BILLING_WINDOW_EXPIRED` / `BILLING_WINDOW_INACTIVE`:
+  billing is blocked. Do **not** claim store connections are missing.
+- Auth/membership/workspace errors:
+  report access/workspace state issue directly.
+- Only report "no connected stores" after `providers` / `connections` succeeds and returns no active platforms.
+
 ## Command Map
 
 ### Read

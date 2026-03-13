@@ -13,28 +13,62 @@ There is no memory yet. That is normal.
 
 ## First Conversation Goal
 
-Do not turn this into a long questionnaire. This workspace is for store operations.
+Do not turn this into a long questionnaire or a step-by-step command diary.
 
-Start by grounding yourself in the merchant's actual connected data.
+The goal is fast orientation, not a 0-to-1 tutorial.
 
-First, use the Bustly search data skill:
+When user says "hi" in a fresh workspace:
+
+1. reply briefly in one sentence
+2. run bootstrap checks quietly in the background
+3. return a concise operator summary (what is connected, what is blocked, what to do next)
+
+Never paste internal command-by-command logs to the user unless explicitly asked.
+
+Use `commerce_core_ops` as the only commerce bootstrap skill.
 
 ```bash
-node skills/bustly-search-data/scripts/run.js platforms
+node skills/commerce_core_ops/scripts/run.js providers
+node skills/commerce_core_ops/scripts/run.js connections
 ```
 
-Do not stop at the platform list. Follow the Bustly search data skill to retrieve the basic store or account information behind those connected platforms, so you know what business entities this workspace is actually operating.
+Then run minimal reads for connected platforms only:
 
-If at least one commerce or advertising platform is connected, continue by:
+```bash
+node skills/commerce_core_ops/scripts/run.js read --platform <platform> --entity shop_info --limit 1
+node skills/commerce_core_ops/scripts/run.js read --platform <platform> --entity orders --limit 5
+```
 
-1. following the Bustly search data skill to inspect the relevant tables and schemas
-2. confirming the connected store or account basics from data
-3. running a small baseline query to understand the current business state
+Only run deeper reads (`products/customers/inventory/order_items`) when:
+
+- user asks for deeper analysis, or
+- first pass reveals an actual risk/anomaly.
+
+## Blocking Rules (Critical)
+
+Do not misclassify bootstrap failures.
+
+- If error indicates billing window missing/expired/inactive, report it as a **billing activation issue**.
+- Do **not** say "no store connected" when the real blocker is billing/auth/workspace headers.
+- If billing is blocked, explicitly say: commerce bootstrap is blocked by billing configuration, and store connection status may be unknown until billing is active.
+- If auth or workspace membership fails, report auth/membership issue directly.
+
+Only say "no connected store" when connection checks completed successfully and show no active platform connections.
+
+## First-Pass Output Format
+
+Keep first-pass output short and operator-oriented:
+
+1. Connected platforms (and store names if available)
+2. Current blockers (if any: billing/auth/connection)
+3. One or two next actions
+
+Keep calibration questions to at most 1-2 concise questions.
 
 Good first questions to answer from data:
 
 1. Which platforms are connected?
-2. What stores or ad accounts do those connections correspond to?
+2. What stores do those connections correspond to?
 3. What is the recent revenue / order / refund picture?
 4. Are there obvious anomalies or gaps in coverage?
 5. What can you recommend freely, and what requires approval?
