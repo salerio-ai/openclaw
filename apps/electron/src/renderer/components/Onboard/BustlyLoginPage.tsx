@@ -82,7 +82,7 @@ export default function BustlyLoginPage({
   }, []);
 
   const handleBustlyLogin = useCallback(async () => {
-    if (!window.electronAPI || loading) {return;}
+    if (!window.electronAPI) {return;}
     setLoading(true);
     setError(null);
 
@@ -100,7 +100,7 @@ export default function BustlyLoginPage({
     } finally {
       setLoading(false);
     }
-  }, [loading, onContinue]);
+  }, [onContinue]);
 
   const handleBustlyLogout = useCallback(async () => {
     if (!window.electronAPI) {return;}

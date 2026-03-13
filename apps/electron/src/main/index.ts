@@ -167,6 +167,7 @@ let gatewayPort: number = 17999;
 let gatewayBind: string = "loopback";
 let gatewayToken: string | null = null;
 let bustlyLoginCancelled = false;
+let bustlyLoginAttemptId = 0;
 
 function emitGatewayLifecycle(phase: "starting" | "stopping" | "ready" | "error", message?: string): void {
   if (!mainWindow || mainWindow.isDestroyed()) {
@@ -2679,6 +2680,8 @@ function setupIpcHandlers(): void {
 
   // Bustly OAuth login
   ipcMain.handle("bustly-login", async () => {
+    const loginAttemptId = bustlyLoginAttemptId + 1;
+    bustlyLoginAttemptId = loginAttemptId;
     try {
       console.log("[Bustly Login] Starting Bustly OAuth login flow");
       bustlyLoginCancelled = false;
@@ -2704,13 +2707,18 @@ function setupIpcHandlers(): void {
       while (true) {
         await delay(2000);
 
+        if (loginAttemptId !== bustlyLoginAttemptId) {
+          console.log("[Bustly Login] Login superseded by a newer attempt");
+          return { success: false, canceled: true };
+        }
+
         if (bustlyLoginCancelled) {
           console.log("[Bustly Login] Login canceled by user");
           stopOAuthCallbackServer();
           return { success: false, canceled: true };
         }
 
-        const code = BustlyOAuth.getBustlyAuthCode();
+        const code = BustlyOAuth.consumeBustlyAuthCode();
 
         if (code) {
           // Got the code, now exchange for token

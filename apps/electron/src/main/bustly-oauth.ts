@@ -274,6 +274,27 @@ export function getBustlyAuthCode(): string | null {
 }
 
 /**
+ * Get and clear the stored authorization code so a single login attempt
+ * cannot exchange the same code more than once.
+ */
+export function consumeBustlyAuthCode(): string | null {
+  const state = readBustlyOAuthState();
+  if (!state || !state.authCode) {
+    return null;
+  }
+  const expiresAt = typeof state.expiresAt === "number" ? state.expiresAt : 0;
+  if (!expiresAt || Date.now() > expiresAt) {
+    clearBustlyOAuthState();
+    return null;
+  }
+
+  const code = state.authCode;
+  delete state.authCode;
+  writeBustlyOAuthState(state);
+  return code;
+}
+
+/**
  * Complete login - store user info and canonical supabase config.
  * All configuration is stored in bustlyOauth.json.
  */
