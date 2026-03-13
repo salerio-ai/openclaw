@@ -8,25 +8,6 @@ type OpenClawInitOptions = {
   openrouterApiKey?: string;
 };
 
-type OnboardAuthResult = {
-  success: boolean;
-  provider: string;
-  method: string;
-  credential?: {
-    type: "api_key" | "token" | "oauth";
-    provider: string;
-    key?: string;
-    token?: string;
-    access?: string;
-    refresh?: string;
-    expires?: number;
-    email?: string;
-    projectId?: string;
-  };
-  defaultModel?: string;
-  error?: string;
-};
-
 type GatewayLogPayload = { stream: "stdout" | "stderr"; message: string };
 type GatewayExitPayload = { code: number | null; signal: string | null };
 type MainLogPayload = { message: string };
@@ -36,18 +17,6 @@ type GatewayLifecyclePayload = {
   message: string | null;
 };
 
-type WhatsAppConfigRequest =
-  | {
-      mode: "personal";
-      personalNumber: string;
-    }
-  | {
-      mode: "separate";
-      dmPolicy: string;
-      allowFromMode: "keep" | "unset" | "list";
-      allowFromList?: string;
-    };
-
 /**
  * Expose protected methods that allow the renderer process to use
  * the ipcRenderer without exposing the entire object
@@ -56,7 +25,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // OpenClaw initialization
   openclawInit: (options?: OpenClawInitOptions) => ipcRenderer.invoke("openclaw-init", options),
   openclawIsInitialized: () => ipcRenderer.invoke("openclaw-is-initialized"),
-  openclawReset: () => ipcRenderer.invoke("openclaw-reset"),
   openclawNeedsOnboard: () => ipcRenderer.invoke("openclaw-needs-onboard"),
 
   // Gateway management
@@ -104,7 +72,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   bustlyLogout: () => ipcRenderer.invoke("bustly-logout"),
   bustlyOpenLogin: () => ipcRenderer.invoke("bustly-open-login"),
   bustlyOpenSettings: () => ipcRenderer.invoke("bustly-open-settings"),
-  bustlyOpenProviderSetup: () => ipcRenderer.invoke("bustly-open-provider-setup"),
   bustlyOpenWorkspaceSettings: (workspaceId: string) =>
     ipcRenderer.invoke("bustly-open-workspace-settings", workspaceId),
   bustlyOpenWorkspaceInvite: (workspaceId: string) =>
@@ -114,36 +81,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   bustlyOpenWorkspacePricing: (workspaceId: string) =>
     ipcRenderer.invoke("bustly-open-workspace-pricing", workspaceId),
   bustlyOpenWorkspaceCreate: (workspaceId?: string) => ipcRenderer.invoke("bustly-open-workspace-create", workspaceId),
-  bustlyReonboard: () => ipcRenderer.invoke("bustly-reonboard"),
-  onboardBetaOpenRouterApiKey: () => ipcRenderer.invoke("onboard-beta-openrouter-api-key"),
-  onboardListProviders: () => ipcRenderer.invoke("onboard-list-providers"),
-  onboardAuthApiKey: (provider: string, apiKey: string) =>
-    ipcRenderer.invoke("onboard-auth-api-key", provider, apiKey),
-  onboardAuthToken: (provider: string, token: string) =>
-    ipcRenderer.invoke("onboard-auth-token", provider, token),
-  onboardAuthOAuth: (provider: string) => ipcRenderer.invoke("onboard-auth-oauth", provider),
-  onboardAuthOAuthCancel: () => ipcRenderer.invoke("onboard-auth-oauth-cancel"),
-  onboardOAuthSubmitCode: (code: string) => ipcRenderer.invoke("onboard-oauth-submit-code", code),
-  onboardListModels: (provider: string) => ipcRenderer.invoke("onboard-list-models", provider),
-  onboardComplete: (authResult: OnboardAuthResult, options?: { model?: string; openControlUi?: boolean }) =>
-    ipcRenderer.invoke("onboard-complete", authResult, options),
-  onboardOpenUrl: (url: string) => ipcRenderer.invoke("onboard-open-url", url),
-  onboardOpenControlUi: () => ipcRenderer.invoke("onboard-open-control-ui"),
-  onboardWhatsAppStatus: () => ipcRenderer.invoke("onboard-whatsapp-status"),
-  onboardWhatsAppStart: (options?: { force?: boolean }) =>
-    ipcRenderer.invoke("onboard-whatsapp-start", options),
-  onboardWhatsAppWait: (options?: { timeoutMs?: number }) =>
-    ipcRenderer.invoke("onboard-whatsapp-wait", options),
-  onboardWhatsAppConfig: (payload: WhatsAppConfigRequest) =>
-    ipcRenderer.invoke("onboard-whatsapp-config", payload),
   consumePendingDeepLink: () => ipcRenderer.invoke("deep-link-consume-pending"),
 
   // Event listeners
-  onOAuthRequestCode: (callback: (message: string) => void) => {
-    const listener = (_event: IpcRendererEvent, message: string) => callback(message);
-    ipcRenderer.on("onboard-oauth-request-code", listener);
-    return () => ipcRenderer.removeListener("onboard-oauth-request-code", listener);
-  },
   onGatewayLog: (callback: (data: GatewayLogPayload) => void) => {
     const listener = (_event: IpcRendererEvent, data: GatewayLogPayload) => callback(data);
     ipcRenderer.on("gateway-log", listener);

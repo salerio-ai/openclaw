@@ -4,7 +4,6 @@ import {
   clipboard,
   ipcMain,
   shell,
-  globalShortcut,
   powerSaveBlocker,
   dialog,
   type OpenDialogOptions,
@@ -38,18 +37,11 @@ import {
   resolveOpenClawCliPath,
 } from "./cli-utils.js";
 import {
-  listProviders,
-  authenticateWithApiKey,
-  authenticateWithToken,
-  authenticateWithOAuth,
-  handleOAuthPromptResponse,
   exchangeToken,
   generateLoginUrl,
   startOAuthCallbackServer,
   stopOAuthCallbackServer,
   cancelOAuthFlow,
-  type AuthResult,
-  type ProviderId,
 } from "./oauth-handler.js";
 import * as BustlyOAuth from "./bustly-oauth.js";
 import { resolveOpenClawAgentDir } from "../../../../src/agents/agent-paths";
@@ -60,7 +52,6 @@ import { DEFAULT_PROVIDER } from "../../../../src/agents/defaults";
 import {
   buildModelAliasIndex,
   modelKey,
-  normalizeProviderId,
 } from "../../../../src/agents/model-selection";
 import { loadConfig } from "../../../../src/config/config";
 import { updateSessionStore } from "../../../../src/config/sessions";
@@ -70,8 +61,7 @@ import { resolveGatewayLaunchAgentLabel } from "../../../../src/daemon/constants
 import { GatewayClient } from "../../../../src/gateway/client";
 import type { SessionsPatchResult } from "../../../../src/gateway/protocol";
 import { applySessionsPatchToStore } from "../../../../src/gateway/sessions-patch";
-import { mergeWhatsAppConfig } from "../../../../src/config/merge-config";
-import type { DmPolicy, OpenClawConfig } from "../../../../src/config/types";
+import type { OpenClawConfig } from "../../../../src/config/types";
 import { GATEWAY_CLIENT_MODES, GATEWAY_CLIENT_NAMES } from "../../../../src/utils/message-channel";
 import {
   applyAuthProfileConfig,
@@ -80,14 +70,6 @@ import {
   writeOAuthCredentials,
 } from "../../../../src/commands/onboard-auth";
 import { applyPrimaryModel } from "../../../../src/commands/model-picker";
-import { enablePluginInConfig } from "../../../../src/plugins/enable";
-import { normalizeE164 } from "../../../../src/utils";
-import {
-  resolveDefaultWhatsAppAccountId,
-  resolveWhatsAppAuthDir,
-} from "../../../../src/web/accounts";
-import { startWebLoginWithQr, waitForWebLogin } from "../../../../src/web/login-qr";
-import { webAuthExists } from "../../../../src/web/session";
 import { buildAgentMainSessionKey } from "../../../../src/routing/session-key";
 import {
   ELECTRON_DEFAULT_MODEL,
@@ -161,7 +143,6 @@ const DEEP_LINK_CHANNEL = "deep-link";
 
 let gatewayProcess: ChildProcess | null = null;
 let mainWindow: BrowserWindow | null = null;
-let devPanelWindow: BrowserWindow | null = null;
 let needsOnboardAtLaunch = false;
 let gatewayPort: number = 17999;
 let gatewayBind: string = "loopback";
@@ -440,25 +421,9 @@ function registerProtocolClient() {
 let initResult: InitializationResult | null = null;
 let mainLogPath: string | null = null;
 
-type WhatsAppConfigRequest =
-  | {
-      mode: "personal";
-      personalNumber: string;
-    }
-  | {
-      mode: "separate";
-      dmPolicy: DmPolicy;
-      allowFromMode: "keep" | "unset" | "list";
-      allowFromList?: string;
-    };
-
 // Gateway configuration
 const GATEWAY_HOST = "127.0.0.1";
-const DEV_PANEL_HASH = "/devpanel";
 const BUSTLY_LOGIN_HASH = "/bustly-login";
-const PROVIDER_SETUP_HASH = "/provider-setup";
-const DEV_PANEL_SHORTCUT = "CommandOrControl+Shift+Alt+D";
-const DASHBOARD_CHANNEL_PLUGIN_IDS = ["whatsapp"] as const;
 const BUSTLY_PROVIDER_ID = "bustly";
 const BUSTLY_PROVIDER_PROFILE_ID = `${BUSTLY_PROVIDER_ID}:default`;
 const BUSTLY_MODEL_GATEWAY_BASE_URL_DEFAULT = "https://gw.bustly.ai/api/v1";
@@ -1783,14 +1748,6 @@ function openBustlyLoginInMainWindow(): void {
   loadRendererWindow(mainWindow, { hash: BUSTLY_LOGIN_HASH });
 }
 
-function openProviderSetupInMainWindow(): void {
-  writeMainLog("[Provider Setup] Opening provider setup in main window");
-  if (!mainWindow || mainWindow.isDestroyed()) {
-    return;
-  }
-  loadRendererWindow(mainWindow, { hash: PROVIDER_SETUP_HASH });
-}
-
 function resolveOpenClawConfigPath(): string {
   return resolveElectronConfigPath();
 }
@@ -1869,65 +1826,6 @@ async function withPrivilegedGatewayClient<T>(
   });
 }
 
-function readOpenClawConfigFile(): OpenClawConfig {
-  const configPath = resolveOpenClawConfigPath();
-  return JSON.parse(readFileSync(configPath, "utf-8")) as OpenClawConfig;
-}
-
-function writeOpenClawConfigFile(config: OpenClawConfig): void {
-  const configPath = resolveOpenClawConfigPath();
-  writeFileSync(configPath, JSON.stringify(config, null, 2));
-}
-
-function ensureDashboardChannelPluginsEnabled(cfg: OpenClawConfig): {
-  config: OpenClawConfig;
-  changed: boolean;
-  blocked: string[];
-} {
-  let next = cfg;
-  let changed = false;
-  const blocked: string[] = [];
-
-  for (const pluginId of DASHBOARD_CHANNEL_PLUGIN_IDS) {
-    if (next.plugins?.enabled === false) {
-      blocked.push(pluginId);
-      continue;
-    }
-    if (next.plugins?.deny?.includes(pluginId)) {
-      blocked.push(pluginId);
-      continue;
-    }
-
-    const entry = next.plugins?.entries?.[pluginId] as Record<string, unknown> | undefined;
-    const allow = next.plugins?.allow;
-    const allowlistActive = Array.isArray(allow) && allow.length > 0;
-    const allowlisted = !allowlistActive || allow.includes(pluginId);
-    const alreadyEnabled = entry?.enabled === true && allowlisted;
-    if (alreadyEnabled) {
-      continue;
-    }
-
-    const result = enablePluginInConfig(next, pluginId);
-    if (!result.enabled) {
-      blocked.push(pluginId);
-      continue;
-    }
-    next = result.config;
-    changed = true;
-  }
-
-  return { config: next, changed, blocked };
-}
-
-function parseAllowFromList(raw: string): string[] {
-  const parts = String(raw)
-    .split(/[\n,;]+/g)
-    .map((part) => part.trim())
-    .filter(Boolean);
-  const normalized = parts.map((part) => (part === "*" ? "*" : normalizeE164(part)));
-  return [...new Set(normalized.filter(Boolean))];
-}
-
 function loadRendererWindow(targetWindow: BrowserWindow, options?: { hash?: string }) {
   if (process.env.NODE_ENV === "development") {
     const url = options?.hash ? `http://localhost:5180/#${options.hash}` : "http://localhost:5180";
@@ -1941,42 +1839,6 @@ function loadRendererWindow(targetWindow: BrowserWindow, options?: { hash?: stri
       writeMainLog(`Renderer load failed: ${error instanceof Error ? error.message : String(error)}`);
     });
   }
-}
-
-function createDevPanelWindow(): void {
-  if (devPanelWindow && !devPanelWindow.isDestroyed()) {
-    devPanelWindow.focus();
-    return;
-  }
-
-  devPanelWindow = new BrowserWindow({
-    width: 1100,
-    height: 760,
-    minWidth: 800,
-    minHeight: 600,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      preload: PRELOAD_PATH,
-    },
-    title: "OpenClaw DevPanel",
-  });
-
-  loadRendererWindow(devPanelWindow, { hash: DEV_PANEL_HASH });
-
-  devPanelWindow.on("closed", () => {
-    devPanelWindow = null;
-  });
-}
-
-function toggleDevPanelWindow(): boolean {
-  if (devPanelWindow && !devPanelWindow.isDestroyed()) {
-    devPanelWindow.close();
-    return false;
-  }
-
-  createDevPanelWindow();
-  return true;
 }
 
 /**
@@ -2031,9 +1893,8 @@ function createWindow(): void {
         return;
       }
       if (!loggedIn) {
-        openBustlyLoginInMainWindow();
+        mainWindow.webContents.send("bustly-login-refresh");
       }
-      mainWindow.webContents.send("bustly-login-refresh");
     })();
   });
 
@@ -2250,21 +2111,6 @@ function setupIpcHandlers(): void {
       needsOnboardAtLaunch = false;
     }
     return needsOnboardAtLaunch && !initialized;
-  });
-
-  // Reset onboarding (delete state dir and stop gateway)
-  ipcMain.handle("openclaw-reset", async () => {
-    try {
-      await stopGateway();
-      const stateDir = resolveElectronStateDir();
-      rmSync(stateDir, { recursive: true, force: true });
-      initResult = null;
-      gatewayToken = null;
-      gatewayProcess = null;
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : String(error) };
-    }
   });
 
   // Start gateway
@@ -2929,316 +2775,6 @@ function setupIpcHandlers(): void {
     }
   });
 
-  ipcMain.handle("bustly-open-provider-setup", async () => {
-    try {
-      openProviderSetupInMainWindow();
-      return { success: true };
-    } catch (error) {
-      console.error("[Provider Setup] Error:", error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  });
-
-  ipcMain.handle("bustly-reonboard", async () => {
-    try {
-      await stopGateway();
-      const stateDir = resolveElectronStateDir();
-      const configPath = resolveElectronConfigPath();
-      const mainAgentDir = resolve(stateDir, "agents", "main", "agent");
-      rmSync(configPath, { force: true });
-      rmSync(mainAgentDir, { recursive: true, force: true });
-      initResult = null;
-      gatewayToken = null;
-      gatewayProcess = null;
-      needsOnboardAtLaunch = true;
-      setTimeout(() => {
-        app.relaunch();
-        app.exit(0);
-      }, 50);
-      return { success: true };
-    } catch (error) {
-      console.error("[Reonboard] Error:", error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  });
-
-  // === Onboarding handlers ===
-
-  ipcMain.handle("onboard-beta-openrouter-api-key", () => {
-    return process.env.BUSTLY_BETA_OPENROUTER_API_KEY ?? "";
-  });
-
-  // List available providers
-  ipcMain.handle("onboard-list-providers", () => {
-    return listProviders();
-  });
-
-  // Authenticate with API key
-  ipcMain.handle("onboard-auth-api-key", async (_event, provider: string, apiKey: string) => {
-    if (normalizeProviderId(provider) !== BUSTLY_PROVIDER_ID) {
-      return {
-        success: false,
-        provider,
-        method: "api_key",
-        error: "Only bustly provider is supported.",
-      };
-    }
-    try {
-      const result = await authenticateWithApiKey({ provider: provider as ProviderId, apiKey });
-      return result;
-    } catch (error) {
-      return {
-        success: false,
-        provider,
-        method: "api_key",
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  });
-
-  // Authenticate with token
-  ipcMain.handle("onboard-auth-token", async (_event, provider: string, token: string) => {
-    if (normalizeProviderId(provider) !== BUSTLY_PROVIDER_ID) {
-      return {
-        success: false,
-        provider,
-        method: "token",
-        error: "Only bustly provider is supported.",
-      };
-    }
-    try {
-      const result = await authenticateWithToken({ provider: provider as ProviderId, token });
-      return result;
-    } catch (error) {
-      return {
-        success: false,
-        provider,
-        method: "token",
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  });
-
-  // Authenticate with OAuth
-  ipcMain.handle("onboard-auth-oauth", async (_event, provider: string) => {
-    if (normalizeProviderId(provider) !== BUSTLY_PROVIDER_ID) {
-      return {
-        success: false,
-        provider,
-        method: "oauth",
-        error: "Only bustly provider is supported.",
-      };
-    }
-    try {
-      const result = await authenticateWithOAuth({
-        provider: provider as ProviderId,
-        onPromptRequired: (message) => {
-          // Send request to renderer to ask user for input
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send("onboard-oauth-request-code", message);
-          }
-        },
-      });
-      return result;
-    } catch (error) {
-      return {
-        success: false,
-        provider,
-        method: "oauth",
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  });
-
-  // Handle manual OAuth code submission
-  ipcMain.handle("onboard-oauth-submit-code", (_event, code: string) => {
-    handleOAuthPromptResponse(code);
-    return { success: true };
-  });
-
-  ipcMain.handle("onboard-auth-oauth-cancel", () => {
-    cancelOAuthFlow();
-    return { success: true };
-  });
-
-  // List available models for provider
-  ipcMain.handle("onboard-list-models", async (_event, provider: string) => {
-    try {
-      const normalizedProvider = normalizeProviderId(provider);
-      if (normalizedProvider === BUSTLY_PROVIDER_ID) {
-        return BUSTLY_ROUTE_MODELS.map((entry) => ({
-          id: entry.routeKey,
-          name: `${entry.alias} · ${entry.description}`,
-          provider: BUSTLY_PROVIDER_ID,
-          contextWindow: 200_000,
-          reasoning: entry.reasoning,
-          input: ["text", "image"] as Array<"text" | "image">,
-          aliases: [entry.alias.toLowerCase()],
-        }));
-      }
-      return [];
-    } catch (error) {
-      console.warn("[Onboard] Failed to load model catalog:", error);
-      return [];
-    }
-  });
-
-  // Complete onboarding (save credentials and initialize)
-  ipcMain.handle(
-    "onboard-complete",
-    async (
-      _event,
-      authResult: AuthResult,
-      options?: { model?: string; openControlUi?: boolean },
-    ) => {
-      try {
-        const resolveAuthProvider = (result: AuthResult) => {
-          if (result.provider === "openai" && result.method === "oauth") {
-            return "openai-codex";
-          }
-          if (result.provider === "google" && result.method === "oauth") {
-            return "google-antigravity";
-          }
-          return result.provider;
-        };
-
-        const provider = resolveAuthProvider(authResult);
-        if (provider !== BUSTLY_PROVIDER_ID) {
-          return { success: false, error: "Only bustly provider is supported." };
-        }
-        const result = await bootstrapDesktopSession({
-          model: options?.model?.trim() || authResult.defaultModel,
-          openControlUi: options?.openControlUi === true,
-        });
-        return { success: true };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : String(error),
-        };
-      }
-    },
-  );
-
-  ipcMain.handle("onboard-whatsapp-status", async () => {
-    const cfg = loadConfig();
-    const accountId = resolveDefaultWhatsAppAccountId(cfg);
-    const { authDir } = resolveWhatsAppAuthDir({ cfg, accountId });
-    const linked = await webAuthExists(authDir);
-    return {
-      linked,
-      accountId,
-      dmPolicy: cfg.channels?.whatsapp?.dmPolicy ?? "pairing",
-      allowFrom: cfg.channels?.whatsapp?.allowFrom ?? [],
-      selfChatMode: cfg.channels?.whatsapp?.selfChatMode ?? false,
-    };
-  });
-
-  ipcMain.handle("onboard-whatsapp-start", async (_event, options?: { force?: boolean }) => {
-    return await startWebLoginWithQr({ force: options?.force });
-  });
-
-  ipcMain.handle("onboard-whatsapp-wait", async (_event, options?: { timeoutMs?: number }) => {
-    return await waitForWebLogin({ timeoutMs: options?.timeoutMs });
-  });
-
-  ipcMain.handle(
-    "onboard-whatsapp-config",
-    async (_event, payload: WhatsAppConfigRequest) => {
-      try {
-        const cfg = readOpenClawConfigFile();
-        const existingAllowFrom = cfg.channels?.whatsapp?.allowFrom ?? [];
-        let next = cfg;
-
-        if (payload.mode === "personal") {
-          const normalized = normalizeE164(payload.personalNumber);
-          const merged = [
-            ...existingAllowFrom
-              .filter((item) => item !== "*")
-              .map((item) => normalizeE164(String(item)))
-              .filter(Boolean),
-            normalized,
-          ];
-          const unique = [...new Set(merged.filter(Boolean))];
-          next = mergeWhatsAppConfig(next, { selfChatMode: true });
-          next = mergeWhatsAppConfig(next, { dmPolicy: "allowlist" });
-          next = mergeWhatsAppConfig(next, { allowFrom: unique });
-        } else {
-          next = mergeWhatsAppConfig(next, { selfChatMode: false });
-          next = mergeWhatsAppConfig(next, { dmPolicy: payload.dmPolicy });
-          if (payload.dmPolicy === "open") {
-            next = mergeWhatsAppConfig(next, { allowFrom: ["*"] });
-          }
-          if (payload.dmPolicy !== "disabled") {
-            if (payload.allowFromMode === "unset") {
-              next = mergeWhatsAppConfig(next, { allowFrom: undefined }, { unsetOnUndefined: ["allowFrom"] });
-            } else if (payload.allowFromMode === "list") {
-              const allowFrom = parseAllowFromList(payload.allowFromList ?? "");
-              if (allowFrom.length === 0) {
-                return { success: false, error: "AllowFrom list cannot be empty." };
-              }
-              next = mergeWhatsAppConfig(next, { allowFrom });
-            }
-          }
-        }
-
-        writeOpenClawConfigFile(next);
-        return { success: true };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : String(error),
-        };
-      }
-    },
-  );
-
-  ipcMain.handle("onboard-open-control-ui", () => {
-    try {
-      const cfg = readOpenClawConfigFile();
-      const ensured = ensureDashboardChannelPluginsEnabled(cfg);
-      if (ensured.changed) {
-        writeOpenClawConfigFile(ensured.config);
-      }
-      if (ensured.blocked.length > 0) {
-        writeMainLog(
-          `[Onboard] Channel plugins not enabled due to config: ${ensured.blocked.join(", ")}`,
-        );
-      }
-      openControlUiInMainWindow();
-      return { success: true };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  });
-
-  // Open OAuth URL in browser
-  ipcMain.handle("onboard-open-url", async (_event, url: string) => {
-    try {
-      await shell.openExternal(url);
-      return { success: true };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  });
-
-  ipcMain.handle("devpanel-toggle-window", () => {
-    const open = toggleDevPanelWindow();
-    return { success: true, open };
-  });
-
   ipcMain.handle("deep-link-consume-pending", () => {
     const next = pendingDeepLink;
     pendingDeepLink = null;
@@ -3371,17 +2907,6 @@ void app.whenReady().then(async () => {
   needsOnboardAtLaunch = needsInit && !bustlyLoggedIn;
 
   ensureWindow();
-
-  const shortcutRegistered = globalShortcut.register(DEV_PANEL_SHORTCUT, () => {
-    const open = toggleDevPanelWindow();
-    writeMainLog(`DevPanel window ${open ? "opened" : "closed"} via shortcut`);
-  });
-  if (!shortcutRegistered) {
-    writeMainLog(`DevPanel shortcut registration failed: ${DEV_PANEL_SHORTCUT}`);
-  }
-  app.on("will-quit", () => {
-    globalShortcut.unregisterAll();
-  });
 
   if (needsInit) {
     if (bustlyLoggedIn) {
