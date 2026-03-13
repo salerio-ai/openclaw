@@ -16,6 +16,17 @@ const stagingDir = mkdtempSync(resolve(tmpdir(), "openclaw-deps-"));
 
 rmSync(targetDir, { recursive: true, force: true });
 
+console.log("[prepare-openclaw-deps] Building root OpenClaw package artifacts.");
+const buildResult = spawnSync(
+  "pnpm",
+  ["build"],
+  { cwd: repoRoot, stdio: "inherit" },
+);
+
+if (buildResult.status !== 0) {
+  process.exit(buildResult.status ?? 1);
+}
+
 const deployResult = spawnSync(
   "pnpm",
   ["deploy", "--filter", "openclaw", "--prod", "--legacy", stagingDir],
