@@ -5,7 +5,9 @@ This contract is for direct platform API operations on Shopify/BigCommerce/WooCo
 ## Scope
 
 - `DIRECT_READ`: products / orders / customers / inventory / variants / shop_info / order_items
-- `DIRECT_WRITE`: product create / upsert / update / delete / inventory_adjust / publish / unpublish / variants_bulk_update
+- `DIRECT_WRITE`:
+  - legacy op mode: product create / upsert / update / delete / inventory_adjust / publish / unpublish / variants_bulk_update
+  - native mode (recommended): pass-through request via `native_request`
 
 This contract intentionally does not define sync/job workflow commands.
 
@@ -53,6 +55,33 @@ This contract intentionally does not define sync/job workflow commands.
   "idempotency_key": "optional-idempotency-key"
 }
 ```
+
+### Native Mode (recommended)
+
+```json
+{
+  "action": "DIRECT_WRITE",
+  "platform": "shopify | bigcommerce | woocommerce | magento",
+  "operation": "native",
+  "resource": "native",
+  "workspace_id": "uuid",
+  "user_id": "uuid",
+  "native_request": {
+    "method": "PUT",
+    "path": "/v3/catalog/products/123",
+    "query": {},
+    "headers": {},
+    "body": {}
+  },
+  "payload": {}
+}
+```
+
+Notes:
+
+- `native_request.path` must be a relative API path (not a full URL).
+- Auth headers/tokens are injected server-side; caller should not pass provider auth headers.
+- Keep request payload close to each platform's official API schema.
 
 ## Response Body (shape)
 

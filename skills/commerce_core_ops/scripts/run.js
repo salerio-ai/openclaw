@@ -45,6 +45,8 @@ const COMMAND_ALIASES = {
   get: "read:entity",
   write: "write:product",
   put: "write:product",
+  "write-native": "write:native",
+  "native-write": "write:native",
   auth: "auth:check",
   providers: "platforms",
   connections: "connect:sources",
@@ -714,6 +716,8 @@ Read Commands:
 Write Commands:
   write:product --platform <platform> --op <operation> --payload '{...}' [--resource product] [--function commerce-core-ops]
   all platforms route to /functions/v1/commerce-core-ops (DIRECT_WRITE)
+  write:native --platform <platform> --method <METHOD> --path </api/path> [--payload '{...}'] [--query '{"k":"v"}'] [--headers '{"x":"y"}']
+  native mode: pass-through to platform API with server-side auth/token injection
 
 Generic Edge Invocation:
   edge:invoke --function <function-name-or-url> --payload '{...}'
@@ -982,6 +986,19 @@ function buildCoreWritePayload(auth, platform, operation, resource, payload, fla
   };
 }
 
+function parseJsonObjectFlag(flags, inlineKey, fileKey) {
+  const value = getJsonInput(flags, {
+    inlineKey,
+    fileKey,
+    defaultValue: null,
+  });
+  if (value === null) return {};
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`--${inlineKey} / --${fileKey} must be a JSON object`);
+  }
+  return value;
+}
+
 async function handleWriteProduct(config, positional, flags) {
   const platform = normalizePlatform(flags.platform || flags.provider || positional[1]);
   if (!platform) {
@@ -997,6 +1014,13 @@ async function handleWriteProduct(config, positional, flags) {
   if (!payload || typeof payload !== "object") {
     throw new Error("--payload or --payload-file is required and must be a JSON object");
   }
+  if (flags.id && payload.id === undefined) payload.id = String(flags.id);
+  if (flags["product-id"] && payload.product_id === undefined) {
+    payload.product_id = String(flags["product-id"]);
+  }
+  if (flags["variant-id"] && payload.variant_id === undefined) {
+    payload.variant_id = String(flags["variant-id"]);
+  }
 
   const auth = await ensureAuthContext(config, flags, { requireMembership: true });
 
@@ -1009,6 +1033,48 @@ async function handleWriteProduct(config, positional, flags) {
   });
 
   printData({ platform, op, resource, via: functionName, result });
+}
+
+async function handleWriteNative(config, positional, flags) {
+  const platform = normalizePlatform(flags.platform || flags.provider || positional[1]);
+  if (!platform) {
+    throw new Error("--platform is required: shopify | bigcommerce | woocommerce | magento");
+  }
+
+  const path = String(flags.path || flags.endpoint || positional[2] || "").trim();
+  if (!path) {
+    throw new Error("--path is required for write:native");
+  }
+
+  const method = String(flags.method || "POST")
+    .trim()
+    .toUpperCase();
+
+  const payload = getJsonInput(flags, { defaultValue: {} });
+  if (payload === null || payload === undefined) {
+    throw new Error("--payload must be a JSON value when provided");
+  }
+
+  const query = parseJsonObjectFlag(flags, "query", "query-file");
+  const headers = parseJsonObjectFlag(flags, "headers", "headers-file");
+
+  const auth = await ensureAuthContext(config, flags, { requireMembership: true });
+  const functionName = String(flags.function || DEFAULT_CORE_OPS_FUNCTION);
+
+  const body = buildCoreWritePayload(auth, platform, "native", "native", {}, flags);
+  body.native_request = {
+    method,
+    path,
+    query,
+    headers,
+    body: payload,
+  };
+
+  const result = await callEdgeFunction(config, functionName, body, {
+    dryRun: flags["dry-run"] === true,
+  });
+
+  printData({ platform, mode: "native", method, path, via: functionName, result });
 }
 
 async function handleEdgeInvoke(config, flags) {
@@ -1086,6 +1152,11 @@ async function main() {
 
   if (command === "write:product") {
     await handleWriteProduct(config, positional, flags);
+    return;
+  }
+
+  if (command === "write:native") {
+    await handleWriteNative(config, positional, flags);
     return;
   }
 

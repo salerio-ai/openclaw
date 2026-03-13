@@ -38,7 +38,7 @@ Preferred env vars:
 ## Design Scope
 
 - Read directly from platform APIs (not semantic warehouse tables)
-- Write products through platform adapters with one CLI interface
+- Write products through native platform API pass-through (legacy op wrapper remains for compatibility)
 - Enforce JWT, workspace membership, workspace active status, and billing-window checks
 - All four platforms read/write via `/functions/v1/commerce-core-ops` (`DIRECT_READ` / `DIRECT_WRITE`)
 
